@@ -1,0 +1,145 @@
+# Product Requirements Document
+
+## Product Overview
+
+The system identifies value betting opportunities in football corner markets by comparing model-generated probabilities with bookmaker odds.
+
+---
+
+## Target Users
+
+Primary users:
+
+- sports data analysts
+- quantitative bettors
+- sports analytics developers
+
+---
+
+## Product Goals
+
+1. Estimate corner distributions for football matches
+2. Calculate probabilities for betting lines
+3. Compare probabilities with bookmaker odds
+4. Detect potential value bets
+
+---
+
+## Core Features
+
+### Feature 1 — Historical Data Processing
+
+The system must:
+
+- ingest historical match data
+- compute rolling statistics
+- generate training features
+- include rolling windows for last 5 and last 10 matches
+- add matchup and total-corners derived features
+- include team strength ratings (ELO-style)
+- standardize match statistics to the common cross-season set (corners, shots, shots on target, fouls, cards, referee)
+
+---
+
+### Feature 2 — Model Training
+
+The system must:
+
+- train two machine learning models
+- predict home and away corner counts
+- support retraining with new datasets
+- apply a time-aware split using the most recent season for testing
+- weight recent seasons more heavily during training
+- include team identity encoding as model features
+- use XGBoost with Poisson objective and deterministic seed
+
+---
+
+### Feature 3 — Probability Calculation
+
+The system must:
+
+- convert expected corners to probability distributions
+- calculate probabilities for betting lines
+
+---
+
+### Feature 4 — Odds Integration
+
+The system must:
+
+- retrieve pre-match odds
+- support corner over/under markets
+- normalize bookmaker data format
+
+---
+
+### Feature 5 — Value Bet Detection
+
+The system must:
+
+- compute bookmaker implied probability
+- compare with model probability
+- detect value opportunities
+
+---
+
+## Functional Requirements
+
+The system must:
+
+- process historical datasets
+- compute rolling statistics
+- train machine learning models
+- compute Poisson probabilities
+- fetch odds
+- detect value bets
+
+---
+
+## Non-Functional Requirements
+
+Performance:
+
+- handle thousands of matches
+
+Scalability:
+
+- allow new leagues and datasets
+
+Modularity:
+
+- components must be independent
+
+Reproducibility:
+
+- training pipeline must be deterministic
+
+---
+
+## Success Metrics
+
+Model metrics:
+
+MAE  
+RMSE  
+
+Betting metrics:
+
+ROI  
+Yield  
+Hit rate
+
+---
+
+## Future Extensions
+
+Possible future features:
+
+- live betting analysis
+- API-based input in place of datasets
+- action-oriented agents for orchestration and alerts
+- xG integration
+- lineup prediction
+- odds movement tracking
+- automated alerts

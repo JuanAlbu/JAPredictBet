@@ -1,0 +1,35 @@
+Checklist - proximos passos
+
+[x] Implementar treino dos modelos em src/japredictbet/models/train.py
+[x] Implementar predicao em src/japredictbet/models/predict.py
+[x] Definir e integrar features finais usadas no treino (selecionar colunas)
+[ ] Definir contrato de odds (schema esperado) e estrategia de matching partida <-> odds
+[ ] Implementar coleta e normalizacao de odds em src/japredictbet/odds/collector.py
+[ ] Ajustar pipeline em src/japredictbet/pipeline/mvp_pipeline.py para usar odds e linhas reais
+[ ] Criar testes basicos em tests/ (ingestao, features, probabilidade, value_detector)
+[ ] Definir scripts ou entrypoints para rodar o pipeline
+[ ] Implementar persistencia basica de modelos e metricas (artifacts em pasta local)
+[ ] Rodar backtest basico end-to-end com dataset real (validar ROI/Yield/Hit Rate)
+[ ] Preparar base para evolucao futura (contratos de entrada via API e agentes)
+
+Checklist - inconsistencias e alinhamentos de docs
+
+[ ] Alinhar janelas de rolling features (5 e 10 vs apenas 10) em todos os docs
+[ ] Definir encoding de team identity (default target vs label) e atualizar docs
+[ ] Confirmar algoritmo permitido (XGBoost apenas vs XGBoost/LightGBM) e atualizar PRD/arquitetura
+[ ] Decidir se odds sao obrigatorias no MVP ou opcionais e alinhar docs
+[ ] Documentar dependencias minimas do dataset (ex: gols se ELO for usado)
+[ ] Atualizar docstring do mvp_pipeline (treino e odds ja existem no fluxo)
+[ ] Corrigir encoding nos docs (setas e simbolos lambda)
+[ ] Padronizar nomes finais das features (ex: home_team_team_enc vs home_team_id)
+
+Checklist - melhorias MVP nao mapeadas
+
+[ ] Validacao de qualidade de dados (duplicatas, datas invalidas, times inconsistentes, missing)
+[ ] Manifesto de features finais (lista unica das colunas usadas no treino)
+[ ] Checagem automatica de leakage em rolling features (teste unitario)
+[ ] Avaliacao de calibracao das probabilidades (curva de confianca)
+[ ] Normalizacao de odds para remover margem do bookmaker (overround)
+[ ] Persistencia/versionamento de modelos e metricas por execucao
+[ ] Definir politica de stake no backtest (flat vs proporcional)
+[ ] Matching robusto entre partidas e odds (normalizacao de nomes)

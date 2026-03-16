@@ -1,0 +1,74 @@
+Relatorio - Treinamento e Teste
+
+Data: 2026-03-16
+
+Resumo
+Este relatorio descreve o treinamento dos modelos de escanteios e a validacao no conjunto de teste.
+O treinamento aprende a prever o numero de escanteios (home e away). A logica de aposta e aplicada
+somente no teste, conforme definido na estrategia de backtesting.
+
+Dados e split
+- Fonte: arquivos CSV em data/processed (PL15_16 ate PL25_26)
+- Split temporal: 50% da temporada mais recente (2025) para teste
+- Treino: todas as temporadas anteriores + 50% restante de 2025
+
+Features utilizadas
+- Rolling stats (janelas 10 e 5) para corners, shots, shots_on_target, fouls, cards
+- Features de matchup e diferencas
+- Elo ratings (quando gols estao disponiveis)
+- Target encoding de times (home e away)
+- Home advantage
+
+Modelo
+- Dois modelos XGBoost (home e away)
+- Objetivo: count:poisson
+- Metricas internas: poisson-nloglik
+
+Hiperparametros finais (train.py)
+- n_estimators: 390
+- learning_rate: 0.07028325952142593
+- max_depth: 6
+- subsample: 0.933071278423135
+- colsample_bytree: 0.8801060408008996
+- min_child_weight: 3
+- gamma: 0.6247332827640821
+- random_state: 42
+
+Regras de teste
+- Todas as previsoes do conjunto de teste viram aposta (over sempre)
+- Linha definida por regra de arredondamento
+  - x.5 mais proximo
+  - x.5 anterior
+- Push (resultado == linha) e excluido do hit rate
+
+Resultados (Over sempre, teste 2025)
+
+x.5 mais proximo
+- Home: validos 133, push 12, hit rate 46.62%
+- Away: validos 129, push 16, hit rate 31.78%
+- Total: validos 136, push 9, hit rate 41.18%
+
+x.5 anterior
+- Home: validos 133, push 12, hit rate 51.88%
+- Away: validos 124, push 21, hit rate 37.90%
+- Total: validos 137, push 8, hit rate 43.07%
+
+Melhor resultado (25x - variacao de hiperparametros, over sempre, x.5 anterior)
+- Total hit rate: 56.93%
+- Home hit rate: 58.70%
+- Away hit rate: 49.62%
+
+Hiperparametros vencedores
+- n_estimators: 390
+- learning_rate: 0.07028325952142593
+- max_depth: 6
+- subsample: 0.933071278423135
+- colsample_bytree: 0.8801060408008996
+- min_child_weight: 3
+- gamma: 0.6247332827640821
+- random_state: 42
+
+Observacoes
+- O treinamento nao considera regras de aposta.
+- A escolha da regra de linha impacta diretamente o hit rate.
+- Para comparacoes futuras, manter o mesmo split temporal e as mesmas regras de teste.
