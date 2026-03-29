@@ -1,36 +1,50 @@
 """MVP pipeline orchestration."""
 
 from __future__ import annotations
-
 from dataclasses import asdict
 
 import numpy as np
 import pandas as pd
 
+from japredictbet.betting import engine
 from japredictbet.config import PipelineConfig
 from japredictbet.data.ingestion import load_historical_dataset
 from japredictbet.features.elo import EloConfig, add_elo_ratings
 from japredictbet.features.matchup import add_matchup_features
 from japredictbet.features.rolling import add_result_rolling, add_stat_rolling
 from japredictbet.features.team_identity import add_team_target_encoding
-from japredictbet.models.train import train_models
 from japredictbet.models.predict import predict_expected_corners
+from japredictbet.models.train import train_models
 from japredictbet.odds.collector import fetch_odds
-from japredictbet.betting.value_detector import detect_value_bets
-from japredictbet.probability.poisson import prob_total_over
 
 
 def run_mvp_pipeline(config: PipelineConfig) -> pd.DataFrame:
-    """Run the end-to-end MVP pipeline.
+    """Orchestrate the end-to-end backtesting pipeline.
 
-    This function wires the core components without implementing model
-    training or odds ingestion yet.
+    This function performs the following steps:
+    1. Loads historical match data.
+    2. Engineers a rich set of features (rolling stats, ELO, etc.).
+    3. Splits data temporally for training and testing.
+    4. Trains ML models to predict home and away corner lambdas.
+    5. Fetches odds data from a configured provider.
+    6. Merges predictions with odds.
+    7. Iterates through each match, calling the core betting engine
+       to evaluate value opportunities.
+    8. Returns a DataFrame containing all identified betting opportunities.
+
+    Args:
+        config: A PipelineConfig object with all necessary configurations.
+
+    Returns:
+        A pandas DataFrame containing the results of the value bet analysis,
+        with one row per identified opportunity.
     """
 
     _ = asdict(config)
     data = load_historical_dataset(config.data.raw_path, config.data.date_column)
     data = _ensure_season_column(data, config.data.date_column)
 
+    # --- Feature Engineering ---
     data = _add_rolling_stats(data, config.features.rolling_window, season_col="season")
     data = _add_rolling_stats(data, 5, season_col="season")
     data = add_matchup_features(data, window=config.features.rolling_window)
@@ -41,7 +55,7 @@ def run_mvp_pipeline(config: PipelineConfig) -> pd.DataFrame:
     data = _add_total_goals_features(data, window=5)
     data["home_advantage"] = 1.0
 
-    train_mask, test_mask = _build_temporal_split(
+    train_mask, _ = _build_temporal_split(
         data["season"], config.model.random_state
     )
     weights = _build_recency_weights(data["season"])
@@ -71,6 +85,7 @@ def run_mvp_pipeline(config: PipelineConfig) -> pd.DataFrame:
         feature_name="away_team_team_enc",
     )
 
+    # --- Model Training and Prediction ---
     train_data = data.loc[train_mask].copy()
     train_weights = weights.loc[train_mask]
 
@@ -79,24 +94,45 @@ def run_mvp_pipeline(config: PipelineConfig) -> pd.DataFrame:
         home_target="home_corners",
         away_target="away_corners",
         sample_weight=train_weights,
+        random_state=config.model.random_state,
     )
     expected_home, expected_away = predict_expected_corners(models, data)
-    expected_total = expected_home + expected_away
 
-    try:
-        odds = fetch_odds(config.odds.provider_name)
-    except NotImplementedError:
-        odds = _build_mock_odds(data)
+    # --- Odds and Value Evaluation using the new Engine ---
+    odds_df = fetch_odds(config.odds.provider_name)
 
-    odds = odds.reset_index(drop=True)
-    expected_total = expected_total.reset_index(drop=True)
-    odds["model_prob"] = [
-        prob_total_over(line, rate)
-        for line, rate in zip(odds["line"], expected_total)
-    ]
+    # Prepare data for joining
+    data["match_key"] = data["home_team"] + " vs " + data["away_team"]
+    data["lambda_home"] = expected_home
+    data["lambda_away"] = expected_away
 
-    results = detect_value_bets(odds, odds["model_prob"], config.value.threshold)
-    return results
+    # For simplicity, we assume the fetched odds are for the 'total' market
+    # A real implementation would require more robust joining and market handling
+    odds_df = odds_df.rename(columns={"match": "match_key"})
+    merged_data = pd.merge(data, odds_df, on="match_key", how="left")
+    merged_data = merged_data.dropna(subset=["line", "over_odds"])
+
+    all_bets = []
+    for _, row in merged_data.iterrows():
+        # This assumes a simple 'total' market for now
+        # The engine's evaluate_match is more flexible than this
+        odds_data = {"total": {"line": row["line"], "odds": row["over_odds"]}}
+
+        bet_evaluations = engine.evaluate_match(
+            lambda_home=row["lambda_home"],
+            lambda_away=row["lambda_away"],
+            odds_data=odds_data,
+            edge_threshold=config.value.threshold,
+        )
+        # Add match context to each bet evaluation
+        for bet in bet_evaluations:
+            bet["match"] = row["match_key"]
+            all_bets.append(bet)
+
+    if not all_bets:
+        return pd.DataFrame()
+
+    return pd.DataFrame(all_bets)
 
 
 def _ensure_season_column(data: pd.DataFrame, date_column: str) -> pd.DataFrame:
@@ -196,18 +232,6 @@ def _add_rolling_stats(
         )
     return df
 
-
-def _build_mock_odds(data: pd.DataFrame) -> pd.DataFrame:
-    """Create a simple mock odds table aligned to the dataset."""
-
-    return pd.DataFrame(
-        {
-            "match": data["home_team"].str.cat(data["away_team"], sep=" vs "),
-            "line": 9.5,
-            "over_odds": 1.9,
-            "under_odds": 1.9,
-        }
-    )
 
 
 def _add_total_corners_features(data: pd.DataFrame, window: int) -> pd.DataFrame:

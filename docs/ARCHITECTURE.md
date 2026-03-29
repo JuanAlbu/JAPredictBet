@@ -12,14 +12,13 @@ The architecture combines:
 - historical match data
 - feature engineering
 - machine learning models
-- probability modelling
-- odds comparison
+- a core betting engine
 
 ---
 
 # System Pipeline
 
-The full pipeline is:
+The high-level pipeline for backtesting is:
 
 dataset
 ->
@@ -27,17 +26,16 @@ data preprocessing
 ->
 feature engineering
 ->
-team encoding
-->
 model training
 ->
 prediction
 ->
-probability estimation
+betting engine
 ->
-odds comparison
-->
-value bet detection
+value bet output
+
+For live, single-event evaluation, the flow is:
+(model predictions, odds) -> betting engine -> value bet output
 
 ---
 
@@ -48,12 +46,12 @@ value bet detection
 Sources:
 
 - historical football datasets
-- optional odds APIs
-- optional statistics APIs
+- odds provider (API or local file)
 
 Output:
 
-structured match dataset.
+- structured match dataset
+- structured odds data
 
 ---
 
@@ -63,10 +61,8 @@ Transforms raw match data into model features.
 
 Includes:
 
-- rolling statistics (last 5 and last 10)
-- rolling goal averages and recent form (wins/draws/losses/points)
+- rolling statistics
 - matchup interaction features
-- total corners and total goals aggregates
 - team strength (ELO ratings)
 - team identity features
 
@@ -74,48 +70,31 @@ Includes:
 
 ## Model Training
 
-Machine learning models are trained using:
-
-- historical matches
-- recency weighting
-- team identity encoding
-
-Training rules defined in:
-
-TRAINING_STRATEGY.md
+Machine learning models are trained on historical data to produce predictions
+(e.g., expected corners).
 
 ---
 
 ## Prediction Engine
 
-The model predicts:
+The trained models predict lambda values for upcoming matches.
 
-expected_home_corners  
-expected_away_corners
+Example outputs:
 
-These values represent expected corner counts.
-
----
-
-## Probability Module
-
-Expected values are converted into probabilities using
-Poisson distribution.
-
-Example:
-
-lambda_total = lambda_home + lambda_away
-
-P(total corners > line)
+- `lambda_home` (expected home corners)
+- `lambda_away` (expected away corners)
 
 ---
 
-## Value Bet Detection
+## Betting Engine (`engine.py`)
 
-The system compares:
+This is the core of the system. It's a self-contained module that operates on a single-event basis (one match at a time).
 
-model probability  
-vs  
-bookmaker implied probability
+It is responsible for:
 
-If the difference exceeds a threshold, the system identifies a potential value bet.
+1.  **Probability Calculation:** Converting model lambda values into market probabilities (e.g., P(Total > 10.5)) using statistical distributions like Poisson.
+2.  **Odds Normalization:** Calculating implied probability from bookmaker odds and removing the overround.
+3.  **Edge & EV Calculation:** Calculating the 'edge' (model probability vs. odds probability) and the Expected Value (EV) of a bet.
+4.  **Bet Decision:** Determining if a bet should be placed based on a configurable edge threshold.
+
+This engine provides a clean API (`evaluate_match`) that takes model predictions and odds data, and returns a full evaluation of all potential bets for that match.

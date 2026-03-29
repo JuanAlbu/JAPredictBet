@@ -24,6 +24,7 @@ def train_models(
     home_target: str,
     away_target: str,
     sample_weight: pd.Series | None = None,
+    random_state: int = 42,
 ) -> TrainedModels:
     """Train separate models for home and away corner counts.
 
@@ -67,7 +68,7 @@ def train_models(
         "colsample_bytree": 0.7153312415720976,
         "min_child_weight": 2,
         "gamma": 0.2795049672186196,
-        "random_state": 42,
+        "random_state": random_state,
         "n_jobs": 1,
         "verbosity": 0,
         "eval_metric": "poisson-nloglik",

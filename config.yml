@@ -1,0 +1,19 @@
+# Configuration for the JAPredictBet MVP Pipeline
+
+data:
+  raw_path: "data/raw/dataset.csv"
+  processed_path: "data/processed/processed_data.parquet"
+  date_column: "date"
+
+features:
+  rolling_window: 10
+
+model:
+  objective: "count:poisson"
+  random_state: 42
+
+odds:
+  provider_name: "data/raw/mock_odds.json"
+
+value:
+  threshold: 0.05

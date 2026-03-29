@@ -91,13 +91,9 @@ Machine Learning Model
         ↓
 Expected Corners Prediction
         ↓
-Poisson Probability Distribution
+Betting Engine
         ↓
-Odds Collector
-        ↓
-Value Bet Detection
-        ↓
-Opportunity Output
+Value Opportunity Output
 
 ---
 
@@ -114,8 +110,6 @@ home_team
 away_team  
 home_corners  
 away_corners  
-home_shots  
-away_shots  
 
 ---
 
@@ -123,22 +117,11 @@ away_shots
 
 Features are derived from **rolling statistics of the last 10 matches**.
 
-Separated by home and away performance.
-
 Example features:
 
 home_corners_for_last10_home  
 home_corners_against_last10_home  
 away_corners_for_last10_away  
-away_corners_against_last10_away  
-home_shots_last10_home  
-away_shots_last10_away  
-
-Rules:
-
-- dataset sorted by date
-- only previous matches used
-- matches without enough history removed
 
 ---
 
@@ -152,69 +135,32 @@ Objective:
 
 count:poisson
 
-Two independent models:
-
-Model A → predict home corners  
-Model B → predict away corners  
-
-Outputs:
-
-λ_home  
-λ_away  
+Two independent models to predict `λ_home` and `λ_away`.
 
 ---
 
-### 4. Probability Engine
+### 4. Odds Collector
 
-Total expected corners:
-
-λ_total = λ_home + λ_away
-
-Assumption:
-
-TotalCorners ~ Poisson(λ_total)
-
-Used to calculate probabilities such as:
-
-P(total > 8.5)  
-P(total > 9.5)  
-P(total > 10.5)
-
----
-
-### 5. Odds Collector
-
-Responsible for retrieving bookmaker odds.
-
-Odds will be fetched using **sports odds APIs**.
+Responsible for retrieving bookmaker odds from an API or local file.
 
 Example structure:
 
 match  
-market  
 line  
 over_odds  
 under_odds  
 
 ---
 
-### 6. Value Bet Engine
+### 5. Betting Engine (`engine.py`)
 
-Convert odds to probability:
+This is the central component for all betting logic. It takes lambda predictions and odds data for a single match and performs all necessary calculations:
 
-P_odds = 1 / odd
+- **Probability Modeling:** Converts lambdas to probabilities for different markets (e.g., P(Total > 10.5)) using Poisson distribution.
+- **Odds Processing:** Calculates implied probability from odds.
+- **Value Calculation:** Computes edge (model prob vs. odds prob) and Expected Value (EV).
+- **Decision Making:** Determines if a bet is a "value bet" based on a threshold.
 
-Compare with model probability:
-
-value = P_model − P_odds
-
-If value exceeds threshold:
-
-Value Bet detected.
-
-Example threshold:
-
-5%
 
 ---
 
@@ -234,37 +180,28 @@ scikit-learn
 xgboost  
 scipy  
 requests  
+PyYAML
 
 ---
 
 ## Project Structure
 
 project/
-
-data/
-    raw/
-    processed/
-
-features/
-    feature_engineering.py
-
-models/
-    train_model.py
-    predict.py
-
-probability/
-    poisson_model.py
-
-odds/
-    odds_collector.py
-
-betting/
-    value_detector.py
-
-analysis/
-    backtest.py
-
-docs/
+├── run.py
+├── config.yml
+├── data/
+│   ├── raw/
+│   └── processed/
+├── src/
+│   └── japredictbet/
+│       ├── betting/
+│       │   └── engine.py
+│       ├── features/
+│       ├── models/
+│       ├── odds/
+│       └── pipeline/
+├── tests/
+└── docs/
 
 ---
 

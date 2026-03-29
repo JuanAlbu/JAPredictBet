@@ -1,81 +1,81 @@
 # JAPredictBet
 
-Sistema para identificar possiveis oportunidades de value betting em mercados de escanteios no futebol, usando estatistica e modelos de machine learning.
+A system to identify potential value betting opportunities in football corner markets, using statistical analysis and machine learning models.
 
-## Objetivo
+## 🎯 Goal
 
-- Estimar o numero esperado de escanteios por partida
-- Calcular probabilidades para linhas Over/Under
-- Comparar com odds de casas para detectar possivel valor
+- Predict the expected number of corners per match.
+- Calculate probabilities for Over/Under lines.
+- Compare model probabilities with bookmaker odds to detect potential value.
 
-## Escopo do MVP
+## 🏛️ Architecture Overview
 
-Inclui:
-- ingestao de dataset historico
-- engenharia de features com rolling averages
-- modelagem estatistica (Poisson)
-- comparacao com odds
-- deteccao de value bets
+The system is designed around a core **Betting Engine** (`src/japredictbet/betting/engine.py`) that handles all business logic on a single-event basis.
 
-Fora do escopo:
-- apostas ao vivo
-- automatizacao de apostas
-- integracao com contas de casas
+A backtesting **Pipeline** (`src/japredictbet/pipeline/mvp_pipeline.py`) wraps this engine to process historical datasets in batch, allowing for strategy evaluation.
 
-## Arquitetura (alto nivel)
+The flow is:
+`Dataset -> Feature Engineering -> Model Prediction -> Betting Engine -> Value Bet Output`
 
-Dataset -> Features -> Modelos -> Probabilidade -> Odds -> Value Bet
+## 🚀 How to Run
 
-## Estrutura do projeto
+This project is now executable end-to-end.
 
-- src/japredictbet/data: ingestao de dados
-- src/japredictbet/features: geracao de features
-- src/japredictbet/models: treino e inferencia
-- src/japredictbet/probability: calculos estatisticos
-- src/japredictbet/odds: coleta e normalizacao de odds
-- src/japredictbet/betting: logica de comparacao de valor
-- src/japredictbet/agents: orquestracao futura de acoes
-- src/japredictbet/pipeline: pipeline end-to-end
-- data/raw: dados brutos
-- data/processed: dados processados
-- docs: documentacao
+### 1. Installation
 
-## Requisitos
+Ensure you have Python 3.10+ installed.
+
+```bash
+# Install dependencies
+python -m pip install -r requirements.txt
+
+# Install the project in editable mode
+python -m pip install -e .
+```
+
+### 2. Configuration
+
+The pipeline is configured via the `config.yml` file. You can adjust paths, model parameters, and thresholds in this file. By default, it reads from `data/raw/dataset.csv` and uses a mock odds file.
+
+### 3. Execution
+
+To run the full backtesting pipeline:
+
+```bash
+python run.py
+```
+
+The script will print the value bets found to the console.
+
+## 📁 Project Structure
+
+- `run.py`: Main entrypoint to execute the pipeline.
+- `config.yml`: Configuration file for the pipeline.
+- `pyproject.toml`: Project configuration for packaging and installation.
+- `src/japredictbet/`: Main source code package.
+  - `betting/engine.py`: **Core logic** for probability, EV, and value calculation.
+  - `features/`: Feature engineering modules.
+  - `models/`: Model training and prediction.
+  - `odds/`: Odds collection.
+  - `pipeline/`: End-to-end pipeline orchestration for backtesting.
+- `data/`: Datasets and other data files.
+- `tests/`: Test suite for the project.
+- `docs/`: Project documentation.
+
+## 🛠️ Requirements
 
 - Python 3.10+
-- pandas, numpy, scikit-learn, xgboost, scipy, requests
+- `pandas`
+- `numpy`
+- `scikit-learn`
+- `xgboost`
+- `scipy`
+- `requests`
+- `pytest`
+- `PyYAML`
 
-## Como executar (MVP)
+## 📜 Project Principles
 
-Este projeto ainda esta em fase inicial. Algumas partes sao stubs.
-
-Etapas esperadas:
-1. Colocar dataset em data/raw
-2. Executar o pipeline (sera adicionado um entrypoint)
-
-## Dataset esperado (exemplo de colunas)
-
-- date
-- home_team
-- away_team
-- home_corners
-- away_corners
-- home_shots
-- away_shots
-
-## Principios
-
-- pipelines deterministicas
-- reproducibilidade
-- arquitetura modular
-- clara separacao de responsabilidades
-
-## Evolucao futura
-
-- entrada via API no lugar de dataset
-- agentes para orquestrar acoes e alertas
-- melhoria dos modelos e novas fontes de dados
-
-## Aviso de seguranca
-
-Este projeto e uma ferramenta analitica. Nao realiza apostas reais, nem integra com contas de casas.
+- Deterministic and reproducible pipelines.
+- Modular architecture with a clear separation of concerns.
+- A core engine for single-event evaluation, wrapped by other components for batch processing.

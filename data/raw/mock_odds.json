@@ -1,0 +1,34 @@
+{
+    "data": [
+        {
+            "match_name": "Chelsea vs Arsenal",
+            "market": {
+                "line": 9.5,
+                "prices": {
+                    "over": 1.90,
+                    "under": 1.90
+                }
+            }
+        },
+        {
+            "match_name": "Man United vs Man City",
+            "market": {
+                "line": 10.5,
+                "prices": {
+                    "over": 2.10,
+                    "under": 1.75
+                }
+            }
+        },
+        {
+            "match_name": "Liverpool vs Everton",
+            "market": {
+                "line": 8.5,
+                "prices": {
+                    "over": 1.5,
+                    "under": 2.5
+                }
+            }
+        }
+    ]
+}
