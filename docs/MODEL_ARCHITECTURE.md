@@ -9,7 +9,9 @@ Targets:
 home_corners  
 away_corners
 
-Two independent regression models may be used.
+Two independent regression models are used per trained member.
+
+In consensus mode, these members are combined in an ensemble (default 30).
 
 ---
 
@@ -70,11 +72,18 @@ Example calculation:
 Recommended algorithms:
 
 XGBoost Regressor  
-LightGBM Regressor
+LightGBM Regressor  
+RandomForest Regressor
 
 Objective:
 
 Poisson regression for count data.
+
+Current default consensus composition:
+
+- 10 XGBoost models
+- 10 LightGBM models
+- 10 RandomForest models
 
 ---
 

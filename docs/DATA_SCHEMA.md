@@ -49,7 +49,7 @@ Example columns:
 | HR | integer | Home red cards |
 | AR | integer | Away red cards |
 
-These variables describe match events such as shots, corners, fouls, and cards. :contentReference[oaicite:1]{index=1}  
+These variables describe match events such as shots, corners, fouls, and cards.
 
 ---
 
@@ -93,18 +93,16 @@ These features represent the identity of teams.
 
 | Column | Type | Description |
 |------|------|-------------|
-| home_team_id | integer | Encoded home team |
-| away_team_id | integer | Encoded away team |
+| home_team_team_enc | float | Target encoding for home team |
+| away_team_team_enc | float | Target encoding for away team |
 
 Encoding method:
 
-Default → Label Encoding
+Default -> target encoding fitted on train split only.
 
-Example:
+Fallback encoding:
 
-Arsenal → 1  
-Chelsea → 2  
-Liverpool → 3  
+Label encoding (optional, less informative).
 
 Purpose:
 
@@ -169,6 +167,8 @@ Possible rating systems:
 - power ratings
 - model-learned parameters
 
+Current implementation includes ELO-style features in the training pipeline.
+
 ---
 
 # 8. Betting Odds Data (Optional)
@@ -206,8 +206,8 @@ These values are used to compute probabilities using a Poisson distribution.
 
 Example final feature vector:
 
-home_team_id  
-away_team_id  
+home_team_team_enc  
+away_team_team_enc  
 
 home_corners_for_last10_home  
 home_corners_against_last10_home  

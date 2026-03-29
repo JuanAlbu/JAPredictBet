@@ -46,7 +46,7 @@ The system must:
 
 The system must:
 
-- train two machine learning models
+- train two machine learning models per ensemble member (home and away)
 - predict home and away corner counts
 - support retraining with new datasets
 - apply a time-aware split using the most recent season for testing
@@ -56,6 +56,7 @@ The system must:
 - generate and persist the 30-model ensemble artifacts with standardized names
 - enforce balanced 10/10/10 training across XGBoost, LightGBM and RandomForest
 - vary hyperparameters deterministically across the 10 members of each algorithm
+- allow loading pre-trained ensemble artifacts from disk to skip retraining
 
 ---
 
@@ -110,6 +111,7 @@ The system must:
 - support threshold increments of 5%
 - return outputs that allow ROI vs volume comparison by threshold
 - compute and expose threshold-level ROI and Yield metrics
+- rank thresholds by financial quality and mark the best threshold
 
 ---
 

@@ -14,6 +14,8 @@ The system is designed around a core **Betting Engine** (`src/japredictbet/betti
 
 A backtesting **Pipeline** (`src/japredictbet/pipeline/mvp_pipeline.py`) wraps this engine to process historical datasets in batch, allowing for strategy evaluation.
 
+The current decision layer uses **ensemble consensus** (default 30 models) before confirming any bet.
+
 The flow is:
 `Dataset -> Feature Engineering -> Model Prediction -> Betting Engine -> Value Bet Output`
 
@@ -45,7 +47,7 @@ To run the full backtesting pipeline:
 python run.py
 ```
 
-The script will print the value bets found to the console.
+The script prints consensus decisions, threshold-level ROI/Yield summary, and best threshold balance (ROI x volume).
 
 ## 📁 Project Structure
 
@@ -58,6 +60,7 @@ The script will print the value bets found to the console.
   - `models/`: Model training and prediction.
   - `odds/`: Odds collection.
   - `pipeline/`: End-to-end pipeline orchestration for backtesting.
+  - `artifacts/models/`: Optional pre-trained ensemble artifacts auto-discovered by `run.py`.
 - `data/`: Datasets and other data files.
 - `tests/`: Test suite for the project.
 - `docs/`: Project documentation.

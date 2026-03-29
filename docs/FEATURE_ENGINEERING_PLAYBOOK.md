@@ -10,8 +10,8 @@ The project uses three feature categories.
 
 # Team Identity Features
 
-home_team_id  
-away_team_id
+home_team_team_enc  
+away_team_team_enc
 
 Purpose:
 
@@ -53,6 +53,12 @@ shots_attack_vs_defense
 
 rating_difference
 
+Current pipeline also adds:
+
+- ELO-based team strength features
+- total corners/goals derived features (`*_total*`)
+- result-form rolling metrics (wins/draws/losses/points)
+
 ---
 
 # Feature Creation Rules
@@ -60,3 +66,4 @@ rating_difference
 1. Use only past matches when computing rolling features
 2. Do not include test data in feature creation
 3. Maintain chronological order
+4. Fit team target encoding only on train mask (avoid leakage)

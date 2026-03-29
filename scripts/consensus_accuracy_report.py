@@ -150,6 +150,43 @@ def _dispersion_label(std_value: float) -> str:
     return "Alta Dispersao"
 
 
+def _select_mirrored_features(
+    train_data: pd.DataFrame,
+    test_data: pd.DataFrame,
+) -> list[str]:
+    """Select train features and enforce an exact mirrored set on test."""
+
+    feature_candidates = _select_feature_columns(
+        train_data, exclude=("home_corners", "away_corners")
+    )
+    train_x = train_data[feature_candidates]
+    train_x = train_x.loc[train_x.notna().all(axis=1)]
+
+    corr = train_x.corr(numeric_only=True).abs()
+    upper = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
+    to_drop = [col for col in upper.columns if (upper[col] > 0.90).any()]
+    selected_train = [col for col in feature_candidates if col not in to_drop]
+
+    # Apply the same feature filter to test and enforce exact mirror of train selection.
+    test_candidates = _select_feature_columns(
+        test_data, exclude=("home_corners", "away_corners")
+    )
+    missing_in_test = [col for col in selected_train if col not in test_candidates]
+    if missing_in_test:
+        raise ValueError(
+            "Test set is missing selected train features: "
+            f"{missing_in_test}"
+        )
+
+    selected_test = [col for col in test_candidates if col in selected_train]
+    if selected_test != selected_train:
+        raise ValueError(
+            "Test selected features do not mirror train selected features."
+        )
+
+    return selected_train
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Consensus accuracy test report.")
     parser.add_argument("--config", type=Path, default=Path("config.yml"))
@@ -209,15 +246,9 @@ def main() -> None:
     )
 
     train_data = data.loc[train_mask].copy()
-    feature_candidates = _select_feature_columns(
-        train_data, exclude=("home_corners", "away_corners")
-    )
-    train_x = train_data[feature_candidates]
-    train_x = train_x.loc[train_x.notna().all(axis=1)]
-    corr = train_x.corr(numeric_only=True).abs()
-    upper = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
-    to_drop = [col for col in upper.columns if (upper[col] > 0.90).any()]
-    selected = [col for col in feature_candidates if col not in to_drop]
+    test_data = data.loc[test_mask].copy()
+    selected = _select_mirrored_features(train_data=train_data, test_data=test_data)
+    test_x = test_data[selected].copy()
 
     seed_values = list(range(args.seed_start, args.seed_start + args.n_models))
     pred_matrix = []
@@ -229,11 +260,11 @@ def main() -> None:
             sample_weight=weights.loc[train_mask],
             random_state=seed,
         )
-        pred_home, pred_away = predict_expected_corners(models, data.loc[test_mask].copy())
+        pred_home, pred_away = predict_expected_corners(models, test_x)
         pred_matrix.append((pred_home + pred_away).to_numpy(float))
 
     lambdas = np.vstack(pred_matrix)  # (n_models, n_matches)
-    test_df = data.loc[test_mask].copy().reset_index(drop=True)
+    test_df = test_data.reset_index(drop=True)
 
     report_lines: list[str] = []
     report_lines.append("Relatorio de Consenso do Ensemble")
@@ -341,4 +372,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

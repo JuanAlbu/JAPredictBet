@@ -73,6 +73,9 @@ are intentionally discarded.
 The backtest layer also computes ROI and Yield by consensus threshold,
 allowing direct analysis of return versus betting volume.
 
+The model architecture remains based on two regressors per trained member
+(`lambda_home` and `lambda_away`), now executed as an ensemble for safety.
+
 The MVP execution now supports:
 
 - automatic training of the 30-model ensemble with standardized artifacts
@@ -83,6 +86,7 @@ The MVP execution now supports:
 - safe fuzzy matching with configurable confidence threshold (`>=95` by default)
 - automatic discard of ambiguous odds/dataset pairings to avoid synthetic linkage
 - audit logs that record explicit odds-name to dataset-name mappings
+- support for loading pre-trained ensemble artifacts from `artifacts/models`
 
 ---
 

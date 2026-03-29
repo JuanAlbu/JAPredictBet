@@ -124,28 +124,7 @@ model.fit(X_train, y_train, sample_weight=weights)
 
 ---
 
-# 5. Exponential Time Decay (Advanced Option)
-
-Instead of discrete season weights, an exponential decay function can be used.
-
-Example:
-
-weight = exp(-lambda * age_of_match)
-
-Where:
-
-age_of_match = number of days since the match occurred
-
-This method is widely used in football prediction models such as Dixon-Coles models.
-
-The purpose is to ensure:
-
-recent matches -> higher influence
-older matches -> progressively lower influence
-
----
-
-# 6. Importance of Recent Matches
+# 5. Importance of Recent Matches
 
 Recent matches contain more relevant information about:
 
@@ -162,7 +141,7 @@ recent data -> predictive relevance
 
 ---
 
-# 7. Team Identity in the Model
+# 6. Team Identity in the Model
 
 Statistics alone cannot fully capture team behavior.
 
@@ -191,7 +170,7 @@ Fallback encoding strategy:
 
 ---
 
-# 8. Training Pipeline
+# 7. Training Pipeline
 
 Full training pipeline:
 
@@ -201,8 +180,8 @@ Full training pipeline:
 4. Identify most recent season
 5. Randomly select 50% of latest season for test
 6. Assign temporal weights to training matches
-7. Train ML model
-8. Evaluate using test dataset
+7. Train ensemble models (two-model architecture per ensemble member: home + away)
+8. Run predictions and evaluate betting decisions with consensus
 
 Pipeline summary:
 
@@ -217,6 +196,18 @@ recency weighting
 model training
 ->
 evaluation
+
+---
+
+# 8. Ensemble Training Rules
+
+Current consensus mode training uses:
+
+- configurable ensemble size (`model.ensemble_size`)
+- deterministic schedule by algorithm list (`model.algorithms`)
+- default balanced mix for 30 models: 10 XGBoost + 10 LightGBM + 10 RandomForest
+- deterministic variation parameters for each member
+- automatic artifact persistence in `artifacts/models` when internal training is used
 
 ---
 
@@ -266,3 +257,4 @@ Key principles of this training strategy:
 - all previous seasons used for training
 - recency weighting applied to prioritize recent matches
 - team identity included as model features
+- consensus architecture built on ensemble members (home/away model pair per member)

@@ -74,6 +74,11 @@ Includes:
 Machine learning models are trained on historical data to produce predictions
 (e.g., expected corners).
 
+Each trained member keeps the two-model architecture:
+
+- one regressor for `lambda_home`
+- one regressor for `lambda_away`
+
 For consensus mode, training supports automated artifact generation with
 standardized names:
 
@@ -168,6 +173,9 @@ The pipeline returns threshold-level financial metrics:
 
 The execution report also highlights the best threshold balance between ROI and
 bet volume.
+
+`run.py` can also load previously trained artifacts from `artifacts/models`
+to run the pipeline without retraining.
 
 ---
 

@@ -8,24 +8,25 @@ The goal is to simulate how the system would have performed
 in past matches.
 
 Obs: o treinamento deve apenas prever o numero de escanteios.
-A logica de aposta e validacao deve ser aplicada somente no conjunto de teste.
-No teste, todas as previsoes viram aposta (over sempre). A linha e definida
-pela regra de arredondamento (x.5 mais proximo ou x.5 anterior).
+A logica de aposta e validacao deve ser aplicada no conjunto avaliado
+com decisao por consenso (nao sao aceitas todas as previsoes automaticamente).
 
 ---
 
 # Backtesting Pipeline
 
 historical data
-↓
+->
 model prediction
-↓
+->
 probability calculation
-↓
+->
 value detection
-↓
+->
+consensus decision
+->
 bet simulation
-↓
+->
 profit calculation
 
 ---
@@ -34,12 +35,12 @@ profit calculation
 
 The model predicts:
 
-λ_home  
-λ_away
+lambda_home  
+lambda_away
 
 Total expected corners:
 
-λ_total = λ_home + λ_away
+lambda_total = lambda_home + lambda_away
 
 Probabilities are calculated using Poisson distribution.
 
@@ -57,11 +58,12 @@ P_model
 
 Value:
 
-value = P_model − P_odds
+value = P_model - P_odds
 
-Bet if:
+Bet only if:
 
-value ≥ threshold
+value >= threshold
+and agreement >= consensus_threshold
 
 ---
 
@@ -81,35 +83,18 @@ HitRate = wins / total_bets
 
 ---
 
-# Exemplo de Teste (Over com arredondamento para x.5 anterior)
+# Exemplo de Teste (Consensus Over Total)
 
-Saida do modelo (away): 5.8 escanteios
+Modelos geram lambda_home e lambda_away; o sistema usa lambda_total por modelo.
 
-Aposta: Away team mais de 5.5 escanteios na partida
+Para uma linha fixa de odds (ex: Over 9.5 @ 1.90):
 
-Regra: usar x.5 anterior (linha = floor(previsao * 2) / 2)
+- cada modelo calcula P_model via Poisson
+- cada modelo vota positivo se edge >= edge_threshold
+- acordo final = votos_positivos / total_modelos
+- aposta so e confirmada se o acordo atingir consensus_threshold
 
-Resultado do teste:
+No backtest com sweep:
 
-- Away team = 5 ou menos escanteios -> errou
-- Away team = 6 ou mais escanteios -> acertou
-
----
-
-# Exemplo de Teste (Over total da partida com arredondamento para x.5 anterior)
-
-Saida do modelo (home): 6.1 escanteios  
-Saida do modelo (away): 5.8 escanteios  
-Total previsto: 11.9 escanteios
-
-Aposta: Over 11.5 escanteios na partida
-
-Regra: usar x.5 anterior (linha = floor(total_previsto * 2) / 2)
-
-Resultado do teste (total real):
-
-- Total = 11 escanteios -> errou
-- Total = 12 escanteios -> acertou
-
-Obs: o teste pode ser feito tanto no total da partida (somando home+away) quanto
-individualmente por time, usando a mesma regra de x.5 anterior e a mesma linha de corte.
+- a mesma partida e avaliada em multiplos thresholds
+- o relatorio final compara ROI, Yield, Hit Rate e volume por threshold

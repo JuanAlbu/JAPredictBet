@@ -21,8 +21,8 @@ SHAP values
 
 Team Identity
 
-home_team_id  
-away_team_id
+home_team_team_enc  
+away_team_team_enc
 
 Rolling Statistics
 
@@ -34,6 +34,12 @@ Matchup Features
 attack_vs_defense  
 rating_difference
 
+Additional groups in current pipeline:
+
+- ELO features
+- rolling result-form metrics
+- derived totals (`*_total*`)
+
 ---
 
 # Workflow
@@ -43,3 +49,4 @@ rating_difference
 3. Remove weak features
 4. Retrain model
 5. Compare performance
+6. Validate impact on consensus metrics (ROI/Yield/Hit Rate by threshold)
