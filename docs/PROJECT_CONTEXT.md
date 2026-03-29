@@ -80,6 +80,9 @@ The MVP execution now supports:
 - robust team-name normalization for dataset/odds matching
 - consensus sweep from 35% to 100% in configurable steps
 - threshold-level ROI/Yield reporting with best-threshold ranking support
+- safe fuzzy matching with configurable confidence threshold (`>=95` by default)
+- automatic discard of ambiguous odds/dataset pairings to avoid synthetic linkage
+- audit logs that record explicit odds-name to dataset-name mappings
 
 ---
 

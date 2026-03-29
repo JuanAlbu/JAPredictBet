@@ -28,12 +28,15 @@ modelo -> probabilidade -> odds -> edge -> decisao -> ROI
 
 ## Matching Partida x Odds
 
-[ ] Melhorar robustez do matching (normalizacao + fuzzy matching para dados reais)
-[ ] Definir estrategia de matching (nome + data + liga)
-[ ] Implementar normalizacao de nomes de times
-[ ] Implementar fuzzy matching (fallback)
+[x] Melhorar robustez do matching (normalizacao + fuzzy matching para dados reais) - Feito em `mvp_pipeline.py`
+[ ] (P0) Definir estrategia de matching (nome + data + liga)
+[x] Implementar normalizacao de nomes de times - Feito em `mvp_pipeline.py`
+[x] Implementar fuzzy matching (fallback) - Feito em `mvp_pipeline.py`
+[x] Implementar threshold de confianca no fuzzy match (>=95 por padrao) - `config.yml` + `mvp_pipeline.py`
+[x] Implementar descarte por ambiguidade no matching - Feito em `mvp_pipeline.py`
+[x] Implementar logging de pareamento odds -> dataset para auditoria - Feito em `mvp_pipeline.py`
 [ ] Definir chave unica de partida (match_id idealmente)
-[ ] Padronizar timezone e formato de data
+[ ] (P1) Padronizar timezone e formato de data
 
 ---
 
@@ -44,29 +47,30 @@ modelo -> probabilidade -> odds -> edge -> decisao -> ROI
 [x] Implementar coleta de odds (collector.py) - Feito, com suporte a local/http.
 [x] Normalizar estrutura das odds coletadas - Feito em `odds/collector.py`.
 [x] Integrar odds reais no pipeline (remover mock) - Feito, `mvp_pipeline.py` refatorado.
-[ ] Validar consistencia entre dataset e odds
+[ ] (P0) Validar consistencia entre dataset e odds usando nome+data+liga
 
 ---
 
 ## Backtest Real (Value Betting)
 
-[ ] Implementar calculo de ROI (prioridade maxima - sem isso pipeline nao e validavel)
-[ ] Implementar calculo de yield (metrica de retorno principal do sistema)
-[ ] Implementar lucro acumulado (rastreamento de ganhos e perdas)
+[x] Implementar calculo de ROI - Feito em `_attach_threshold_performance` (`mvp_pipeline.py`)
+[x] Implementar calculo de yield - Feito em `_attach_threshold_performance` (`mvp_pipeline.py`)
+[x] Implementar lucro acumulado (rastreamento de ganhos e perdas) - Feito via `profit` por decisao e `profit_total` por threshold
 [ ] Remover estrategia "over sempre"
-[ ] Apostar apenas quando edge > threshold
-[ ] Contabilizar numero de apostas
+[x] Apostar apenas quando edge > threshold - Feito via `ConsensusEngine` (`engine.py`)
+[x] Contabilizar numero de apostas - Feito via `bets_placed` (`mvp_pipeline.py`)
 [ ] Definir e isolar um periodo de backtest final (hold-out) nao visto no treino
 [ ] Separar metricas por:
 - home
 - away
 - total
+[ ] (P1) Expor EV agregado por threshold no relatorio final
 
 ---
 
 ## Estrategia de Stake
 
-[ ] Implementar stake fixa (flat) - MVP
+[x] Implementar stake fixa (flat) - MVP (stake=1.0 para apostas aprovadas)
 [ ] Preparar estrutura para stake proporcional (futuro)
 
 ---
@@ -109,8 +113,8 @@ modelo -> probabilidade -> odds -> edge -> decisao -> ROI
 
 [ ] Checar duplicatas
 [ ] Validar datas invalidas
-[ ] Normalizar nomes de times
-[ ] Tratar missing values
+[x] Normalizar nomes de times - Feito para matching dataset/odds em `mvp_pipeline.py`
+[x] Tratar missing values sem imputacao (dropna em campos criticos) - Feito em `ingestion.py` + `mvp_pipeline.py`
 
 ---
 
@@ -118,7 +122,7 @@ modelo -> probabilidade -> odds -> edge -> decisao -> ROI
 
 ## Persistencia
 
-[ ] Salvar modelos treinados (artifacts/)
+[x] Salvar modelos treinados (artifacts/) - Feito em `train_and_save_ensemble` (`artifacts/models`)
 [ ] Salvar metricas por execucao
 [ ] Versionar modelos (timestamp/hash)
 [ ] Salvar features utilizadas
@@ -136,7 +140,8 @@ modelo -> probabilidade -> odds -> edge -> decisao -> ROI
 - decisao
 - resultado
 
-[ ] Permitir auditoria e analise posterior
+[x] Permitir auditoria de pareamento de odds - logs de matching aceito/descartado no pipeline
+[ ] (P1) Permitir auditoria completa e analise posterior (persistir logs estruturados por aposta)
 
 ---
 
@@ -145,7 +150,7 @@ modelo -> probabilidade -> odds -> edge -> decisao -> ROI
 [x] Criar entrypoint do pipeline - Feito (`run.py` + `config.yml`).
 [ ] Criar script de treino
 [ ] Criar script de backtest
-[ ] Implementar validacao de configuracao na inicializacao (ex: com Pydantic)
+[ ] (P0) Implementar validacao de configuracao na inicializacao (ex: com Pydantic)
 [ ] Configurar pipeline de CI (ex: GitHub Actions) para rodar testes a cada commit
 
 ---
@@ -155,9 +160,11 @@ modelo -> probabilidade -> odds -> edge -> decisao -> ROI
 [x] Teste de probabilidade
 [x] Teste de calculo de edge - Coberto por `tests/betting/test_engine.py`
 [x] Teste de decisao de aposta (threshold) - Coberto por `tests/betting/test_engine.py`
+[x] Teste de matching seguro (descarte por ambiguidade + log de pareamento) - `tests/pipeline/test_mvp_pipeline.py`
 [ ] Teste de ingestao de dados
 [ ] Teste de feature engineering
 [ ] Teste de leakage
+[ ] (P1) Testes de regressao para risco de homonimos (nome igual em datas/ligas diferentes)
 
 ---
 
@@ -187,7 +194,7 @@ modelo -> probabilidade -> odds -> edge -> decisao -> ROI
 ## Modelo
 
 [ ] Adicionar odds como feature
-[ ] Implementar ensemble de modelos
+[x] Implementar ensemble de modelos - Conselho de 30 modelos com consenso
 
 ---
 
@@ -208,9 +215,9 @@ O sucesso do sistema NAO sera medido por:
 
 E sim por:
 
-[ ] ROI
-[ ] Yield
-[ ] EV (Expected Value)
+[x] ROI
+[x] Yield
+[ ] EV (Expected Value) agregado por threshold
 [ ] Consistencia ao longo do tempo
 
 ---
@@ -232,14 +239,16 @@ E sim por:
 - Pipeline de treino funcional
 - Engine de probabilidade e valor implementada
 - Coletor de Odds integrado
-- Base de testes automatizados criada (15 testes passando)
+- Base de testes automatizados criada (21 testes passando)
 - Pipeline executavel de ponta a ponta
 - Split temporal e pesos por recencia ativos no treino
 - Walk-forward implementado para validacao de modelo
+- Regra de integridade sem imputacao aplicada no pipeline (dropna em campos criticos)
+- Matching seguro com threshold, descarte por ambiguidade e logs de auditoria implementados
 
 Proximo passo critico:
 
--> Implementar o Backtest Real para validar o ROI.
+-> Blindar o matching com chave composta (nome + data + liga) e validacao de configuracao na inicializacao.
 
 ---
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import asdict
+from difflib import SequenceMatcher
 import logging
 from pathlib import Path
 from typing import Sequence
@@ -66,10 +67,9 @@ def run_mvp_pipeline(
     data = _add_total_goals_features(data, window=5)
     data["home_advantage"] = 1.0
 
-    train_mask, _ = _build_temporal_split(
+    encoding_train_mask, _ = _build_temporal_split(
         data["season"], config.model.random_state
     )
-    weights = _build_recency_weights(data["season"])
 
     data = add_elo_ratings(
         data,
@@ -85,16 +85,21 @@ def run_mvp_pipeline(
         data,
         team_col="home_team",
         target_col="home_corners",
-        train_mask=train_mask,
+        train_mask=encoding_train_mask,
         feature_name="home_team_team_enc",
     )
     data = add_team_target_encoding(
         data,
         team_col="away_team",
         target_col="away_corners",
-        train_mask=train_mask,
+        train_mask=encoding_train_mask,
         feature_name="away_team_team_enc",
     )
+    data = _drop_matches_with_missing_critical_data(data)
+    train_mask, _ = _build_temporal_split(
+        data["season"], config.model.random_state
+    )
+    weights = _build_recency_weights(data["season"])
 
     # --- Model Training and Prediction ---
     train_data = data.loc[train_mask].copy()
@@ -115,7 +120,12 @@ def run_mvp_pipeline(
     # Prepare data for robust matching
     data["source_row_id"] = data.index
     data["match_key"] = data["home_team"] + " vs " + data["away_team"]
-    merged_data = _merge_with_normalized_match_keys(data=data, odds_df=odds_df)
+    merged_data = _merge_with_normalized_match_keys(
+        data=data,
+        odds_df=odds_df,
+        similarity_threshold=float(config.odds.match_similarity_threshold),
+        ambiguity_margin=float(config.odds.ambiguity_margin),
+    )
     merged_data = merged_data.dropna(subset=["line", "over_odds"])
 
     consensus_thresholds = _build_consensus_thresholds(config)
@@ -185,9 +195,22 @@ def _get_or_train_ensemble_models(
 ) -> list[TrainedModels]:
     """Use provided ensemble models or train an ensemble from config."""
 
+    target_ensemble_size = max(1, int(config.model.ensemble_size))
+    if target_ensemble_size != 30:
+        logger.warning(
+            "Consensus architecture expects 30 models; current config uses %d.",
+            target_ensemble_size,
+        )
+
     if ensemble_models is not None:
         if not ensemble_models:
             raise ValueError("ensemble_models was provided but is empty.")
+        if len(ensemble_models) != target_ensemble_size:
+            logger.warning(
+                "Provided ensemble size differs from config | provided=%d | configured=%d",
+                len(ensemble_models),
+                target_ensemble_size,
+            )
         return list(ensemble_models)
 
     output_dir = Path("artifacts") / "models"
@@ -197,7 +220,7 @@ def _get_or_train_ensemble_models(
         away_target="away_corners",
         output_dir=output_dir,
         algorithms=_normalize_algorithms(config.model.algorithms),
-        ensemble_size=max(1, int(config.model.ensemble_size)),
+        ensemble_size=target_ensemble_size,
         sample_weight=train_weights,
         random_state=config.model.random_state,
         ensemble_seed_stride=max(1, int(config.model.ensemble_seed_stride)),
@@ -265,7 +288,12 @@ def _normalize_algorithms(algorithms: Sequence[str]) -> tuple[str, ...]:
     return normalized if normalized else ("xgboost",)
 
 
-def _merge_with_normalized_match_keys(data: pd.DataFrame, odds_df: pd.DataFrame) -> pd.DataFrame:
+def _merge_with_normalized_match_keys(
+    data: pd.DataFrame,
+    odds_df: pd.DataFrame,
+    similarity_threshold: float = 95.0,
+    ambiguity_margin: float = 1.0,
+) -> pd.DataFrame:
     """Merge dataset and odds using robust normalized team names."""
 
     prepared_data = data.copy()
@@ -274,6 +302,20 @@ def _merge_with_normalized_match_keys(data: pd.DataFrame, odds_df: pd.DataFrame)
     prepared_data["match_key_normalized"] = prepared_data["match_key"].map(_normalize_match_key)
     prepared_odds["match_key"] = prepared_odds["match"]
     prepared_odds["match_key_normalized"] = prepared_odds["match_key"].map(_normalize_match_key)
+    prepared_odds = prepared_odds.dropna(subset=["match_key_normalized"]).copy()
+
+    odds_key_counts = prepared_odds["match_key_normalized"].value_counts()
+    ambiguous_exact_keys = odds_key_counts[odds_key_counts > 1].index.tolist()
+    if ambiguous_exact_keys:
+        logger.info(
+            "Dropping ambiguous odds keys with multiple rows: %d",
+            len(ambiguous_exact_keys),
+        )
+        prepared_odds = prepared_odds[
+            ~prepared_odds["match_key_normalized"].isin(ambiguous_exact_keys)
+        ].copy()
+    if prepared_odds.empty:
+        return prepared_data.assign(line=np.nan, over_odds=np.nan, under_odds=np.nan)
 
     merged = pd.merge(
         prepared_data,
@@ -283,48 +325,185 @@ def _merge_with_normalized_match_keys(data: pd.DataFrame, odds_df: pd.DataFrame)
         suffixes=("", "_odds"),
     )
 
-    # Fuzzy fallback to recover rows still unmatched after strict normalization.
-    odds_key_lookup = {
-        _normalize_match_key(raw_key): raw_key
-        for raw_key in prepared_odds["match_key"].dropna().tolist()
+    if "line" not in merged.columns:
+        return merged
+
+    strict_matched = merged[merged["line"].notna()] if "line" in merged.columns else pd.DataFrame()
+    _log_match_pairing(strict_matched, method="strict", score=100.0)
+
+    # Formatting-correction fallback with safety gates:
+    # 1) minimum similarity threshold
+    # 2) ambiguity rejection when top candidates are too close.
+    odds_keys = prepared_odds["match_key_normalized"].dropna().unique().tolist()
+    if not odds_keys:
+        return merged
+
+    odds_by_key = {
+        normalized_key: group.copy()
+        for normalized_key, group in prepared_odds.groupby("match_key_normalized", dropna=True)
     }
-
-    normalized_odds_keys = list(odds_key_lookup.keys())
-    if not normalized_odds_keys:
+    if not odds_by_key:
         return merged
 
-    from difflib import get_close_matches
-
-    fuzzy_map: dict[str, str] = {}
-    for key in prepared_data["match_key_normalized"].dropna().unique().tolist():
-        close = get_close_matches(key, normalized_odds_keys, n=1, cutoff=0.82)
-        if close:
-            fuzzy_map[key] = close[0]
-
-    if not fuzzy_map:
+    unmatched_mask = merged["line"].isna()
+    if not unmatched_mask.any():
         return merged
 
-    prepared_data["fuzzy_odds_key"] = prepared_data["match_key_normalized"].map(fuzzy_map)
-    prepared_odds["fuzzy_odds_key"] = prepared_odds["match_key_normalized"]
-    fuzzy_merged = pd.merge(
-        prepared_data,
-        prepared_odds.drop(columns=["match_key_normalized", "match"]),
-        on="fuzzy_odds_key",
-        how="left",
-    )
-    # Fill only rows missing from strict merge using fuzzy merge values.
-    fill_columns = [col for col in ["line", "over_odds", "under_odds"] if col in merged.columns]
-    if not fill_columns:
-        return merged
-
-    fuzzy_lookup = fuzzy_merged.set_index("source_row_id")
-    for column in fill_columns:
-        if column not in fuzzy_lookup.columns:
+    recovered_rows: list[dict[str, float | str | int]] = []
+    unmatched_rows = merged.loc[unmatched_mask, ["source_row_id", "match_key", "match_key_normalized"]]
+    for _, row in unmatched_rows.iterrows():
+        source_id = int(row["source_row_id"])
+        source_match = str(row["match_key"])
+        source_key = str(row["match_key_normalized"])
+        if not source_key:
             continue
-        merged[column] = merged[column].fillna(
-            merged["source_row_id"].map(fuzzy_lookup[column])
+
+        ranked_candidates = sorted(
+            (
+                (_similarity_score(source_key, candidate_key), candidate_key)
+                for candidate_key in odds_by_key
+            ),
+            key=lambda item: item[0],
+            reverse=True,
         )
+        if not ranked_candidates:
+            logger.info(
+                "Odds match discarded | source='%s' | reason=no_candidates",
+                source_match,
+            )
+            continue
+
+        top_score, top_key = ranked_candidates[0]
+        second_score = ranked_candidates[1][0] if len(ranked_candidates) > 1 else -1.0
+        if top_score < similarity_threshold:
+            logger.info(
+                "Odds match discarded | source='%s' | reason=low_similarity | best_score=%.2f | required=%.2f",
+                source_match,
+                top_score,
+                similarity_threshold,
+            )
+            continue
+        if second_score >= 0.0 and (top_score - second_score) <= ambiguity_margin:
+            logger.info(
+                "Odds match discarded | source='%s' | reason=ambiguous | best_score=%.2f | second_score=%.2f | margin=%.2f",
+                source_match,
+                top_score,
+                second_score,
+                ambiguity_margin,
+            )
+            continue
+
+        matched_odds = odds_by_key[top_key]
+        if len(matched_odds) != 1:
+            logger.info(
+                "Odds match discarded | source='%s' | reason=multiple_odds_rows | candidates=%d",
+                source_match,
+                len(matched_odds),
+            )
+            continue
+
+        matched_row = matched_odds.iloc[0]
+        recovered_rows.append(
+            {
+                "source_row_id": source_id,
+                "line": float(matched_row["line"]),
+                "over_odds": float(matched_row["over_odds"]),
+                "under_odds": float(matched_row["under_odds"]),
+                "matched_odds_match": str(matched_row["match"]),
+                "match_similarity_score": float(top_score),
+            }
+        )
+
+    if not recovered_rows:
+        return merged
+
+    recovered = pd.DataFrame(recovered_rows).set_index("source_row_id")
+    for column in ("line", "over_odds", "under_odds"):
+        if column not in merged.columns or column not in recovered.columns:
+            continue
+        missing_mask = merged[column].isna()
+        merged.loc[missing_mask, column] = merged.loc[missing_mask, "source_row_id"].map(
+            recovered[column]
+        )
+    recovered_log = merged[merged["source_row_id"].isin(recovered.index)].copy()
+    recovered_log["matched_odds_match"] = recovered_log["source_row_id"].map(
+        recovered["matched_odds_match"]
+    )
+    recovered_log["match_similarity_score"] = recovered_log["source_row_id"].map(
+        recovered["match_similarity_score"]
+    )
+    _log_match_pairing(
+        recovered_log,
+        method="fuzzy_safe",
+    )
     return merged
+
+
+def _similarity_score(left: str, right: str) -> float:
+    """Compute robust similarity score in [0, 100] for normalized keys."""
+
+    if not left or not right:
+        return 0.0
+
+    left_tokens = set(left.split())
+    right_tokens = set(right.split())
+    if left_tokens and right_tokens and (
+        left_tokens.issubset(right_tokens) or right_tokens.issubset(left_tokens)
+    ):
+        return 100.0
+
+    return SequenceMatcher(None, left, right).ratio() * 100.0
+
+
+def _log_match_pairing(
+    matched_rows: pd.DataFrame,
+    method: str,
+    score: float | None = None,
+) -> None:
+    """Log auditable dataset<->odds pairing details."""
+
+    if matched_rows.empty:
+        return
+
+    for _, row in matched_rows.iterrows():
+        dataset_match = str(row.get("match_key", ""))
+        odds_match = str(row.get("matched_odds_match", row.get("match", "")))
+        if not dataset_match or not odds_match:
+            continue
+        dataset_home, dataset_away = _split_match_name(dataset_match)
+        odds_home, odds_away = _split_match_name(odds_match)
+        similarity = (
+            float(row.get("match_similarity_score"))
+            if "match_similarity_score" in row and pd.notna(row.get("match_similarity_score"))
+            else (100.0 if score is None else score)
+        )
+        logger.info(
+            "Odds pairing accepted | method=%s | score=%.2f | odds_home='%s' -> dataset_home='%s' | odds_away='%s' -> dataset_away='%s' | odds_match='%s' | dataset_match='%s'",
+            method,
+            similarity,
+            odds_home,
+            dataset_home,
+            odds_away,
+            dataset_away,
+            odds_match,
+            dataset_match,
+        )
+
+
+def _split_match_name(match_name: str) -> tuple[str, str]:
+    """Split a match label into home and away team names."""
+
+    import re
+
+    if not isinstance(match_name, str):
+        return "", ""
+    raw = match_name.strip()
+    parts = re.split(r"\s+(?:versus|vs|v|x)\s+", raw, maxsplit=1, flags=re.IGNORECASE)
+    if len(parts) == 2:
+        home = parts[0].strip()
+        away = parts[1].strip()
+        return home, away
+    return match_name.strip(), ""
 
 
 def _normalize_match_key(match_name: str) -> str:
@@ -368,7 +547,7 @@ def _normalize_team_name(team_name: str) -> str:
 
     stop_tokens = {
         "fc", "cf", "sc", "ac", "cr", "cd", "club", "clube", "de", "do", "da",
-        "the", "esporte", "sport", "athletic", "atletico",
+        "the", "esporte", "sport", "athletic", "atletico", "gama",
     }
     filtered = [token for token in tokens if token not in stop_tokens]
     return " ".join(filtered) if filtered else " ".join(tokens)
@@ -411,7 +590,6 @@ def _attach_threshold_performance(decisions_df: pd.DataFrame) -> pd.DataFrame:
     summary["yield_pct"] = summary["yield"] * 100.0
     summary["roi_pct"] = summary["roi"] * 100.0
     summary = summary.merge(hit_rate_summary, on="consensus_threshold", how="left")
-    summary["hit_rate"] = summary["hit_rate"].fillna(0.0)
     summary["hit_rate_pct"] = summary["hit_rate"] * 100.0
 
     # Rank thresholds by financial quality (ROI first, then profit, then volume).
@@ -565,3 +743,61 @@ def _add_total_goals_features(data: pd.DataFrame, window: int) -> pd.DataFrame:
     if home_for in df.columns and away_for in df.columns:
         df[f"total_goals_for{suffix}"] = df[home_for] + df[away_for]
     return df
+
+
+def _drop_matches_with_missing_critical_data(data: pd.DataFrame) -> pd.DataFrame:
+    """Drop matches with missing labels or model-critical features."""
+
+    required = ["season", "home_team", "away_team", "home_corners", "away_corners"]
+    feature_columns = _select_critical_feature_columns(
+        data,
+        exclude=("home_corners", "away_corners"),
+    )
+    subset = [column for column in required + feature_columns if column in data.columns]
+    if not subset:
+        return data
+
+    before = len(data)
+    cleaned = data.dropna(subset=subset).copy()
+    dropped = before - len(cleaned)
+    if dropped:
+        logger.info(
+            "Dropped matches with missing critical values: %d (remaining=%d)",
+            dropped,
+            len(cleaned),
+        )
+    return cleaned
+
+
+def _select_critical_feature_columns(
+    data: pd.DataFrame,
+    exclude: tuple[str, ...],
+) -> list[str]:
+    """Select numeric model features considered critical for train/backtest."""
+
+    numeric_columns = data.select_dtypes(include=[np.number]).columns
+    excluded = set(exclude)
+    selected: list[str] = []
+    for column in numeric_columns:
+        if column in excluded:
+            continue
+        if _is_model_feature_candidate(column):
+            selected.append(column)
+    return selected
+
+
+def _is_model_feature_candidate(column: str) -> bool:
+    """Match the same pre-match feature pattern used by the training module."""
+
+    keywords = (
+        "_last",
+        "_diff",
+        "_team_enc",
+        "_vs_",
+        "_ratio",
+        "_pressure",
+        "_total",
+        "elo",
+    )
+    direct_features = {"home_advantage", "is_home"}
+    return column in direct_features or any(keyword in column for keyword in keywords)

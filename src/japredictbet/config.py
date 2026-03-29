@@ -38,6 +38,8 @@ class OddsConfig:
     """Odds ingestion settings."""
 
     provider_name: str = "mock"
+    match_similarity_threshold: float = 95.0
+    ambiguity_margin: float = 1.0
 
 
 @dataclass(frozen=True)

@@ -76,6 +76,9 @@ The system must:
 - support corner over/under markets
 - normalize bookmaker data format
 - normalize team names for robust dataset/odds matching
+- apply safe fuzzy matching only above configurable similarity threshold (default `95`)
+- reject and discard ambiguous matches (close competing candidates)
+- log explicit pairing audit records (odds team name -> dataset team name)
 
 ---
 

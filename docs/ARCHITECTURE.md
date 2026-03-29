@@ -168,3 +168,19 @@ The pipeline returns threshold-level financial metrics:
 
 The execution report also highlights the best threshold balance between ROI and
 bet volume.
+
+---
+
+## Safe Match Pairing Policy
+
+To preserve data integrity when joining odds with historical matches:
+
+- strict normalized match-key join is attempted first
+- fuzzy fallback is allowed only for formatting corrections with high confidence
+- fuzzy acceptance requires configurable similarity threshold (default `>= 95`)
+- ambiguous candidates (close top scores) are rejected and discarded
+- duplicate odds rows for the same normalized key are treated as ambiguous and discarded
+
+All accepted pairings are logged with explicit mapping for manual audit, e.g.:
+
+- `'CR Flamengo' -> 'Flamengo'`

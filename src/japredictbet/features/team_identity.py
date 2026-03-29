@@ -16,7 +16,6 @@ def add_team_target_encoding(
 
     df = df.copy()
     train_data = df.loc[train_mask]
-    global_mean = train_data[target_col].mean()
     team_means = train_data.groupby(team_col)[target_col].mean()
-    df[feature_name] = df[team_col].map(team_means).fillna(global_mean)
+    df[feature_name] = df[team_col].map(team_means)
     return df

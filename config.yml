@@ -15,6 +15,8 @@ model:
 
 odds:
   provider_name: "data/raw/mock_odds.json"
+  match_similarity_threshold: 95.0
+  ambiguity_margin: 1.0
 
 value:
   threshold: 0.05 # Edge minimo para voto positivo

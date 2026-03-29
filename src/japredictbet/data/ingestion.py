@@ -151,6 +151,7 @@ def load_historical_dataset(path: Path, date_column: str = "date") -> pd.DataFra
         dayfirst=True,
         format="mixed",
     )
-    df = df.dropna(subset=[normalized_date_column])
+    required_non_null_columns = sorted(set(REQUIRED_COLUMNS) | {normalized_date_column})
+    df = df.dropna(subset=required_non_null_columns)
     df = df.sort_values(normalized_date_column).reset_index(drop=True)
     return df
