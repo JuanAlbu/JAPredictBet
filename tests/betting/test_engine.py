@@ -136,6 +136,8 @@ def test_consensus_engine_confirms_bet():
     assert result["consensus_label"] == "Consenso: 4/4 - 100% | Status: Value Bet"
     assert result["decision_status"] == "Value Bet"
     assert result["model_votes"] == [1, 1, 1, 1]
+    assert "ESTATISTICAS DO ENSEMBLE" in result["audit_report"]
+    assert "CONCLUSAO: VALUE BET CONFIRMADA" in result["audit_report"]
 
 
 def test_consensus_engine_discards_without_agreement():
@@ -165,3 +167,22 @@ def test_consensus_engine_discards_without_agreement():
     assert result["consensus_label"] == "Consenso: 0/4 - 0% | Status: Insegura"
     assert result["decision_status"] == "Insegura"
     assert result["model_votes"] == [0, 0, 0, 0]
+    assert "CONCLUSAO: ABSTENCAO (INSEGURA)" in result["audit_report"]
+
+
+def test_report_consensus_generates_formatted_output():
+    """Report helper should return standardized audit payload."""
+
+    lambdas = [10.0, 10.3, 9.8, 10.5]
+    report = engine.report_consensus(
+        lambdas=lambdas,
+        odds=2.0,
+        line=9.5,
+        threshold_edge=0.05,
+        consensus_threshold=0.70,
+    )
+
+    assert "ESTATISTICAS DO ENSEMBLE (4 MODELOS)" in report["formatted_report"]
+    assert "VOTACAO DE VALOR" in report["formatted_report"]
+    assert "CONCLUSAO" in report["formatted_report"]
+    assert report["votes"] >= 0

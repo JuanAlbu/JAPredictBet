@@ -118,6 +118,7 @@ The system must:
 - evaluate consensus agreement
 - produce auditable decision logs
 - compute segmented financial performance (ROI/Yield) by consensus threshold
+- use a standardized consensus audit report block for each evaluated bet
 
 ---
 

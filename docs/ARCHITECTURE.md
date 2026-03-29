@@ -120,6 +120,14 @@ Example audit output:
 - `Aposta descartada por falta de consenso (Agreement: 40%)`
 - `Consenso: 21/30 - 70% | Status: Value Bet`
 
+The consensus audit is standardized by `report_consensus(...)` in `engine.py`,
+which generates:
+
+- ensemble statistics (mean/std of lambdas)
+- lambda-range distribution
+- vote count and agreement
+- formatted conclusion block used for backtest logs
+
 ---
 
 ## Backtest Threshold Sweep
@@ -138,3 +146,4 @@ The pipeline returns threshold-level financial metrics:
 - `profit_total`
 - `yield`
 - `roi`
+- `hit_rate`

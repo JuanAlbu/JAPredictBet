@@ -138,7 +138,7 @@ def run_mvp_pipeline(
         }
 
         for threshold in consensus_thresholds:
-            decision = consensus_engine.evaluate_with_consensus(
+            decision = consensus_engine.evaluate_match_with_consensus(
                 predictions_list=model_predictions,
                 odds_data=consensus_odds,
                 threshold=threshold,
@@ -316,12 +316,30 @@ def _attach_threshold_performance(decisions_df: pd.DataFrame) -> pd.DataFrame:
         profit_total=("profit", "sum"),
     ).reset_index()
 
+    # Hit rate (accuracy of placed bets excluding pushes)
+    settled = decisions_df[
+        (decisions_df["stake"] > 0.0) & (decisions_df["bet_result"].notna())
+    ].copy()
+    if settled.empty:
+        hit_rate_summary = summary[["consensus_threshold"]].copy()
+        hit_rate_summary["hit_rate"] = 0.0
+    else:
+        settled["is_win"] = settled["bet_result"].astype(bool)
+        hit_rate_summary = (
+            settled.groupby("consensus_threshold", dropna=False)["is_win"]
+            .mean()
+            .reset_index()
+            .rename(columns={"is_win": "hit_rate"})
+        )
+
     summary["yield"] = np.where(
         summary["bets_placed"] > 0,
         summary["profit_total"] / summary["bets_placed"],
         0.0,
     )
     summary["roi"] = summary["yield"]
+    summary = summary.merge(hit_rate_summary, on="consensus_threshold", how="left")
+    summary["hit_rate"] = summary["hit_rate"].fillna(0.0)
 
     return decisions_df.merge(summary, on="consensus_threshold", how="left")
 

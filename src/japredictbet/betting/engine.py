@@ -4,6 +4,7 @@ import logging
 import math
 from typing import Dict, Iterable, Optional
 
+import numpy as np
 from scipy.stats import poisson
 
 logger = logging.getLogger(__name__)
@@ -216,6 +217,78 @@ def compute_profit(
     return -stake
 
 
+def report_consensus(
+    lambdas: list[float],
+    odds: float,
+    line: float,
+    threshold_edge: float,
+    consensus_threshold: float,
+) -> Dict:
+    """Gera o output resumido da Analise de Concordancia."""
+
+    if not lambdas:
+        raise ValueError("lambdas must contain at least one value.")
+    if odds <= 0:
+        raise ValueError("odds must be positive.")
+
+    # 1. Estatisticas Basicas
+    mean_lambda = float(np.mean(lambdas))
+    std_lambda = float(np.std(lambdas))
+
+    # 2. Votacao de Valor (Poisson + Edge)
+    probs = [1 - poisson.cdf(line, lb) for lb in lambdas]
+    p_odds = 1 / odds
+    votes = int(sum(1 for p in probs if (p - p_odds) >= threshold_edge))
+    agreement = votes / len(lambdas)
+
+    # 3. Distribuicao por Ranges (Frequencia)
+    ranges = {
+        f"< {line}": int(sum(1 for lb in lambdas if lb < line)),
+        f"{line} - {line + 1}": int(sum(1 for lb in lambdas if line <= lb < line + 1)),
+        f"> {line + 1}": int(sum(1 for lb in lambdas if lb >= line + 1)),
+    }
+
+    # 4. Decisao
+    status = (
+        "VALUE BET CONFIRMADA"
+        if agreement >= consensus_threshold
+        else "ABSTENCAO (INSEGURA)"
+    )
+
+    lines = [
+        "-" * 40,
+        f"ESTATISTICAS DO ENSEMBLE ({len(lambdas)} MODELOS)",
+        f"Media lambda: {mean_lambda:.2f} | Desvio Padrao (sigma): {std_lambda:.2f}",
+        "",
+        "DISTRIBUICAO POR RANGE (lambda):",
+    ]
+    for label, count in ranges.items():
+        lines.append(f"  {label}: {count} modelos")
+
+    lines.extend(
+        [
+            "",
+            f"VOTACAO DE VALOR (Edge >= {threshold_edge}):",
+            f"  Votos: {votes} / {len(lambdas)} ({agreement:.1%})",
+            f"  Threshold Requerido: {consensus_threshold:.1%}",
+            f"",
+            f"CONCLUSAO: {status}",
+            "-" * 40,
+        ]
+    )
+    formatted_report = "\n".join(lines)
+
+    return {
+        "mean_lambda": mean_lambda,
+        "std_lambda": std_lambda,
+        "votes": votes,
+        "agreement": agreement,
+        "ranges": ranges,
+        "status": status,
+        "formatted_report": formatted_report,
+    }
+
+
 class ConsensusEngine:
     """Consensus-based evaluator for value betting decisions.
 
@@ -252,6 +325,7 @@ class ConsensusEngine:
         model_votes = []
         model_edges = []
         model_probs = []
+        lambda_totals = []
         normalized_predictions = list(predictions_list)
 
         if not normalized_predictions:
@@ -274,6 +348,7 @@ class ConsensusEngine:
             model_votes.append(vote)
             model_edges.append(edge)
             model_probs.append(p_model)
+            lambda_totals.append(lambda_total)
 
         total_models = len(model_votes)
         positive_votes = int(sum(model_votes))
@@ -291,6 +366,13 @@ class ConsensusEngine:
             f"Consenso: {positive_votes}/{total_models} - {agreement:.0%} | "
             f"Status: {decision_status}"
         )
+        audit_report = report_consensus(
+            lambdas=lambda_totals,
+            odds=odds,
+            line=line,
+            threshold_edge=self.edge_threshold,
+            consensus_threshold=threshold,
+        )
 
         logger.info(
             "%s | threshold=%.0f%% | edge_threshold=%.2f | votes=%s",
@@ -299,6 +381,7 @@ class ConsensusEngine:
             self.edge_threshold,
             model_votes,
         )
+        logger.info("Audit report\n%s", audit_report["formatted_report"])
 
         return {
             "line": line,
@@ -318,10 +401,27 @@ class ConsensusEngine:
             "decision_status": decision_status,
             "model_votes": model_votes,
             "model_edges": model_edges,
+            "audit_report": audit_report["formatted_report"],
+            "ensemble_mean_lambda": audit_report["mean_lambda"],
+            "ensemble_std_lambda": audit_report["std_lambda"],
             "status_message": status_message,
             "bet": should_place_bet,
             "is_value": should_place_bet,
         }
+
+    def evaluate_match_with_consensus(
+        self,
+        predictions_list: Iterable[Dict],
+        odds_data: Dict,
+        threshold: float = 0.7,
+    ) -> Dict:
+        """Alias explicito para integracao com pipeline/backtest."""
+
+        return self.evaluate_with_consensus(
+            predictions_list=predictions_list,
+            odds_data=odds_data,
+            threshold=threshold,
+        )
 
 
 def _extract_lambda_total(prediction: Dict) -> float:
