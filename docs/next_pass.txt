@@ -5,7 +5,7 @@ Checklist - proximos passos
 [x] Definir e integrar features finais usadas no treino (selecionar colunas)
 [ ] Definir contrato de odds (schema esperado) e estrategia de matching partida <-> odds
 [ ] Implementar coleta e normalizacao de odds em src/japredictbet/odds/collector.py
-[ ] Ajustar pipeline em src/japredictbet/pipeline/mvp_pipeline.py para usar odds e linhas reais
+[ ] Ajustar pipeline em src/japredictbet/pipeline/mvp_pipeline.py para usar odds e linhas reais (atualmente usa mock odds)
 [ ] Criar testes basicos em tests/ (ingestao, features, probabilidade, value_detector)
 [ ] Definir scripts ou entrypoints para rodar o pipeline
 [ ] Implementar persistencia basica de modelos e metricas (artifacts em pasta local)
@@ -14,14 +14,14 @@ Checklist - proximos passos
 
 Checklist - inconsistencias e alinhamentos de docs
 
-[ ] Alinhar janelas de rolling features (5 e 10 vs apenas 10) em todos os docs
-[ ] Definir encoding de team identity (default target vs label) e atualizar docs
-[ ] Confirmar algoritmo permitido (XGBoost apenas vs XGBoost/LightGBM) e atualizar PRD/arquitetura
-[ ] Decidir se odds sao obrigatorias no MVP ou opcionais e alinhar docs
-[ ] Documentar dependencias minimas do dataset (ex: gols se ELO for usado)
-[ ] Atualizar docstring do mvp_pipeline (treino e odds ja existem no fluxo)
+[ ] Alinhar janelas de rolling features (5 e 10 vs apenas 10) em todos os docs - NOTA: Codigo usa ambas as janelas
+[ ] Definir encoding de team identity (default target vs label) e atualizar docs - NOTA: Codigo usa target encoding com nomes "home_team_team_enc" e "away_team_team_enc"
+[ ] Confirmar algoritmo permitido (XGBoost apenas vs XGBoost/LightGBM) e atualizar PRD/arquitetura - NOTA: Codigo usa apenas XGBoost
+[ ] Decidir se odds sao obrigatorias no MVP ou opcionais e alinhar docs - NOTA: Pipeline tenta buscar odds mas usa mock se falhar
+[ ] Documentar dependencias minimas do dataset (ex: gols se ELO for usado) - NOTA: ELO requer home_goals e away_goals
+[ ] Atualizar docstring do mvp_pipeline (treino e odds ja existem no fluxo) - NOTA: Docstring precisa ser atualizada
 [ ] Corrigir encoding nos docs (setas e simbolos lambda)
-[ ] Padronizar nomes finais das features (ex: home_team_team_enc vs home_team_id)
+[ ] Padronizar nomes finais das features (ex: home_team_team_enc vs home_team_id) - NOTA: Codigo usa "home_team_team_enc"
 
 Checklist - melhorias MVP nao mapeadas
 

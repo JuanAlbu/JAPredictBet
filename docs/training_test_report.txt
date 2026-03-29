@@ -1,6 +1,6 @@
 Relatorio - Treinamento e Teste
 
-Data: 2026-03-16
+Data: 2026-03-19
 
 Resumo
 Este relatorio descreve o treinamento dos modelos de escanteios e a validacao no conjunto de teste.
@@ -18,6 +18,7 @@ Features utilizadas
 - Elo ratings (quando gols estao disponiveis)
 - Target encoding de times (home e away)
 - Home advantage
+- Remocao de features com correlacao alta (threshold 0.90)
 
 Modelo
 - Dois modelos XGBoost (home e away)
@@ -25,50 +26,29 @@ Modelo
 - Metricas internas: poisson-nloglik
 
 Hiperparametros finais (train.py)
-- n_estimators: 390
-- learning_rate: 0.07028325952142593
+- n_estimators: 507
+- learning_rate: 0.08242879217471218
 - max_depth: 6
-- subsample: 0.933071278423135
-- colsample_bytree: 0.8801060408008996
-- min_child_weight: 3
-- gamma: 0.6247332827640821
+- subsample: 0.7549913516120698
+- colsample_bytree: 0.7153312415720976
+- min_child_weight: 2
+- gamma: 0.2795049672186196
 - random_state: 42
 
 Regras de teste
 - Todas as previsoes do conjunto de teste viram aposta (over sempre)
 - Linha definida por regra de arredondamento
-  - x.5 mais proximo
   - x.5 anterior
 - Push (resultado == linha) e excluido do hit rate
 
 Resultados (Over sempre, teste 2025)
 
-x.5 mais proximo
-- Home: validos 133, push 12, hit rate 46.62%
-- Away: validos 129, push 16, hit rate 31.78%
-- Total: validos 136, push 9, hit rate 41.18%
-
-x.5 anterior
-- Home: validos 133, push 12, hit rate 51.88%
-- Away: validos 124, push 21, hit rate 37.90%
-- Total: validos 137, push 8, hit rate 43.07%
-
-Melhor resultado (25x - variacao de hiperparametros, over sempre, x.5 anterior)
-- Total hit rate: 56.93%
-- Home hit rate: 58.70%
-- Away hit rate: 49.62%
-
-Hiperparametros vencedores
-- n_estimators: 390
-- learning_rate: 0.07028325952142593
-- max_depth: 6
-- subsample: 0.933071278423135
-- colsample_bytree: 0.8801060408008996
-- min_child_weight: 3
-- gamma: 0.6247332827640821
-- random_state: 42
+Com threshold 0.90 (features removidas: 12; features finais: 99)
+- Home: hit rate 61.15%
+- Away: hit rate 56.59%
+- Total: hit rate 60.74%
 
 Observacoes
 - O treinamento nao considera regras de aposta.
-- A escolha da regra de linha impacta diretamente o hit rate.
+- A escolha da regra de linha e o threshold de correlacao impactam o hit rate.
 - Para comparacoes futuras, manter o mesmo split temporal e as mesmas regras de teste.

@@ -1,0 +1,286 @@
+# Entradas do Modelo e Analise de Correlacao
+
+Este documento resume as entradas do modelo e a analise de correlacao baseada no pipeline de features do walk_forward.
+
+## Contexto
+- Pipeline de features baseado em walk_forward (_build_features)
+- Rolling windows: 10 e 5
+- Encoding de times via target encoding (home_team_team_enc, away_team_team_enc)
+
+## Resumo
+- Total de features numericas usadas no treino: 111
+- Linhas validas para correlacao: 3587
+
+
+## Entradas do Modelo (Features)
+- home_corners_for_last10
+- home_corners_against_last10
+- away_corners_for_last10
+- away_corners_against_last10
+- home_goals_for_last10
+- home_goals_against_last10
+- away_goals_for_last10
+- away_goals_against_last10
+- home_shots_for_last10
+- home_shots_against_last10
+- away_shots_for_last10
+- away_shots_against_last10
+- home_shots_on_target_for_last10
+- home_shots_on_target_against_last10
+- away_shots_on_target_for_last10
+- away_shots_on_target_against_last10
+- home_fouls_for_last10
+- home_fouls_against_last10
+- away_fouls_for_last10
+- away_fouls_against_last10
+- home_yellow_cards_for_last10
+- home_yellow_cards_against_last10
+- away_yellow_cards_for_last10
+- away_yellow_cards_against_last10
+- home_red_cards_for_last10
+- home_red_cards_against_last10
+- away_red_cards_for_last10
+- away_red_cards_against_last10
+- home_wins_last10
+- home_draws_last10
+- home_losses_last10
+- home_points_last10
+- home_win_rate_last10
+- home_points_per_game_last10
+- away_wins_last10
+- away_draws_last10
+- away_losses_last10
+- away_points_last10
+- away_win_rate_last10
+- away_points_per_game_last10
+- home_attack_vs_away_defense_corners_last10
+- away_attack_vs_home_defense_corners_last10
+- corners_last10_diff
+- shots_last10_diff
+- shots_on_target_last10_diff
+- fouls_last10_diff
+- cards_last10_diff
+- corners_pressure_index_last10
+- home_total_corners_last10
+- away_total_corners_last10
+- total_corners_for_last10
+- home_total_goals_last10
+- away_total_goals_last10
+- total_goals_for_last10
+- home_corners_for_last5
+- home_corners_against_last5
+- away_corners_for_last5
+- away_corners_against_last5
+- home_goals_for_last5
+- home_goals_against_last5
+- away_goals_for_last5
+- away_goals_against_last5
+- home_shots_for_last5
+- home_shots_against_last5
+- away_shots_for_last5
+- away_shots_against_last5
+- home_shots_on_target_for_last5
+- home_shots_on_target_against_last5
+- away_shots_on_target_for_last5
+- away_shots_on_target_against_last5
+- home_fouls_for_last5
+- home_fouls_against_last5
+- away_fouls_for_last5
+- away_fouls_against_last5
+- home_yellow_cards_for_last5
+- home_yellow_cards_against_last5
+- away_yellow_cards_for_last5
+- away_yellow_cards_against_last5
+- home_red_cards_for_last5
+- home_red_cards_against_last5
+- away_red_cards_for_last5
+- away_red_cards_against_last5
+- home_wins_last5
+- home_draws_last5
+- home_losses_last5
+- home_points_last5
+- home_win_rate_last5
+- home_points_per_game_last5
+- away_wins_last5
+- away_draws_last5
+- away_losses_last5
+- away_points_last5
+- away_win_rate_last5
+- away_points_per_game_last5
+- home_attack_vs_away_defense_corners_last5
+- away_attack_vs_home_defense_corners_last5
+- corners_last5_diff
+- shots_last5_diff
+- shots_on_target_last5_diff
+- fouls_last5_diff
+- cards_last5_diff
+- corners_pressure_index_last5
+- home_total_corners_last5
+- away_total_corners_last5
+- total_corners_for_last5
+- home_total_goals_last5
+- away_total_goals_last5
+- total_goals_for_last5
+- home_advantage
+- home_team_team_enc
+- away_team_team_enc
+
+
+## Top 30 Correlacoes (Pearson)
+- home_corners_for_last10 vs home_attack_vs_away_defense_corners_last10: 0.8467
+- away_corners_for_last10 vs away_attack_vs_home_defense_corners_last10: 0.8388
+- home_corners_for_last10 vs corners_last10_diff: 0.7643
+- home_corners_for_last10 vs total_corners_for_last10: 0.7525
+- home_goals_for_last10 vs total_goals_for_last10: 0.7324
+- home_corners_for_last10 vs home_corners_for_last5: 0.7085
+- home_win_rate_last10 vs home_wins_last5: 0.7044
+- home_win_rate_last10 vs home_win_rate_last5: 0.7044
+- home_corners_for_last10 vs home_total_corners_last10: 0.6987
+- home_win_rate_last10 vs home_points_per_game_last5: 0.6735
+- home_win_rate_last10 vs home_points_last5: 0.6735
+- home_corners_for_last10 vs home_attack_vs_away_defense_corners_last5: 0.6486
+- home_corners_for_last10 vs home_shots_for_last10: 0.5801
+- home_corners_for_last10 vs corners_pressure_index_last10: 0.5552
+- home_corners_for_last10 vs total_corners_for_last5: 0.5388
+- home_corners_for_last10 vs corners_last5_diff: 0.5320
+- home_corners_for_last10 vs home_total_corners_last5: 0.5010
+- home_corners_for_last10 vs shots_last10_diff: 0.4623
+- home_win_rate_last10 vs home_goals_for_last5: 0.4620
+- home_corners_for_last10 vs home_shots_for_last5: 0.4227
+- home_win_rate_last10 vs home_losses_last5: -0.4208
+- home_corners_for_last10 vs away_corners_against_last10: 0.4013
+- home_corners_for_last10 vs home_shots_on_target_for_last10: 0.3864
+- home_win_rate_last10 vs shots_on_target_last10_diff: 0.3654
+- home_win_rate_last10 vs home_draws_last5: -0.3460
+- home_win_rate_last10 vs total_goals_for_last10: 0.3334
+- home_corners_for_last10 vs shots_last5_diff: 0.3332
+- home_corners_for_last10 vs away_total_corners_last10: 0.3211
+- home_win_rate_last10 vs home_goals_against_last5: -0.3206
+- home_corners_for_last10 vs away_corners_against_last5: 0.2927
+
+## Interpretacao e Riscos de Multicolinearidade
+- Correlacoes altas entre features similares (ex: mesma estatistica com janelas diferentes) indicam redundancia.
+- Features de totals (ex: total_corners_for_lastN) tendem a correlacionar com componentes home/away.
+- Estatisticas derivadas de gols e corners podem carregar informacao sobreposta quando agregadas.
+- Target encoding pode correlacionar com medias rolling de corners, pois ambas refletem forca historica do time.
+- Multicolinearidade nao invalida modelos de arvore, mas pode reduzir interpretabilidade e estabilidade de importancia.
+
+## Recomendacoes Praticas
+- Se objetivo for interpretabilidade: remover features com correlacao absoluta > 0.90 em pares redundantes.
+- Se objetivo for performance: manter e usar selecao automatica (feature importance / SHAP).
+- Avaliar impacto removendo grupos redundantes (ex: manter apenas last10 ou last5 para o mesmo estatistico).
+- Documentar o conjunto final de features no manifesto para reproducao.
+
+
+## Descricao das Features
+- home_corners_for_last10: Media rolling de escanteios a favor do time mandante nos ultimos 10 jogos.
+- home_corners_against_last10: Media rolling de escanteios contra do time mandante nos ultimos 10 jogos.
+- away_corners_for_last10: Media rolling de escanteios a favor do time visitante nos ultimos 10 jogos.
+- away_corners_against_last10: Media rolling de escanteios contra do time visitante nos ultimos 10 jogos.
+- home_goals_for_last10: Media rolling de gols a favor do time mandante nos ultimos 10 jogos.
+- home_goals_against_last10: Media rolling de gols contra do time mandante nos ultimos 10 jogos.
+- away_goals_for_last10: Media rolling de gols a favor do time visitante nos ultimos 10 jogos.
+- away_goals_against_last10: Media rolling de gols contra do time visitante nos ultimos 10 jogos.
+- home_shots_for_last10: Media rolling de finalizacoes a favor do time mandante nos ultimos 10 jogos.
+- home_shots_against_last10: Media rolling de finalizacoes contra do time mandante nos ultimos 10 jogos.
+- away_shots_for_last10: Media rolling de finalizacoes a favor do time visitante nos ultimos 10 jogos.
+- away_shots_against_last10: Media rolling de finalizacoes contra do time visitante nos ultimos 10 jogos.
+- home_shots_on_target_for_last10: Media rolling de finalizacoes no alvo a favor do time mandante nos ultimos 10 jogos.
+- home_shots_on_target_against_last10: Media rolling de finalizacoes no alvo contra do time mandante nos ultimos 10 jogos.
+- away_shots_on_target_for_last10: Media rolling de finalizacoes no alvo a favor do time visitante nos ultimos 10 jogos.
+- away_shots_on_target_against_last10: Media rolling de finalizacoes no alvo contra do time visitante nos ultimos 10 jogos.
+- home_fouls_for_last10: Media rolling de faltas a favor do time mandante nos ultimos 10 jogos.
+- home_fouls_against_last10: Media rolling de faltas contra do time mandante nos ultimos 10 jogos.
+- away_fouls_for_last10: Media rolling de faltas a favor do time visitante nos ultimos 10 jogos.
+- away_fouls_against_last10: Media rolling de faltas contra do time visitante nos ultimos 10 jogos.
+- home_yellow_cards_for_last10: Media rolling de cartoes amarelos a favor do time mandante nos ultimos 10 jogos.
+- home_yellow_cards_against_last10: Media rolling de cartoes amarelos contra do time mandante nos ultimos 10 jogos.
+- away_yellow_cards_for_last10: Media rolling de cartoes amarelos a favor do time visitante nos ultimos 10 jogos.
+- away_yellow_cards_against_last10: Media rolling de cartoes amarelos contra do time visitante nos ultimos 10 jogos.
+- home_red_cards_for_last10: Media rolling de cartoes vermelhos a favor do time mandante nos ultimos 10 jogos.
+- home_red_cards_against_last10: Media rolling de cartoes vermelhos contra do time mandante nos ultimos 10 jogos.
+- away_red_cards_for_last10: Media rolling de cartoes vermelhos a favor do time visitante nos ultimos 10 jogos.
+- away_red_cards_against_last10: Media rolling de cartoes vermelhos contra do time visitante nos ultimos 10 jogos.
+- home_wins_last10: Metrica de resultados do time mandante nos ultimos 10 jogos (rolling): vitorias.
+- home_draws_last10: Metrica de resultados do time mandante nos ultimos 10 jogos (rolling): empates.
+- home_losses_last10: Metrica de resultados do time mandante nos ultimos 10 jogos (rolling): derrotas.
+- home_points_last10: Metrica de resultados do time mandante nos ultimos 10 jogos (rolling): pontos.
+- home_win_rate_last10: Metrica de resultados do time mandante nos ultimos 10 jogos (rolling): taxa de vitorias.
+- home_points_per_game_last10: Metrica de resultados do time mandante nos ultimos 10 jogos (rolling): pontos por jogo.
+- away_wins_last10: Metrica de resultados do time visitante nos ultimos 10 jogos (rolling): vitorias.
+- away_draws_last10: Metrica de resultados do time visitante nos ultimos 10 jogos (rolling): empates.
+- away_losses_last10: Metrica de resultados do time visitante nos ultimos 10 jogos (rolling): derrotas.
+- away_points_last10: Metrica de resultados do time visitante nos ultimos 10 jogos (rolling): pontos.
+- away_win_rate_last10: Metrica de resultados do time visitante nos ultimos 10 jogos (rolling): taxa de vitorias.
+- away_points_per_game_last10: Metrica de resultados do time visitante nos ultimos 10 jogos (rolling): pontos por jogo.
+- home_attack_vs_away_defense_corners_last10: Interacao ataque vs defesa: escanteios do mandante vs defesa do visitante, janela 10.
+- away_attack_vs_home_defense_corners_last10: Interacao ataque vs defesa: escanteios do visitante vs defesa do mandante, janela 10.
+- corners_last10_diff: Diferenca (mandante - visitante) de escanteios na janela rolling de 10 jogos.
+- shots_last10_diff: Diferenca (mandante - visitante) de finalizacoes na janela rolling de 10 jogos.
+- shots_on_target_last10_diff: Diferenca (mandante - visitante) de finalizacoes no alvo na janela rolling de 10 jogos.
+- fouls_last10_diff: Diferenca (mandante - visitante) de faltas na janela rolling de 10 jogos.
+- cards_last10_diff: Diferenca (mandante - visitante) de cartoes na janela rolling de 10 jogos.
+- corners_pressure_index_last10: Indice de pressao baseado em escanteios: razao entre ataque e defesa, janela 10.
+- home_total_corners_last10: Total rolling de escanteios do time mandante (a favor + contra) nos ultimos 10 jogos.
+- away_total_corners_last10: Total rolling de escanteios do time visitante (a favor + contra) nos ultimos 10 jogos.
+- total_corners_for_last10: Total rolling de escanteios a favor somando mandante + visitante nos ultimos 10 jogos.
+- home_total_goals_last10: Total rolling de gols do time mandante (a favor + contra) nos ultimos 10 jogos.
+- away_total_goals_last10: Total rolling de gols do time visitante (a favor + contra) nos ultimos 10 jogos.
+- total_goals_for_last10: Total rolling de gols a favor somando mandante + visitante nos ultimos 10 jogos.
+- home_corners_for_last5: Media rolling de escanteios a favor do time mandante nos ultimos 5 jogos.
+- home_corners_against_last5: Media rolling de escanteios contra do time mandante nos ultimos 5 jogos.
+- away_corners_for_last5: Media rolling de escanteios a favor do time visitante nos ultimos 5 jogos.
+- away_corners_against_last5: Media rolling de escanteios contra do time visitante nos ultimos 5 jogos.
+- home_goals_for_last5: Media rolling de gols a favor do time mandante nos ultimos 5 jogos.
+- home_goals_against_last5: Media rolling de gols contra do time mandante nos ultimos 5 jogos.
+- away_goals_for_last5: Media rolling de gols a favor do time visitante nos ultimos 5 jogos.
+- away_goals_against_last5: Media rolling de gols contra do time visitante nos ultimos 5 jogos.
+- home_shots_for_last5: Media rolling de finalizacoes a favor do time mandante nos ultimos 5 jogos.
+- home_shots_against_last5: Media rolling de finalizacoes contra do time mandante nos ultimos 5 jogos.
+- away_shots_for_last5: Media rolling de finalizacoes a favor do time visitante nos ultimos 5 jogos.
+- away_shots_against_last5: Media rolling de finalizacoes contra do time visitante nos ultimos 5 jogos.
+- home_shots_on_target_for_last5: Media rolling de finalizacoes no alvo a favor do time mandante nos ultimos 5 jogos.
+- home_shots_on_target_against_last5: Media rolling de finalizacoes no alvo contra do time mandante nos ultimos 5 jogos.
+- away_shots_on_target_for_last5: Media rolling de finalizacoes no alvo a favor do time visitante nos ultimos 5 jogos.
+- away_shots_on_target_against_last5: Media rolling de finalizacoes no alvo contra do time visitante nos ultimos 5 jogos.
+- home_fouls_for_last5: Media rolling de faltas a favor do time mandante nos ultimos 5 jogos.
+- home_fouls_against_last5: Media rolling de faltas contra do time mandante nos ultimos 5 jogos.
+- away_fouls_for_last5: Media rolling de faltas a favor do time visitante nos ultimos 5 jogos.
+- away_fouls_against_last5: Media rolling de faltas contra do time visitante nos ultimos 5 jogos.
+- home_yellow_cards_for_last5: Media rolling de cartoes amarelos a favor do time mandante nos ultimos 5 jogos.
+- home_yellow_cards_against_last5: Media rolling de cartoes amarelos contra do time mandante nos ultimos 5 jogos.
+- away_yellow_cards_for_last5: Media rolling de cartoes amarelos a favor do time visitante nos ultimos 5 jogos.
+- away_yellow_cards_against_last5: Media rolling de cartoes amarelos contra do time visitante nos ultimos 5 jogos.
+- home_red_cards_for_last5: Media rolling de cartoes vermelhos a favor do time mandante nos ultimos 5 jogos.
+- home_red_cards_against_last5: Media rolling de cartoes vermelhos contra do time mandante nos ultimos 5 jogos.
+- away_red_cards_for_last5: Media rolling de cartoes vermelhos a favor do time visitante nos ultimos 5 jogos.
+- away_red_cards_against_last5: Media rolling de cartoes vermelhos contra do time visitante nos ultimos 5 jogos.
+- home_wins_last5: Metrica de resultados do time mandante nos ultimos 5 jogos (rolling): vitorias.
+- home_draws_last5: Metrica de resultados do time mandante nos ultimos 5 jogos (rolling): empates.
+- home_losses_last5: Metrica de resultados do time mandante nos ultimos 5 jogos (rolling): derrotas.
+- home_points_last5: Metrica de resultados do time mandante nos ultimos 5 jogos (rolling): pontos.
+- home_win_rate_last5: Metrica de resultados do time mandante nos ultimos 5 jogos (rolling): taxa de vitorias.
+- home_points_per_game_last5: Metrica de resultados do time mandante nos ultimos 5 jogos (rolling): pontos por jogo.
+- away_wins_last5: Metrica de resultados do time visitante nos ultimos 5 jogos (rolling): vitorias.
+- away_draws_last5: Metrica de resultados do time visitante nos ultimos 5 jogos (rolling): empates.
+- away_losses_last5: Metrica de resultados do time visitante nos ultimos 5 jogos (rolling): derrotas.
+- away_points_last5: Metrica de resultados do time visitante nos ultimos 5 jogos (rolling): pontos.
+- away_win_rate_last5: Metrica de resultados do time visitante nos ultimos 5 jogos (rolling): taxa de vitorias.
+- away_points_per_game_last5: Metrica de resultados do time visitante nos ultimos 5 jogos (rolling): pontos por jogo.
+- home_attack_vs_away_defense_corners_last5: Interacao ataque vs defesa: escanteios do mandante vs defesa do visitante, janela 5.
+- away_attack_vs_home_defense_corners_last5: Interacao ataque vs defesa: escanteios do visitante vs defesa do mandante, janela 5.
+- corners_last5_diff: Diferenca (mandante - visitante) de escanteios na janela rolling de 5 jogos.
+- shots_last5_diff: Diferenca (mandante - visitante) de finalizacoes na janela rolling de 5 jogos.
+- shots_on_target_last5_diff: Diferenca (mandante - visitante) de finalizacoes no alvo na janela rolling de 5 jogos.
+- fouls_last5_diff: Diferenca (mandante - visitante) de faltas na janela rolling de 5 jogos.
+- cards_last5_diff: Diferenca (mandante - visitante) de cartoes na janela rolling de 5 jogos.
+- corners_pressure_index_last5: Indice de pressao baseado em escanteios: razao entre ataque e defesa, janela 5.
+- home_total_corners_last5: Total rolling de escanteios do time mandante (a favor + contra) nos ultimos 5 jogos.
+- away_total_corners_last5: Total rolling de escanteios do time visitante (a favor + contra) nos ultimos 5 jogos.
+- total_corners_for_last5: Total rolling de escanteios a favor somando mandante + visitante nos ultimos 5 jogos.
+- home_total_goals_last5: Total rolling de gols do time mandante (a favor + contra) nos ultimos 5 jogos.
+- away_total_goals_last5: Total rolling de gols do time visitante (a favor + contra) nos ultimos 5 jogos.
+- total_goals_for_last5: Total rolling de gols a favor somando mandante + visitante nos ultimos 5 jogos.
+- home_advantage: Indicador constante de vantagem de jogar em casa (valor 1.0).
+- home_team_team_enc: Encoding de time (mandante) via target encoding com media historica de escanteios (treino).
+- away_team_team_enc: Encoding de time (visitante) via target encoding com media historica de escanteios (treino).

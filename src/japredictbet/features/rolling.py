@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 
@@ -71,3 +72,64 @@ def add_stat_rolling(
         group[against_col].shift(1).rolling(window).mean()
     )
     return df
+
+
+def add_result_rolling(
+    df: pd.DataFrame,
+    team_col: str,
+    goals_for_col: str,
+    goals_against_col: str,
+    window: int,
+    prefix: str,
+    season_col: str | None = None,
+) -> pd.DataFrame:
+    """Add rolling result-based features (wins/draws/losses/points)."""
+
+    data = df.copy()
+    if season_col and season_col in data.columns:
+        group = data.groupby([team_col, season_col], sort=False)
+    else:
+        group = data.groupby(team_col, sort=False)
+
+    goals_for = data[goals_for_col]
+    goals_against = data[goals_against_col]
+    has_score = goals_for.notna() & goals_against.notna()
+
+    data["_tmp_win"] = pd.Series(np.nan, index=data.index, dtype="float")
+    data["_tmp_draw"] = pd.Series(np.nan, index=data.index, dtype="float")
+    data["_tmp_loss"] = pd.Series(np.nan, index=data.index, dtype="float")
+    data["_tmp_points"] = pd.Series(np.nan, index=data.index, dtype="float")
+
+    data.loc[has_score, "_tmp_win"] = (
+        goals_for[has_score] > goals_against[has_score]
+    ).astype(float)
+    data.loc[has_score, "_tmp_draw"] = (
+        goals_for[has_score] == goals_against[has_score]
+    ).astype(float)
+    data.loc[has_score, "_tmp_loss"] = (
+        goals_for[has_score] < goals_against[has_score]
+    ).astype(float)
+    data.loc[has_score, "_tmp_points"] = (
+        data.loc[has_score, "_tmp_win"].astype(float) * 3.0
+        + data.loc[has_score, "_tmp_draw"].astype(float)
+    )
+
+    data[f"{prefix}_wins_last{window}"] = (
+        group["_tmp_win"].shift(1).rolling(window).sum()
+    )
+    data[f"{prefix}_draws_last{window}"] = (
+        group["_tmp_draw"].shift(1).rolling(window).sum()
+    )
+    data[f"{prefix}_losses_last{window}"] = (
+        group["_tmp_loss"].shift(1).rolling(window).sum()
+    )
+    data[f"{prefix}_points_last{window}"] = (
+        group["_tmp_points"].shift(1).rolling(window).sum()
+    )
+    data[f"{prefix}_win_rate_last{window}"] = (
+        group["_tmp_win"].shift(1).rolling(window).mean()
+    )
+    data[f"{prefix}_points_per_game_last{window}"] = (
+        group["_tmp_points"].shift(1).rolling(window).mean()
+    )
+    return data.drop(columns=["_tmp_win", "_tmp_draw", "_tmp_loss", "_tmp_points"])

@@ -1,0 +1,155 @@
+Documento - Entradas do Modelo e Analise de Correlacao
+
+Contexto
+- Pipeline de features baseado em walk_forward (_build_features)
+- Rolling windows: 10 e 5
+- Encoding de times via target encoding (home_team_team_enc, away_team_team_enc)
+
+Resumo
+- Total de features numericas usadas no treino: 111
+- Linhas validas para correlacao: 3587
+
+Entradas do modelo (features)
+- home_corners_for_last10
+- home_corners_against_last10
+- away_corners_for_last10
+- away_corners_against_last10
+- home_goals_for_last10
+- home_goals_against_last10
+- away_goals_for_last10
+- away_goals_against_last10
+- home_shots_for_last10
+- home_shots_against_last10
+- away_shots_for_last10
+- away_shots_against_last10
+- home_shots_on_target_for_last10
+- home_shots_on_target_against_last10
+- away_shots_on_target_for_last10
+- away_shots_on_target_against_last10
+- home_fouls_for_last10
+- home_fouls_against_last10
+- away_fouls_for_last10
+- away_fouls_against_last10
+- home_yellow_cards_for_last10
+- home_yellow_cards_against_last10
+- away_yellow_cards_for_last10
+- away_yellow_cards_against_last10
+- home_red_cards_for_last10
+- home_red_cards_against_last10
+- away_red_cards_for_last10
+- away_red_cards_against_last10
+- home_wins_last10
+- home_draws_last10
+- home_losses_last10
+- home_points_last10
+- home_win_rate_last10
+- home_points_per_game_last10
+- away_wins_last10
+- away_draws_last10
+- away_losses_last10
+- away_points_last10
+- away_win_rate_last10
+- away_points_per_game_last10
+- home_attack_vs_away_defense_corners_last10
+- away_attack_vs_home_defense_corners_last10
+- corners_last10_diff
+- shots_last10_diff
+- shots_on_target_last10_diff
+- fouls_last10_diff
+- cards_last10_diff
+- corners_pressure_index_last10
+- home_total_corners_last10
+- away_total_corners_last10
+- total_corners_for_last10
+- home_total_goals_last10
+- away_total_goals_last10
+- total_goals_for_last10
+- home_corners_for_last5
+- home_corners_against_last5
+- away_corners_for_last5
+- away_corners_against_last5
+- home_goals_for_last5
+- home_goals_against_last5
+- away_goals_for_last5
+- away_goals_against_last5
+- home_shots_for_last5
+- home_shots_against_last5
+- away_shots_for_last5
+- away_shots_against_last5
+- home_shots_on_target_for_last5
+- home_shots_on_target_against_last5
+- away_shots_on_target_for_last5
+- away_shots_on_target_against_last5
+- home_fouls_for_last5
+- home_fouls_against_last5
+- away_fouls_for_last5
+- away_fouls_against_last5
+- home_yellow_cards_for_last5
+- home_yellow_cards_against_last5
+- away_yellow_cards_for_last5
+- away_yellow_cards_against_last5
+- home_red_cards_for_last5
+- home_red_cards_against_last5
+- away_red_cards_for_last5
+- away_red_cards_against_last5
+- home_wins_last5
+- home_draws_last5
+- home_losses_last5
+- home_points_last5
+- home_win_rate_last5
+- home_points_per_game_last5
+- away_wins_last5
+- away_draws_last5
+- away_losses_last5
+- away_points_last5
+- away_win_rate_last5
+- away_points_per_game_last5
+- home_attack_vs_away_defense_corners_last5
+- away_attack_vs_home_defense_corners_last5
+- corners_last5_diff
+- shots_last5_diff
+- shots_on_target_last5_diff
+- fouls_last5_diff
+- cards_last5_diff
+- corners_pressure_index_last5
+- home_total_corners_last5
+- away_total_corners_last5
+- total_corners_for_last5
+- home_total_goals_last5
+- away_total_goals_last5
+- total_goals_for_last5
+- home_advantage
+- home_team_team_enc
+- away_team_team_enc
+
+Top 30 correlacoes absolutas (Pearson) entre features
+- home_corners_for_last10 vs home_attack_vs_away_defense_corners_last10: 0.8467
+- away_corners_for_last10 vs away_attack_vs_home_defense_corners_last10: 0.8388
+- home_corners_for_last10 vs corners_last10_diff: 0.7643
+- home_corners_for_last10 vs total_corners_for_last10: 0.7525
+- home_goals_for_last10 vs total_goals_for_last10: 0.7324
+- home_corners_for_last10 vs home_corners_for_last5: 0.7085
+- home_win_rate_last10 vs home_wins_last5: 0.7044
+- home_win_rate_last10 vs home_win_rate_last5: 0.7044
+- home_corners_for_last10 vs home_total_corners_last10: 0.6987
+- home_win_rate_last10 vs home_points_per_game_last5: 0.6735
+- home_win_rate_last10 vs home_points_last5: 0.6735
+- home_corners_for_last10 vs home_attack_vs_away_defense_corners_last5: 0.6486
+- home_corners_for_last10 vs home_shots_for_last10: 0.5801
+- home_corners_for_last10 vs corners_pressure_index_last10: 0.5552
+- home_corners_for_last10 vs total_corners_for_last5: 0.5388
+- home_corners_for_last10 vs corners_last5_diff: 0.5320
+- home_corners_for_last10 vs home_total_corners_last5: 0.5010
+- home_corners_for_last10 vs shots_last10_diff: 0.4623
+- home_win_rate_last10 vs home_goals_for_last5: 0.4620
+- home_corners_for_last10 vs home_shots_for_last5: 0.4227
+- home_win_rate_last10 vs home_losses_last5: -0.4208
+- home_corners_for_last10 vs away_corners_against_last10: 0.4013
+- home_corners_for_last10 vs home_shots_on_target_for_last10: 0.3864
+- home_win_rate_last10 vs shots_on_target_last10_diff: 0.3654
+- home_win_rate_last10 vs home_draws_last5: -0.3460
+- home_win_rate_last10 vs total_goals_for_last10: 0.3334
+- home_corners_for_last10 vs shots_last5_diff: 0.3332
+- home_corners_for_last10 vs away_total_corners_last10: 0.3211
+- home_win_rate_last10 vs home_goals_against_last5: -0.3206
+- home_corners_for_last10 vs away_corners_against_last5: 0.2927

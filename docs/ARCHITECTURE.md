@@ -22,21 +22,21 @@ The architecture combines:
 The full pipeline is:
 
 dataset
-↓
+->
 data preprocessing
-↓
+->
 feature engineering
-↓
+->
 team encoding
-↓
+->
 model training
-↓
+->
 prediction
-↓
+->
 probability estimation
-↓
+->
 odds comparison
-↓
+->
 value bet detection
 
 ---
@@ -64,13 +64,11 @@ Transforms raw match data into model features.
 Includes:
 
 - rolling statistics (last 5 and last 10)
+- rolling goal averages and recent form (wins/draws/losses/points)
 - matchup interaction features
-- total corners aggregates
+- total corners and total goals aggregates
 - team strength (ELO ratings)
-
-- rolling statistics
 - team identity features
-- matchup interaction features
 
 ---
 
@@ -106,7 +104,7 @@ Poisson distribution.
 
 Example:
 
-λ_total = λ_home + λ_away
+lambda_total = lambda_home + lambda_away
 
 P(total corners > line)
 

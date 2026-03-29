@@ -9,7 +9,7 @@ import pandas as pd
 
 from japredictbet.features.elo import EloConfig, add_elo_ratings
 from japredictbet.features.matchup import add_matchup_features
-from japredictbet.features.rolling import add_stat_rolling
+from japredictbet.features.rolling import add_result_rolling, add_stat_rolling
 from japredictbet.features.team_identity import add_team_target_encoding
 from japredictbet.models.importance import compute_feature_importance, select_top_features
 from japredictbet.models.predict import predict_expected_corners
@@ -94,6 +94,7 @@ def _build_features(data: pd.DataFrame, windows: tuple[int, ...]) -> pd.DataFram
 
     stats = [
         ("corners", "home_corners", "away_corners"),
+        ("goals", "home_goals", "away_goals"),
         ("shots", "home_shots", "away_shots"),
         ("shots_on_target", "home_shots_on_target", "away_shots_on_target"),
         ("fouls", "home_fouls", "away_fouls"),
@@ -124,8 +125,28 @@ def _build_features(data: pd.DataFrame, windows: tuple[int, ...]) -> pd.DataFram
                     stat_name=stat_name,
                     season_col="season",
                 )
+        if "home_goals" in df.columns and "away_goals" in df.columns:
+            df = add_result_rolling(
+                df,
+                team_col="home_team",
+                goals_for_col="home_goals",
+                goals_against_col="away_goals",
+                window=window,
+                prefix="home",
+                season_col="season",
+            )
+            df = add_result_rolling(
+                df,
+                team_col="away_team",
+                goals_for_col="away_goals",
+                goals_against_col="home_goals",
+                window=window,
+                prefix="away",
+                season_col="season",
+            )
         df = add_matchup_features(df, window=window)
         df = _add_total_corners_features(df, window)
+        df = _add_total_goals_features(df, window)
 
     df["home_advantage"] = 1.0
     df = add_elo_ratings(
@@ -173,6 +194,23 @@ def _add_total_corners_features(data: pd.DataFrame, window: int) -> pd.DataFrame
         df[f"away_total_corners{suffix}"] = df[away_for] + df[away_against]
     if home_for in df.columns and away_for in df.columns:
         df[f"total_corners_for{suffix}"] = df[home_for] + df[away_for]
+    return df
+
+
+def _add_total_goals_features(data: pd.DataFrame, window: int) -> pd.DataFrame:
+    df = data.copy()
+    suffix = f"_last{window}"
+    home_for = f"home_goals_for{suffix}"
+    home_against = f"home_goals_against{suffix}"
+    away_for = f"away_goals_for{suffix}"
+    away_against = f"away_goals_against{suffix}"
+
+    if home_for in df.columns and home_against in df.columns:
+        df[f"home_total_goals{suffix}"] = df[home_for] + df[home_against]
+    if away_for in df.columns and away_against in df.columns:
+        df[f"away_total_goals{suffix}"] = df[away_for] + df[away_against]
+    if home_for in df.columns and away_for in df.columns:
+        df[f"total_goals_for{suffix}"] = df[home_for] + df[away_for]
     return df
 
 

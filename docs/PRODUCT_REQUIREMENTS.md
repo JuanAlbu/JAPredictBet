@@ -27,7 +27,7 @@ Primary users:
 
 ## Core Features
 
-### Feature 1 — Historical Data Processing
+### Feature 1 - Historical Data Processing
 
 The system must:
 
@@ -36,12 +36,13 @@ The system must:
 - generate training features
 - include rolling windows for last 5 and last 10 matches
 - add matchup and total-corners derived features
+- add rolling goal averages and recent form metrics (wins/draws/losses/points)
 - include team strength ratings (ELO-style)
-- standardize match statistics to the common cross-season set (corners, shots, shots on target, fouls, cards, referee)
+- standardize match statistics to the common cross-season set (corners, goals, shots, shots on target, fouls, cards, referee)
 
 ---
 
-### Feature 2 — Model Training
+### Feature 2 - Model Training
 
 The system must:
 
@@ -55,7 +56,7 @@ The system must:
 
 ---
 
-### Feature 3 — Probability Calculation
+### Feature 3 - Probability Calculation
 
 The system must:
 
@@ -64,7 +65,7 @@ The system must:
 
 ---
 
-### Feature 4 — Odds Integration
+### Feature 4 - Odds Integration
 
 The system must:
 
@@ -74,7 +75,7 @@ The system must:
 
 ---
 
-### Feature 5 — Value Bet Detection
+### Feature 5 - Value Bet Detection
 
 The system must:
 

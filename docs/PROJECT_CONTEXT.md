@@ -43,6 +43,8 @@ intensity.
 
 Rolling statistics capture recent team behaviour.
 Both short-term (last 5) and medium-term (last 10) windows are used.
+Recent form features include rolling goal averages and result-based metrics
+(wins, draws, losses, points per game).
 
 Training prioritizes recent matches using a time-aware split and recency weighting.
 
