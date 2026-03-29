@@ -80,6 +80,8 @@ def test_pipeline_end_to_end_logic(
     assert "edge_mean" in results_df.columns
     assert "vote_distribution" in results_df.columns
     assert "status_message" in results_df.columns
+    assert "roi" in results_df.columns
+    assert "yield" in results_df.columns
 
     # Find the row for our engineered value bet
     value_bet_row = results_df[results_df["match"] == "Team C vs Team D"]
@@ -93,3 +95,7 @@ def test_pipeline_end_to_end_logic(
     assert np.isclose(value_bet_row.iloc[0]["p_model_mean"], expected_p_model)
     assert np.isclose(value_bet_row.iloc[0]["edge_mean"], expected_p_model - 0.5)
     assert value_bet_row.iloc[0]["vote_distribution"] == "3/3 modelos concordam"
+    assert np.isclose(value_bet_row.iloc[0]["bets_placed"], 1.0)
+    assert np.isclose(value_bet_row.iloc[0]["profit_total"], 1.0)
+    assert np.isclose(value_bet_row.iloc[0]["yield"], 1.0)
+    assert np.isclose(value_bet_row.iloc[0]["roi"], 1.0)

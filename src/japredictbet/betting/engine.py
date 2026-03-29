@@ -286,12 +286,18 @@ class ConsensusEngine:
             else f"Aposta descartada por falta de consenso (Agreement: {agreement:.0%})"
         )
         vote_distribution = f"{positive_votes}/{total_models} modelos concordam"
+        decision_status = "Value Bet" if should_place_bet else "Insegura"
+        consensus_label = (
+            f"Consenso: {positive_votes}/{total_models} - {agreement:.0%} | "
+            f"Status: {decision_status}"
+        )
 
         logger.info(
-            "Consensus decision | %s | threshold=%.0f%% | edge_threshold=%.2f",
-            vote_distribution,
+            "%s | threshold=%.0f%% | edge_threshold=%.2f | votes=%s",
+            consensus_label,
             threshold * 100,
             self.edge_threshold,
+            model_votes,
         )
 
         return {
@@ -308,6 +314,10 @@ class ConsensusEngine:
             "agreement": agreement,
             "consensus_threshold": threshold,
             "vote_distribution": vote_distribution,
+            "consensus_label": consensus_label,
+            "decision_status": decision_status,
+            "model_votes": model_votes,
+            "model_edges": model_edges,
             "status_message": status_message,
             "bet": should_place_bet,
             "is_value": should_place_bet,

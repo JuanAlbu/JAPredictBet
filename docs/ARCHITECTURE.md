@@ -111,13 +111,14 @@ Responsibilities:
 3. Compute individual model edge (`P_model - P_odds`) and assign binary votes.
 4. Calculate agreement ratio (`positive_votes / total_models`).
 5. Confirm bet only when agreement reaches a configurable threshold.
-6. Emit audit fields such as vote distribution and explicit decision status.
+6. Emit audit fields such as vote distribution, individual votes, and explicit decision status.
 
 Example audit output:
 
-- `35/50 modelos concordam`
+- `21/30 modelos concordam`
 - `Aposta confirmada (Agreement: 90%)`
 - `Aposta descartada por falta de consenso (Agreement: 40%)`
+- `Consenso: 21/30 - 70% | Status: Value Bet`
 
 ---
 
@@ -130,3 +131,10 @@ The MVP backtest now supports threshold sweeping for consensus validation.
 - output: one decision row per match per threshold
 
 This enables ROI vs bet-volume analysis under different agreement strictness levels.
+
+The pipeline returns threshold-level financial metrics:
+
+- `bets_placed`
+- `profit_total`
+- `yield`
+- `roi`

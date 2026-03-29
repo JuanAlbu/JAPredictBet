@@ -1,6 +1,4 @@
-# Configuration for the JAPredictBet MVP Pipeline
-
-data:
+﻿data:
   raw_path: "data/raw/dataset.csv"
   processed_path: "data/processed/processed_data.parquet"
   date_column: "date"
@@ -11,15 +9,16 @@ features:
 model:
   objective: "count:poisson"
   random_state: 42
-  ensemble_size: 50
+  ensemble_size: 30 # 10 por algoritmo
+  algorithms: ["XGBoost", "LightGBM", "RandomForest"]
   ensemble_seed_stride: 1
 
 odds:
   provider_name: "data/raw/mock_odds.json"
 
 value:
-  threshold: 0.05
-  consensus_threshold: 0.70
+  threshold: 0.05 # Edge minimo para voto positivo
+  consensus_threshold: 0.70 # Exige 70% de concordancia
   run_consensus_sweep: true
   consensus_start: 0.35
   consensus_end: 1.00

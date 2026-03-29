@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Any, Iterable
 
 import numpy as np
 import pandas as pd
 import xgboost as xgb
+from sklearn.ensemble import RandomForestRegressor
+
+try:
+    import lightgbm as lgb
+except ImportError:  # pragma: no cover - optional dependency
+    lgb = None
 
 
 @dataclass(frozen=True)
@@ -25,6 +31,8 @@ def train_models(
     away_target: str,
     sample_weight: pd.Series | None = None,
     random_state: int = 42,
+    algorithm: str = "xgboost",
+    model_params: dict[str, Any] | None = None,
 ) -> TrainedModels:
     """Train separate models for home and away corner counts.
 
@@ -59,23 +67,16 @@ def train_models(
     if len(x) < 10:
         raise ValueError("Not enough training rows after filtering missing values.")
 
-    model_params = {
-        "objective": "count:poisson",
-        "n_estimators": 507,
-        "learning_rate": 0.08242879217471218,
-        "max_depth": 6,
-        "subsample": 0.7549913516120698,
-        "colsample_bytree": 0.7153312415720976,
-        "min_child_weight": 2,
-        "gamma": 0.2795049672186196,
-        "random_state": random_state,
-        "n_jobs": 1,
-        "verbosity": 0,
-        "eval_metric": "poisson-nloglik",
-    }
-
-    home_model = xgb.XGBRegressor(**model_params)
-    away_model = xgb.XGBRegressor(**model_params)
+    home_model = _build_regressor(
+        algorithm=algorithm,
+        random_state=random_state,
+        model_params=model_params,
+    )
+    away_model = _build_regressor(
+        algorithm=algorithm,
+        random_state=random_state,
+        model_params=model_params,
+    )
 
     if weights is not None:
         home_model.fit(x, y_home, sample_weight=weights)
@@ -135,3 +136,68 @@ def _has_invalid_xgb_name(column: str) -> bool:
     """XGBoost rejects feature names containing brackets or angle brackets."""
 
     return any(char in column for char in ("[", "]", "<", ">"))
+
+
+def _build_regressor(
+    algorithm: str,
+    random_state: int,
+    model_params: dict[str, Any] | None,
+) -> object:
+    """Build a regressor aligned with the selected algorithm."""
+
+    algo = algorithm.strip().lower()
+    overrides = model_params or {}
+
+    if algo == "xgboost":
+        params = {
+            "objective": "count:poisson",
+            "n_estimators": 507,
+            "learning_rate": 0.08242879217471218,
+            "max_depth": 6,
+            "subsample": 0.7549913516120698,
+            "colsample_bytree": 0.7153312415720976,
+            "min_child_weight": 2,
+            "gamma": 0.2795049672186196,
+            "random_state": random_state,
+            "n_jobs": 1,
+            "verbosity": 0,
+            "eval_metric": "poisson-nloglik",
+        }
+        params.update(overrides)
+        return xgb.XGBRegressor(**params)
+
+    if algo == "randomforest":
+        params = {
+            "n_estimators": 400,
+            "max_depth": 10,
+            "min_samples_leaf": 2,
+            "max_features": 0.8,
+            "random_state": random_state,
+            "n_jobs": 1,
+        }
+        params.update(overrides)
+        return RandomForestRegressor(**params)
+
+    if algo == "lightgbm":
+        if lgb is None:
+            raise ValueError(
+                "Algorithm 'lightgbm' was requested but lightgbm is not installed."
+            )
+        params = {
+            "objective": "poisson",
+            "n_estimators": 450,
+            "learning_rate": 0.05,
+            "num_leaves": 31,
+            "subsample": 0.85,
+            "colsample_bytree": 0.85,
+            "random_state": random_state,
+            "n_jobs": 1,
+            "verbosity": -1,
+        }
+        params.update(overrides)
+        return lgb.LGBMRegressor(**params)
+
+    raise ValueError(
+        f"Unsupported algorithm '{algorithm}'. "
+        "Expected one of: xgboost, lightgbm, randomforest."
+    )

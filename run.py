@@ -31,7 +31,10 @@ def load_config(config_path: Path) -> PipelineConfig:
     # Recursively build the nested dataclasses
     data_cfg = DataConfig(**data_conf_dict)
     features_cfg = FeatureConfig(**config_dict["features"])
-    model_cfg = ModelConfig(**config_dict["model"])
+    model_conf_dict = config_dict["model"].copy()
+    if "algorithms" in model_conf_dict and isinstance(model_conf_dict["algorithms"], list):
+        model_conf_dict["algorithms"] = tuple(model_conf_dict["algorithms"])
+    model_cfg = ModelConfig(**model_conf_dict)
     odds_cfg = OddsConfig(**config_dict["odds"])
     value_cfg = ValueConfig(**config_dict["value"])
 
@@ -108,7 +111,26 @@ if __name__ == "__main__":
             pd.set_option("display.max_rows", 500)
             pd.set_option("display.max_columns", 50)
             pd.set_option("display.width", 120)
-            print(results_df[["match", "consensus_threshold", "vote_distribution", "status_message"]])
+            print(
+                results_df[
+                    [
+                        "match",
+                        "consensus_threshold",
+                        "consensus_label",
+                        "status_message",
+                    ]
+                ]
+            )
+
+            threshold_summary = (
+                results_df[
+                    ["consensus_threshold", "bets_placed", "profit_total", "yield", "roi"]
+                ]
+                .drop_duplicates(subset=["consensus_threshold"])
+                .sort_values(by="consensus_threshold")
+            )
+            print("\nThreshold performance (ROI/Yield):")
+            print(threshold_summary)
 
             confirmed = results_df[results_df["is_value"]].copy()
             if confirmed.empty:

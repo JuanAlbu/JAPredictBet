@@ -101,6 +101,7 @@ The system must:
 - run backtests across a consensus threshold grid
 - support threshold increments of 5%
 - return outputs that allow ROI vs volume comparison by threshold
+- compute and expose threshold-level ROI and Yield metrics
 
 ---
 
@@ -116,6 +117,7 @@ The system must:
 - detect value bets
 - evaluate consensus agreement
 - produce auditable decision logs
+- compute segmented financial performance (ROI/Yield) by consensus threshold
 
 ---
 

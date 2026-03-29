@@ -133,6 +133,9 @@ def test_consensus_engine_confirms_bet():
     assert np.isclose(result["agreement"], 1.0)
     assert result["bet"] is True
     assert result["status_message"] == "Aposta confirmada (Agreement: 100%)"
+    assert result["consensus_label"] == "Consenso: 4/4 - 100% | Status: Value Bet"
+    assert result["decision_status"] == "Value Bet"
+    assert result["model_votes"] == [1, 1, 1, 1]
 
 
 def test_consensus_engine_discards_without_agreement():
@@ -159,3 +162,6 @@ def test_consensus_engine_discards_without_agreement():
     assert result["status_message"] == (
         "Aposta descartada por falta de consenso (Agreement: 0%)"
     )
+    assert result["consensus_label"] == "Consenso: 0/4 - 0% | Status: Insegura"
+    assert result["decision_status"] == "Insegura"
+    assert result["model_votes"] == [0, 0, 0, 0]

@@ -56,7 +56,7 @@ profile of the opponent influences match events.
 4. Consensus Safety Layer
 
 The betting decision no longer depends on a single model output.
-The pipeline now supports an ensemble of corner models and applies
+The pipeline now supports a 30-model ensemble and applies
 consensus voting on top of individual edge calculations.
 
 For each match:
@@ -69,6 +69,9 @@ For each match:
 
 This implements a "safe prediction" behavior where low-agreement matches
 are intentionally discarded.
+
+The backtest layer also computes ROI and Yield by consensus threshold,
+allowing direct analysis of return versus betting volume.
 
 ---
 

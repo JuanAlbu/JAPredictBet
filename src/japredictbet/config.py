@@ -28,7 +28,8 @@ class ModelConfig:
 
     objective: str = "count:poisson"
     random_state: int = 42
-    ensemble_size: int = 50
+    ensemble_size: int = 30
+    algorithms: tuple[str, ...] = ("xgboost", "lightgbm", "randomforest")
     ensemble_seed_stride: int = 1
 
 

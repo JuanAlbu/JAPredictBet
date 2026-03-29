@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import asdict
+import logging
 from typing import Sequence
 
 import numpy as np
@@ -17,6 +18,8 @@ from japredictbet.features.team_identity import add_team_target_encoding
 from japredictbet.models.predict import predict_expected_corners
 from japredictbet.models.train import TrainedModels, train_models
 from japredictbet.odds.collector import fetch_odds
+
+logger = logging.getLogger(__name__)
 
 
 def run_mvp_pipeline(
@@ -140,13 +143,38 @@ def run_mvp_pipeline(
                 odds_data=consensus_odds,
                 threshold=threshold,
             )
+            realized_total = (
+                float(row["home_corners"] + row["away_corners"])
+                if "home_corners" in row.index and "away_corners" in row.index
+                else np.nan
+            )
+            bet_result = (
+                engine.evaluate_result(
+                    real_value=int(realized_total),
+                    line=decision["line"],
+                    bet_type=decision["bet_type"],
+                )
+                if not np.isnan(realized_total)
+                else None
+            )
+            stake = 1.0 if decision["bet"] else 0.0
+            decision_profit = (
+                engine.compute_profit(result=bet_result, odds=decision["odds"], stake=stake)
+                if decision["bet"]
+                else 0.0
+            )
             decision["match"] = row["match_key"]
+            decision["realized_total"] = realized_total
+            decision["bet_result"] = bet_result
+            decision["stake"] = stake
+            decision["profit"] = decision_profit
             all_bets.append(decision)
 
     if not all_bets:
         return pd.DataFrame()
 
-    return pd.DataFrame(all_bets)
+    decisions_df = pd.DataFrame(all_bets)
+    return _attach_threshold_performance(decisions_df)
 
 
 def _get_or_train_ensemble_models(
@@ -164,15 +192,24 @@ def _get_or_train_ensemble_models(
 
     size = max(1, int(config.model.ensemble_size))
     stride = max(1, int(config.model.ensemble_seed_stride))
+    algorithms = _normalize_algorithms(config.model.algorithms)
+    schedule = _build_ensemble_schedule(size=size, algorithms=algorithms)
+
     trained: list[TrainedModels] = []
-    for idx in range(size):
+    for idx, algorithm in enumerate(schedule):
         seed = config.model.random_state + (idx * stride)
+        params = _build_variation_params(
+            algorithm=algorithm,
+            variation_index=idx,
+        )
         model = train_models(
             train_data,
             home_target="home_corners",
             away_target="away_corners",
             sample_weight=train_weights,
             random_state=seed,
+            algorithm=algorithm,
+            model_params=params,
         )
         trained.append(model)
     return trained
@@ -206,6 +243,87 @@ def _build_consensus_thresholds(config: PipelineConfig) -> list[float]:
 
     thresholds = np.arange(start, end + (step / 2), step)
     return [float(np.clip(round(threshold, 4), 0.0, 1.0)) for threshold in thresholds]
+
+
+def _normalize_algorithms(algorithms: Sequence[str]) -> tuple[str, ...]:
+    """Normalize configured algorithm names."""
+
+    if not algorithms:
+        return ("xgboost",)
+    normalized = tuple(algo.strip().lower() for algo in algorithms if algo)
+    return normalized if normalized else ("xgboost",)
+
+
+def _build_ensemble_schedule(size: int, algorithms: Sequence[str]) -> list[str]:
+    """Create a balanced algorithm schedule for ensemble training."""
+
+    if size <= 0:
+        return ["xgboost"]
+    algo_list = list(algorithms) if algorithms else ["xgboost"]
+    schedule: list[str] = []
+    idx = 0
+    while len(schedule) < size:
+        schedule.append(algo_list[idx % len(algo_list)])
+        idx += 1
+    return schedule
+
+
+def _build_variation_params(algorithm: str, variation_index: int) -> dict:
+    """Generate deterministic hyperparameter variations per algorithm."""
+
+    algo = algorithm.strip().lower()
+    idx = variation_index % 10
+
+    if algo == "xgboost":
+        return {
+            "n_estimators": 320 + (idx * 35),
+            "learning_rate": max(0.03, 0.12 - (idx * 0.008)),
+            "max_depth": 4 + (idx % 4),
+            "min_child_weight": 1 + (idx % 3),
+            "subsample": 0.72 + ((idx % 3) * 0.08),
+            "colsample_bytree": 0.68 + ((idx % 4) * 0.06),
+        }
+
+    if algo == "lightgbm":
+        return {
+            "n_estimators": 300 + (idx * 30),
+            "learning_rate": max(0.02, 0.10 - (idx * 0.007)),
+            "num_leaves": 24 + (idx * 2),
+            "subsample": 0.75 + ((idx % 3) * 0.08),
+            "colsample_bytree": 0.72 + ((idx % 4) * 0.06),
+        }
+
+    if algo == "randomforest":
+        return {
+            "n_estimators": 250 + (idx * 30),
+            "max_depth": 7 + (idx % 6),
+            "min_samples_leaf": 1 + (idx % 3),
+            "max_features": 0.55 + ((idx % 4) * 0.1),
+        }
+
+    return {}
+
+
+def _attach_threshold_performance(decisions_df: pd.DataFrame) -> pd.DataFrame:
+    """Attach ROI/Yield summary per consensus threshold."""
+
+    if decisions_df.empty:
+        return decisions_df
+
+    grouped = decisions_df.groupby("consensus_threshold", dropna=False)
+    summary = grouped.agg(
+        bets_placed=("stake", "sum"),
+        profit_total=("profit", "sum"),
+    ).reset_index()
+
+    summary["yield"] = np.where(
+        summary["bets_placed"] > 0,
+        summary["profit_total"] / summary["bets_placed"],
+        0.0,
+    )
+    summary["roi"] = summary["yield"]
+
+    return decisions_df.merge(summary, on="consensus_threshold", how="left")
 
 
 def _ensure_season_column(data: pd.DataFrame, date_column: str) -> pd.DataFrame:
