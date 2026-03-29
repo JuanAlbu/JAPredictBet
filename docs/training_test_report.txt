@@ -1,31 +1,27 @@
 Relatorio - Treinamento e Teste
 
-Data: 2026-03-19
+Data: 2026-03-29
 
 Resumo
-Este relatorio descreve o treinamento dos modelos de escanteios e a validacao no conjunto de teste.
-O treinamento aprende a prever o numero de escanteios (home e away). A logica de aposta e aplicada
-somente no teste, conforme definido na estrategia de backtesting.
+Este relatorio descreve o treinamento dos modelos de escanteios e a validacao
+no conjunto de teste temporal. Para evitar ambiguidade, o projeto passa a manter
+duas visoes de resultado:
+- Baseline de predicao (comparabilidade historica): over sempre no teste.
+- Regra real de seguranca (negocio): apostar somente quando edge > threshold.
 
 Dados e split
-- Fonte: arquivos CSV em data/processed (PL15_16 ate PL25_26)
-- Split temporal: 50% da temporada mais recente (2025) para teste
-- Treino: todas as temporadas anteriores + 50% restante de 2025
+- Fonte: dataset consolidado em data/raw/dataset.csv (PL15_16 ate PL25_26).
+- Split temporal: 50% da temporada mais recente (2026) para teste.
+- Treino: temporadas anteriores + 50% restante de 2026.
+- Tamanho atual: treino 4048 jogos, teste 61 jogos.
 
-Features utilizadas
-- Rolling stats (janelas 10 e 5) para corners, shots, shots_on_target, fouls, cards
-- Features de matchup e diferencas
-- Elo ratings (quando gols estao disponiveis)
-- Target encoding de times (home e away)
-- Home advantage
-- Remocao de features com correlacao alta (threshold 0.90)
+Features e modelo
+- Rolling stats (janelas 10 e 5), matchup, Elo, target encoding e home advantage.
+- Remocao de features por correlacao alta (threshold 0.90): 12 removidas, 99 finais.
+- Dois modelos XGBoost (home e away), objetivo count:poisson.
+- random_state baseline: 42.
 
-Modelo
-- Dois modelos XGBoost (home e away)
-- Objetivo: count:poisson
-- Metricas internas: poisson-nloglik
-
-Hiperparametros finais (train.py)
+Hiperparametros (train.py)
 - n_estimators: 507
 - learning_rate: 0.08242879217471218
 - max_depth: 6
@@ -33,22 +29,68 @@ Hiperparametros finais (train.py)
 - colsample_bytree: 0.7153312415720976
 - min_child_weight: 2
 - gamma: 0.2795049672186196
-- random_state: 42
 
-Regras de teste
-- Todas as previsoes do conjunto de teste viram aposta (over sempre)
-- Linha definida por regra de arredondamento
-  - x.5 anterior
-- Push (resultado == linha) e excluido do hit rate
+Resultados A - Baseline de predicao (over sempre)
+Metodologia:
+- Toda previsao do teste vira aposta.
+- Linha = x.5 anterior (floor(pred * 2) / 2).
+- Push (resultado == linha) excluido do hit rate.
 
-Resultados (Over sempre, teste 2025)
+Rodada 50x (seeds 42..91), media e desvio:
+- Home: 71.49% (std 4.94 pp)
+- Away: 65.88% (std 4.93 pp)
+- Total: 72.64% (std 3.86 pp)
 
-Com threshold 0.90 (features removidas: 12; features finais: 99)
-- Home: hit rate 61.15%
-- Away: hit rate 56.59%
-- Total: hit rate 60.74%
+Resultados B - Regra real de seguranca (edge > threshold)
+Metodologia:
+- Aposta somente se edge > threshold.
+- edge = P_modelo - P_odds.
+- Para este teste exploratorio, foi usada odd fixa 1.90 (sem odds reais por mercado home/away no dataset historico).
 
-Observacoes
-- O treinamento nao considera regras de aposta.
-- A escolha da regra de linha e o threshold de correlacao impactam o hit rate.
-- Para comparacoes futuras, manter o mesmo split temporal e as mesmas regras de teste.
+Sensibilidade por threshold (hit rate e quantidade de apostas):
+- 0.01 -> Home 100.00% (4), Away 50.00% (10), Total 100.00% (1)
+- 0.02 -> Home 100.00% (3), Away 62.50% (8), Total 100.00% (1)
+- 0.03 -> Home 100.00% (2), Away 75.00% (4), Total 100.00% (1)
+- 0.04 -> Home n/a (0), Away 100.00% (3), Total 100.00% (1)
+- 0.05 -> Home n/a (0), Away 100.00% (3), Total 100.00% (1)
+- 0.06 -> Home n/a (0), Away 100.00% (1), Total 100.00% (1)
+- 0.07 -> Home n/a (0), Away 100.00% (1), Total 100.00% (1)
+- 0.08 -> Home n/a (0), Away 100.00% (1), Total 100.00% (1)
+- 0.09 -> Home n/a (0), Away 100.00% (1), Total n/a (0)
+- 0.10 -> Home n/a (0), Away n/a (0), Total n/a (0)
+
+Interpretacao
+- Baseline (over sempre) continua sendo a referencia de comparacao historica.
+- Regra de seguranca com edge > threshold esta correta conceitualmente, mas com odd fixa
+  gera amostra pequena no teste atual e nao deve ser usada isoladamente para conclusao final.
+- Proximo passo recomendado: repetir a visao B com odds reais normalizadas por mercado.
+
+Validacao de ambiente
+- Testes automatizados apos atualizacoes: 21 passed.
+
+Resultados C - Concordancia Ensemble (30 modelos)
+Metodologia:
+- Ensemble com 30 modelos (seeds 42..71).
+- Voto de valor por modelo: edge >= 0.05.
+- Regra de consenso: minimo de 70% dos votos.
+- Linha fixa para avaliacao: Over 9.5 @ 1.90.
+- Decisao final por partida: APOSTAR somente se consenso >= 70%.
+
+Saida por partida:
+- Para cada jogo do teste, o relatorio inclui:
+  - media lambda do ensemble
+  - desvio padrao (sigma) e classificacao de dispersao
+  - distribuicao dos 30 modelos por faixas de lambda
+  - votos de valor e percentual de consenso
+  - decisao final e resultado real
+
+Resumo da rodada:
+- Partidas no teste: 61
+- Apostas recomendadas (consenso): 6
+- Apostas avaliaveis (sem push): 6
+- Vitorias: 5
+- Acuracia (hit rate das apostas aceitas): 83.33% (5/6)
+
+Arquivos de suporte:
+- Detalhado por partida (linha fixa 9.5): docs/consensus_test_report_line95.txt
+- Detalhado por partida (linha dinamica): docs/consensus_test_report.txt
