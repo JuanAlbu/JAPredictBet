@@ -1,5 +1,7 @@
 """Main entrypoint to run the MVP pipeline."""
 
+import argparse
+import pickle
 import yaml
 from pathlib import Path
 import pandas as pd
@@ -12,6 +14,7 @@ from japredictbet.config import (
     PipelineConfig,
     ValueConfig,
 )
+from japredictbet.models.train import TrainedModels
 from japredictbet.pipeline.mvp_pipeline import run_mvp_pipeline
 
 
@@ -41,39 +44,94 @@ def load_config(config_path: Path) -> PipelineConfig:
     )
 
 
+def parse_args() -> argparse.Namespace:
+    """Parse CLI args for pipeline execution."""
+
+    parser = argparse.ArgumentParser(description="Run JAPredictBet MVP pipeline.")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("config.yml"),
+        help="Path to pipeline config file.",
+    )
+    parser.add_argument(
+        "--model-artifact",
+        action="append",
+        default=[],
+        type=Path,
+        help="Optional pickled TrainedModels artifact path. Can be repeated.",
+    )
+    return parser.parse_args()
+
+
+def load_model_artifacts(artifact_paths: list[Path]) -> list[TrainedModels]:
+    """Load a list of pickled TrainedModels artifacts."""
+
+    loaded_models: list[TrainedModels] = []
+    for artifact in artifact_paths:
+        with open(artifact, "rb") as handle:
+            model = pickle.load(handle)
+        if not isinstance(model, TrainedModels):
+            raise TypeError(
+                f"Artifact '{artifact}' did not contain a TrainedModels instance."
+            )
+        loaded_models.append(model)
+    return loaded_models
+
+
 if __name__ == "__main__":
-    CONFIG_PATH = Path("config.yml")
+    args = parse_args()
+    config_path = args.config
     print(f"Running JAPredictBet MVP Pipeline...")
-    print(f"Loading configuration from: {CONFIG_PATH}")
+    print(f"Loading configuration from: {config_path}")
 
     try:
-        config = load_config(CONFIG_PATH)
+        config = load_config(config_path)
+        ensemble_models = load_model_artifacts(args.model_artifact)
 
         print("\nPipeline configured. Starting execution...")
-        results_df = run_mvp_pipeline(config)
+        if ensemble_models:
+            print(f"Loaded {len(ensemble_models)} model artifacts for consensus.")
+        results_df = run_mvp_pipeline(
+            config,
+            ensemble_models=ensemble_models if ensemble_models else None,
+        )
 
         print("\nPipeline execution finished successfully!")
-        print("Value Betting Opportunities Found:")
+        print("Consensus betting decisions:")
         print("-" * 40)
 
-        if results_df.empty or "is_value" not in results_df.columns:
-            print("No value bets found with the current configuration.")
+        if results_df.empty:
+            print("No markets available for evaluation.")
         else:
-            value_bets = results_df[results_df["is_value"]].copy()
-            if value_bets.empty:
-                print("No value bets found with the current configuration.")
-                print("-" * 40)
-                raise SystemExit(0)
             # Display settings for pandas
             pd.set_option("display.max_rows", 500)
             pd.set_option("display.max_columns", 50)
             pd.set_option("display.width", 120)
-            print(value_bets)
+            print(results_df[["match", "consensus_threshold", "vote_distribution", "status_message"]])
+
+            confirmed = results_df[results_df["is_value"]].copy()
+            if confirmed.empty:
+                print("\nNo confirmed bets after consensus filtering.")
+            else:
+                print("\nConfirmed bets:")
+                print(
+                    confirmed[
+                        [
+                            "match",
+                            "consensus_threshold",
+                            "agreement",
+                            "vote_distribution",
+                            "edge_mean",
+                            "status_message",
+                        ]
+                    ]
+                )
 
         print("-" * 40)
 
     except FileNotFoundError:
-        print(f"ERROR: Configuration file not found at '{CONFIG_PATH}'")
+        print(f"ERROR: Configuration file not found at '{config_path}'")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         # Optionally, re-raise for more detailed traceback

@@ -71,7 +71,7 @@ def test_expected_value():
 def test_should_bet():
     """Test the betting decision logic."""
     assert engine.should_bet(edge=0.06, threshold=0.05)
-    assert not engine.should_bet(edge=0.05, threshold=0.05)
+    assert engine.should_bet(edge=0.05, threshold=0.05)
     assert not engine.should_bet(edge=0.049, threshold=0.05)
 
 
@@ -109,3 +109,53 @@ def test_compute_profit():
     assert np.isclose(engine.compute_profit(result=True, odds=2.5, stake=10), 15.0) # 10 * (2.5-1)
     assert np.isclose(engine.compute_profit(result=False, odds=2.5, stake=10), -10.0)
     assert np.isclose(engine.compute_profit(result=None, odds=2.5, stake=10), 0.0)
+
+
+def test_consensus_engine_confirms_bet():
+    """Consensus should confirm when agreement reaches threshold."""
+
+    consensus = engine.ConsensusEngine(edge_threshold=0.05)
+    predictions = [
+        {"lambda_home": 7.0, "lambda_away": 4.0},
+        {"lambda_home": 6.9, "lambda_away": 4.1},
+        {"lambda_home": 7.2, "lambda_away": 3.9},
+        {"lambda_home": 7.1, "lambda_away": 3.8},
+    ]
+    odds_data = {"line": 8.5, "odds": 2.0, "type": "over"}
+
+    result = consensus.evaluate_with_consensus(
+        predictions_list=predictions,
+        odds_data=odds_data,
+        threshold=0.75,
+    )
+
+    assert result["votes_positive"] == 4
+    assert np.isclose(result["agreement"], 1.0)
+    assert result["bet"] is True
+    assert result["status_message"] == "Aposta confirmada (Agreement: 100%)"
+
+
+def test_consensus_engine_discards_without_agreement():
+    """Consensus should discard when agreement is below threshold."""
+
+    consensus = engine.ConsensusEngine(edge_threshold=0.05)
+    predictions = [
+        {"lambda_total": 8.0},
+        {"lambda_total": 8.2},
+        {"lambda_total": 7.9},
+        {"lambda_total": 8.1},
+    ]
+    odds_data = {"line": 10.5, "odds": 1.9, "type": "over"}
+
+    result = consensus.evaluate_with_consensus(
+        predictions_list=predictions,
+        odds_data=odds_data,
+        threshold=0.70,
+    )
+
+    assert result["votes_positive"] == 0
+    assert np.isclose(result["agreement"], 0.0)
+    assert result["bet"] is False
+    assert result["status_message"] == (
+        "Aposta descartada por falta de consenso (Agreement: 0%)"
+    )

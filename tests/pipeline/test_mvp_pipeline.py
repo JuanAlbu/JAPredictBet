@@ -25,8 +25,12 @@ def minimal_config() -> PipelineConfig:
     return PipelineConfig(
         data=DataConfig(raw_path="dummy/path", processed_path="dummy/processed"),
         features=FeatureConfig(rolling_window=10),
-        model=ModelConfig(random_state=42),
-        value=ValueConfig(threshold=0.05),
+        model=ModelConfig(random_state=42, ensemble_size=3),
+        value=ValueConfig(
+            threshold=0.05,
+            consensus_threshold=0.7,
+            run_consensus_sweep=False,
+        ),
         odds=OddsConfig(provider_name="http://fake-odds-api.com"),
     )
 
@@ -73,7 +77,9 @@ def test_pipeline_end_to_end_logic(
     # 3. Assertions
     assert not results_df.empty
     assert "bet" in results_df.columns
-    assert "edge" in results_df.columns
+    assert "edge_mean" in results_df.columns
+    assert "vote_distribution" in results_df.columns
+    assert "status_message" in results_df.columns
 
     # Find the row for our engineered value bet
     value_bet_row = results_df[results_df["match"] == "Team C vs Team D"]
@@ -84,5 +90,6 @@ def test_pipeline_end_to_end_logic(
 
     # Check the calculations
     expected_p_model = 1 - poisson.cdf(8, 10.0)
-    assert np.isclose(value_bet_row.iloc[0]["p_model"], expected_p_model)
-    assert np.isclose(value_bet_row.iloc[0]["edge"], expected_p_model - 0.5)
+    assert np.isclose(value_bet_row.iloc[0]["p_model_mean"], expected_p_model)
+    assert np.isclose(value_bet_row.iloc[0]["edge_mean"], expected_p_model - 0.5)
+    assert value_bet_row.iloc[0]["vote_distribution"] == "3/3 modelos concordam"

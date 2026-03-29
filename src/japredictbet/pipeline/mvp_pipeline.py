@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import asdict
+from typing import Sequence
 
 import numpy as np
 import pandas as pd
@@ -14,11 +15,14 @@ from japredictbet.features.matchup import add_matchup_features
 from japredictbet.features.rolling import add_result_rolling, add_stat_rolling
 from japredictbet.features.team_identity import add_team_target_encoding
 from japredictbet.models.predict import predict_expected_corners
-from japredictbet.models.train import train_models
+from japredictbet.models.train import TrainedModels, train_models
 from japredictbet.odds.collector import fetch_odds
 
 
-def run_mvp_pipeline(config: PipelineConfig) -> pd.DataFrame:
+def run_mvp_pipeline(
+    config: PipelineConfig,
+    ensemble_models: Sequence[TrainedModels] | None = None,
+) -> pd.DataFrame:
     """Orchestrate the end-to-end backtesting pipeline.
 
     This function performs the following steps:
@@ -89,22 +93,21 @@ def run_mvp_pipeline(config: PipelineConfig) -> pd.DataFrame:
     train_data = data.loc[train_mask].copy()
     train_weights = weights.loc[train_mask]
 
-    models = train_models(
-        train_data,
-        home_target="home_corners",
-        away_target="away_corners",
-        sample_weight=train_weights,
-        random_state=config.model.random_state,
+    models_ensemble = _get_or_train_ensemble_models(
+        config=config,
+        train_data=train_data,
+        train_weights=train_weights,
+        ensemble_models=ensemble_models,
     )
-    expected_home, expected_away = predict_expected_corners(models, data)
+
+    predictions_by_model = _predict_ensemble(models_ensemble, data)
 
     # --- Odds and Value Evaluation using the new Engine ---
     odds_df = fetch_odds(config.odds.provider_name)
 
     # Prepare data for joining
+    data["source_row_id"] = data.index
     data["match_key"] = data["home_team"] + " vs " + data["away_team"]
-    data["lambda_home"] = expected_home
-    data["lambda_away"] = expected_away
 
     # For simplicity, we assume the fetched odds are for the 'total' market
     # A real implementation would require more robust joining and market handling
@@ -112,27 +115,97 @@ def run_mvp_pipeline(config: PipelineConfig) -> pd.DataFrame:
     merged_data = pd.merge(data, odds_df, on="match_key", how="left")
     merged_data = merged_data.dropna(subset=["line", "over_odds"])
 
+    consensus_thresholds = _build_consensus_thresholds(config)
+    consensus_engine = engine.ConsensusEngine(edge_threshold=config.value.threshold)
+
     all_bets = []
     for _, row in merged_data.iterrows():
-        # This assumes a simple 'total' market for now
-        # The engine's evaluate_match is more flexible than this
-        odds_data = {"total": {"line": row["line"], "odds": row["over_odds"]}}
+        model_predictions = [
+            {
+                "lambda_home": float(pred_home.loc[row["source_row_id"]]),
+                "lambda_away": float(pred_away.loc[row["source_row_id"]]),
+            }
+            for pred_home, pred_away in predictions_by_model
+        ]
 
-        bet_evaluations = engine.evaluate_match(
-            lambda_home=row["lambda_home"],
-            lambda_away=row["lambda_away"],
-            odds_data=odds_data,
-            edge_threshold=config.value.threshold,
-        )
-        # Add match context to each bet evaluation
-        for bet in bet_evaluations:
-            bet["match"] = row["match_key"]
-            all_bets.append(bet)
+        consensus_odds = {
+            "line": float(row["line"]),
+            "odds": float(row["over_odds"]),
+            "type": "over",
+        }
+
+        for threshold in consensus_thresholds:
+            decision = consensus_engine.evaluate_with_consensus(
+                predictions_list=model_predictions,
+                odds_data=consensus_odds,
+                threshold=threshold,
+            )
+            decision["match"] = row["match_key"]
+            all_bets.append(decision)
 
     if not all_bets:
         return pd.DataFrame()
 
     return pd.DataFrame(all_bets)
+
+
+def _get_or_train_ensemble_models(
+    config: PipelineConfig,
+    train_data: pd.DataFrame,
+    train_weights: pd.Series,
+    ensemble_models: Sequence[TrainedModels] | None,
+) -> list[TrainedModels]:
+    """Use provided ensemble models or train an ensemble from config."""
+
+    if ensemble_models is not None:
+        if not ensemble_models:
+            raise ValueError("ensemble_models was provided but is empty.")
+        return list(ensemble_models)
+
+    size = max(1, int(config.model.ensemble_size))
+    stride = max(1, int(config.model.ensemble_seed_stride))
+    trained: list[TrainedModels] = []
+    for idx in range(size):
+        seed = config.model.random_state + (idx * stride)
+        model = train_models(
+            train_data,
+            home_target="home_corners",
+            away_target="away_corners",
+            sample_weight=train_weights,
+            random_state=seed,
+        )
+        trained.append(model)
+    return trained
+
+
+def _predict_ensemble(
+    models_ensemble: Sequence[TrainedModels],
+    data: pd.DataFrame,
+) -> list[tuple[pd.Series, pd.Series]]:
+    """Run inference for each model in the ensemble."""
+
+    predictions: list[tuple[pd.Series, pd.Series]] = []
+    for models in models_ensemble:
+        predictions.append(predict_expected_corners(models, data))
+    return predictions
+
+
+def _build_consensus_thresholds(config: PipelineConfig) -> list[float]:
+    """Build threshold list for consensus backtesting."""
+
+    if not config.value.run_consensus_sweep:
+        return [float(config.value.consensus_threshold)]
+
+    start = float(config.value.consensus_start)
+    end = float(config.value.consensus_end)
+    step = float(config.value.consensus_step)
+    if step <= 0:
+        raise ValueError("consensus_step must be greater than zero.")
+    if end < start:
+        raise ValueError("consensus_end must be >= consensus_start.")
+
+    thresholds = np.arange(start, end + (step / 2), step)
+    return [float(np.clip(round(threshold, 4), 0.0, 1.0)) for threshold in thresholds]
 
 
 def _ensure_season_column(data: pd.DataFrame, date_column: str) -> pd.DataFrame:

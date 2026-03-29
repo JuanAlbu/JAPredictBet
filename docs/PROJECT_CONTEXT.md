@@ -53,6 +53,23 @@ Training prioritizes recent matches using a time-aware split and recency weighti
 The interaction between the attacking strength of one team and the defensive
 profile of the opponent influences match events.
 
+4. Consensus Safety Layer
+
+The betting decision no longer depends on a single model output.
+The pipeline now supports an ensemble of corner models and applies
+consensus voting on top of individual edge calculations.
+
+For each match:
+
+- each model generates lambda values
+- each lambda is converted to a Poisson market probability
+- each model votes "bet" when edge >= configured edge threshold
+- the final decision is approved only if the agreement ratio reaches
+  the configured consensus threshold
+
+This implements a "safe prediction" behavior where low-agreement matches
+are intentionally discarded.
+
 ---
 
 # Initial Scope

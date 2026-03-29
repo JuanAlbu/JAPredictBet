@@ -83,6 +83,25 @@ The system must:
 - compare with model probability
 - detect value opportunities
 
+### Feature 6 - Consensus Safety Decision
+
+The system must:
+
+- evaluate value using an ensemble of model predictions
+- compute one vote per model based on `edge >= threshold`
+- calculate agreement ratio and vote distribution
+- discard low-consensus matches ("insecure" bets)
+- confirm bets only when agreement reaches configurable consensus threshold
+- log an explicit status message for each decision
+
+### Feature 7 - Consensus Threshold Backtesting
+
+The system must:
+
+- run backtests across a consensus threshold grid
+- support threshold increments of 5%
+- return outputs that allow ROI vs volume comparison by threshold
+
 ---
 
 ## Functional Requirements
@@ -95,6 +114,8 @@ The system must:
 - compute Poisson probabilities
 - fetch odds
 - detect value bets
+- evaluate consensus agreement
+- produce auditable decision logs
 
 ---
 
