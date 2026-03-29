@@ -73,6 +73,14 @@ are intentionally discarded.
 The backtest layer also computes ROI and Yield by consensus threshold,
 allowing direct analysis of return versus betting volume.
 
+The MVP execution now supports:
+
+- automatic training of the 30-model ensemble with standardized artifacts
+- deterministic balance of 10 XGBoost + 10 LightGBM + 10 RandomForest models
+- robust team-name normalization for dataset/odds matching
+- consensus sweep from 35% to 100% in configurable steps
+- threshold-level ROI/Yield reporting with best-threshold ranking support
+
 ---
 
 # Initial Scope

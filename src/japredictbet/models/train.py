@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import pickle
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Iterable
 
 import numpy as np
@@ -23,6 +25,17 @@ class TrainedModels:
     home_model: object
     away_model: object
     feature_columns: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class EnsembleModelSpec:
+    """Metadata for an ensemble member."""
+
+    algorithm: str
+    variation_index: int
+    random_state: int
+    model_name: str
+    params: dict[str, Any]
 
 
 def train_models(
@@ -90,6 +103,110 @@ def train_models(
         away_model=away_model,
         feature_columns=tuple(feature_cols),
     )
+
+
+def train_ensemble_models(
+    features: pd.DataFrame,
+    home_target: str,
+    away_target: str,
+    algorithms: tuple[str, ...] = ("xgboost", "lightgbm", "randomforest"),
+    ensemble_size: int = 30,
+    sample_weight: pd.Series | None = None,
+    random_state: int = 42,
+    ensemble_seed_stride: int = 1,
+) -> tuple[list[TrainedModels], list[EnsembleModelSpec]]:
+    """Train an ensemble with deterministic algorithm/variation scheduling.
+
+    For the default 30-model council this yields 10 models per algorithm
+    (XGBoost, LightGBM and RandomForest), each with deterministic parameter
+    variations.
+    """
+
+    normalized_algorithms = _normalize_algorithms(algorithms)
+    schedule = _build_ensemble_schedule(ensemble_size, normalized_algorithms)
+
+    trained: list[TrainedModels] = []
+    specs: list[EnsembleModelSpec] = []
+    algo_counter: dict[str, int] = {algo: 0 for algo in normalized_algorithms}
+
+    for idx, algorithm in enumerate(schedule):
+        variation_index = algo_counter[algorithm]
+        algo_counter[algorithm] += 1
+        seed = random_state + (idx * max(1, ensemble_seed_stride))
+        params = build_variation_params(algorithm=algorithm, variation_index=variation_index)
+        model_name = _build_model_filename(algorithm, variation_index)
+
+        trained_model = train_models(
+            features=features,
+            home_target=home_target,
+            away_target=away_target,
+            sample_weight=sample_weight,
+            random_state=seed,
+            algorithm=algorithm,
+            model_params=params,
+        )
+        trained.append(trained_model)
+        specs.append(
+            EnsembleModelSpec(
+                algorithm=algorithm,
+                variation_index=variation_index,
+                random_state=seed,
+                model_name=model_name,
+                params=params,
+            )
+        )
+
+    return trained, specs
+
+
+def save_ensemble_models(
+    models: list[TrainedModels],
+    specs: list[EnsembleModelSpec],
+    output_dir: Path | str,
+) -> list[Path]:
+    """Persist trained ensemble members to disk with standard names."""
+
+    if len(models) != len(specs):
+        raise ValueError("models and specs must have the same length.")
+
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    saved_paths: list[Path] = []
+
+    for model, spec in zip(models, specs):
+        output_path = out_dir / spec.model_name
+        with open(output_path, "wb") as handle:
+            pickle.dump(model, handle)
+        saved_paths.append(output_path)
+
+    return saved_paths
+
+
+def train_and_save_ensemble(
+    features: pd.DataFrame,
+    home_target: str,
+    away_target: str,
+    output_dir: Path | str,
+    algorithms: tuple[str, ...] = ("xgboost", "lightgbm", "randomforest"),
+    ensemble_size: int = 30,
+    sample_weight: pd.Series | None = None,
+    random_state: int = 42,
+    ensemble_seed_stride: int = 1,
+) -> tuple[list[TrainedModels], list[EnsembleModelSpec], list[Path]]:
+    """Train and persist the full ensemble for consensus evaluation."""
+
+    models, specs = train_ensemble_models(
+        features=features,
+        home_target=home_target,
+        away_target=away_target,
+        algorithms=algorithms,
+        ensemble_size=ensemble_size,
+        sample_weight=sample_weight,
+        random_state=random_state,
+        ensemble_seed_stride=ensemble_seed_stride,
+    )
+    paths = save_ensemble_models(models=models, specs=specs, output_dir=output_dir)
+    return models, specs, paths
 
 
 def _select_feature_columns(
@@ -168,6 +285,7 @@ def _build_regressor(
 
     if algo == "randomforest":
         params = {
+            "criterion": "poisson",
             "n_estimators": 400,
             "max_depth": 10,
             "min_samples_leaf": 2,
@@ -201,3 +319,87 @@ def _build_regressor(
         f"Unsupported algorithm '{algorithm}'. "
         "Expected one of: xgboost, lightgbm, randomforest."
     )
+
+
+def _normalize_algorithms(algorithms: tuple[str, ...]) -> tuple[str, ...]:
+    """Normalize configured algorithm names."""
+
+    if not algorithms:
+        return ("xgboost",)
+    normalized = tuple(algo.strip().lower() for algo in algorithms if algo)
+    return normalized if normalized else ("xgboost",)
+
+
+def _build_ensemble_schedule(size: int, algorithms: tuple[str, ...]) -> list[str]:
+    """Build deterministic and balanced algorithm schedule."""
+
+    if size <= 0:
+        return ["xgboost"]
+    algo_list = list(algorithms) if algorithms else ["xgboost"]
+
+    # Keep exact balance whenever size is divisible by algorithm count.
+    if size % len(algo_list) == 0:
+        per_algorithm = size // len(algo_list)
+        schedule: list[str] = []
+        for _ in range(per_algorithm):
+            for algorithm in algo_list:
+                schedule.append(algorithm)
+        return schedule
+
+    schedule: list[str] = []
+    idx = 0
+    while len(schedule) < size:
+        schedule.append(algo_list[idx % len(algo_list)])
+        idx += 1
+    return schedule
+
+
+def build_variation_params(algorithm: str, variation_index: int) -> dict[str, Any]:
+    """Generate deterministic hyperparameter variations (10 per algorithm)."""
+
+    algo = algorithm.strip().lower()
+    idx = variation_index % 10
+
+    if algo == "xgboost":
+        return {
+            "objective": "count:poisson",
+            "n_estimators": [320, 360, 400, 440, 480, 520, 560, 600, 640, 680][idx],
+            "learning_rate": [0.12, 0.11, 0.10, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03][idx],
+            "max_depth": [4, 5, 6, 7, 4, 5, 6, 7, 5, 6][idx],
+            "min_child_weight": [1, 1, 2, 2, 3, 1, 2, 3, 2, 1][idx],
+            "subsample": [0.72, 0.80, 0.88, 0.76, 0.84, 0.92, 0.74, 0.82, 0.90, 0.78][idx],
+            "colsample_bytree": [0.68, 0.74, 0.80, 0.86, 0.72, 0.78, 0.84, 0.90, 0.76, 0.82][idx],
+        }
+
+    if algo == "lightgbm":
+        return {
+            "objective": "poisson",
+            "n_estimators": [300, 340, 380, 420, 460, 500, 540, 580, 620, 660][idx],
+            "learning_rate": [0.10, 0.09, 0.08, 0.07, 0.06, 0.05, 0.045, 0.04, 0.03, 0.02][idx],
+            "num_leaves": [24, 28, 32, 36, 40, 30, 34, 38, 42, 46][idx],
+            "subsample": [0.75, 0.83, 0.91, 0.79, 0.87, 0.95, 0.77, 0.85, 0.93, 0.81][idx],
+            "colsample_bytree": [0.72, 0.78, 0.84, 0.90, 0.76, 0.82, 0.88, 0.74, 0.80, 0.86][idx],
+        }
+
+    if algo == "randomforest":
+        return {
+            "n_estimators": [250, 280, 310, 340, 370, 400, 430, 460, 490, 520][idx],
+            "max_depth": [7, 8, 9, 10, 11, 12, 8, 9, 10, 11][idx],
+            "min_samples_leaf": [1, 2, 3, 1, 2, 3, 1, 2, 3, 2][idx],
+            "max_features": [0.55, 0.65, 0.75, 0.85, 0.60, 0.70, 0.80, 0.90, 0.58, 0.68][idx],
+        }
+
+    return {}
+
+
+def _build_model_filename(algorithm: str, variation_index: int) -> str:
+    """Build standardized artifact name."""
+
+    algo = algorithm.strip().lower()
+    prefix_map = {
+        "xgboost": "xgb",
+        "lightgbm": "lgbm",
+        "randomforest": "rf",
+    }
+    prefix = prefix_map.get(algo, algo)
+    return f"{prefix}_model_{variation_index + 1}.pkl"

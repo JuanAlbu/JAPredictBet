@@ -53,6 +53,9 @@ The system must:
 - weight recent seasons more heavily during training
 - include team identity encoding as model features
 - use XGBoost with Poisson objective and deterministic seed
+- generate and persist the 30-model ensemble artifacts with standardized names
+- enforce balanced 10/10/10 training across XGBoost, LightGBM and RandomForest
+- vary hyperparameters deterministically across the 10 members of each algorithm
 
 ---
 
@@ -72,6 +75,7 @@ The system must:
 - retrieve pre-match odds
 - support corner over/under markets
 - normalize bookmaker data format
+- normalize team names for robust dataset/odds matching
 
 ---
 
@@ -99,6 +103,7 @@ The system must:
 The system must:
 
 - run backtests across a consensus threshold grid
+- default sweep from `0.35` to `1.00` when enabled in config
 - support threshold increments of 5%
 - return outputs that allow ROI vs volume comparison by threshold
 - compute and expose threshold-level ROI and Yield metrics

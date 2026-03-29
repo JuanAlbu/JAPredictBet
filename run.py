@@ -4,6 +4,7 @@ import argparse
 import pickle
 import yaml
 from pathlib import Path
+import math
 import pandas as pd
 
 from japredictbet.config import (
@@ -64,6 +65,17 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Optional pickled TrainedModels artifact path. Can be repeated.",
     )
+    parser.add_argument(
+        "--models-dir",
+        type=Path,
+        default=Path("artifacts/models"),
+        help="Directory containing standard ensemble artifacts (xgb_model_1.pkl etc.).",
+    )
+    parser.add_argument(
+        "--skip-model-dir",
+        action="store_true",
+        help="Disable auto-loading artifacts from --models-dir.",
+    )
     return parser.parse_args()
 
 
@@ -82,6 +94,18 @@ def load_model_artifacts(artifact_paths: list[Path]) -> list[TrainedModels]:
     return loaded_models
 
 
+def discover_model_artifacts(models_dir: Path) -> list[Path]:
+    """Discover standardized ensemble artifact files in a directory."""
+
+    if not models_dir.exists() or not models_dir.is_dir():
+        return []
+    patterns = ("xgb_model_*.pkl", "lgbm_model_*.pkl", "rf_model_*.pkl")
+    discovered: list[Path] = []
+    for pattern in patterns:
+        discovered.extend(sorted(models_dir.glob(pattern)))
+    return discovered
+
+
 if __name__ == "__main__":
     args = parse_args()
     config_path = args.config
@@ -90,7 +114,19 @@ if __name__ == "__main__":
 
     try:
         config = load_config(config_path)
-        ensemble_models = load_model_artifacts(args.model_artifact)
+        artifact_paths = list(args.model_artifact)
+        if not args.skip_model_dir and not artifact_paths:
+            artifact_paths = discover_model_artifacts(args.models_dir)
+            if artifact_paths:
+                print(
+                    f"Discovered {len(artifact_paths)} model artifacts in {args.models_dir}"
+                )
+        ensemble_models = load_model_artifacts(artifact_paths)
+        if ensemble_models and len(ensemble_models) != config.model.ensemble_size:
+            raise ValueError(
+                "Loaded artifact count does not match configured ensemble_size "
+                f"({len(ensemble_models)} != {config.model.ensemble_size})."
+            )
 
         print("\nPipeline configured. Starting execution...")
         if ensemble_models:
@@ -124,13 +160,35 @@ if __name__ == "__main__":
 
             threshold_summary = (
                 results_df[
-                    ["consensus_threshold", "bets_placed", "profit_total", "yield", "roi"]
+                    [
+                        "consensus_threshold",
+                        "bets_placed",
+                        "profit_total",
+                        "yield",
+                        "roi",
+                        "hit_rate",
+                    ]
                 ]
                 .drop_duplicates(subset=["consensus_threshold"])
                 .sort_values(by="consensus_threshold")
             )
+            threshold_summary["balance_score"] = threshold_summary.apply(
+                lambda row: float(row["roi"]) * math.log1p(float(row["bets_placed"])),
+                axis=1,
+            )
             print("\nThreshold performance (ROI/Yield):")
             print(threshold_summary)
+
+            best_row = threshold_summary.sort_values(
+                by=["balance_score", "roi", "bets_placed"],
+                ascending=False,
+            ).iloc[0]
+            print("\nBest threshold balance (ROI x volume):")
+            print(
+                f"Threshold={best_row['consensus_threshold']:.2f} | "
+                f"ROI={best_row['roi']:.3f} | Yield={best_row['yield']:.3f} | "
+                f"HitRate={best_row['hit_rate']:.3f} | Bets={int(best_row['bets_placed'])}"
+            )
 
             confirmed = results_df[results_df["is_value"]].copy()
             if confirmed.empty:

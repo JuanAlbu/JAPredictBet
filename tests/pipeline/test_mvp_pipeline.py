@@ -37,11 +37,11 @@ def minimal_config() -> PipelineConfig:
 
 @patch("japredictbet.pipeline.mvp_pipeline.fetch_odds")
 @patch("japredictbet.pipeline.mvp_pipeline.predict_expected_corners")
-@patch("japredictbet.pipeline.mvp_pipeline.train_models")
+@patch("japredictbet.pipeline.mvp_pipeline.train_and_save_ensemble")
 @patch("japredictbet.pipeline.mvp_pipeline.load_historical_dataset")
 def test_pipeline_end_to_end_logic(
     mock_load_data: MagicMock,
-    mock_train: MagicMock,
+    mock_train_and_save_ensemble: MagicMock,
     mock_predict: MagicMock,
     mock_fetch_odds: MagicMock,
     minimal_config: PipelineConfig,
@@ -70,6 +70,11 @@ def test_pipeline_end_to_end_logic(
         "over_odds": [1.9, 2.0], # This will be the value bet
         "under_odds": [1.9, 1.8],
     })
+    mock_train_and_save_ensemble.return_value = (
+        [MagicMock(), MagicMock(), MagicMock()],
+        [],
+        [],
+    )
 
     # 2. Execution
     results_df = run_mvp_pipeline(minimal_config)
@@ -103,3 +108,42 @@ def test_pipeline_end_to_end_logic(
     assert np.isclose(value_bet_row.iloc[0]["yield"], 1.0)
     assert np.isclose(value_bet_row.iloc[0]["roi"], 1.0)
     assert np.isclose(value_bet_row.iloc[0]["hit_rate"], 1.0)
+
+
+@patch("japredictbet.pipeline.mvp_pipeline.fetch_odds")
+@patch("japredictbet.pipeline.mvp_pipeline.predict_expected_corners")
+@patch("japredictbet.pipeline.mvp_pipeline.train_and_save_ensemble")
+@patch("japredictbet.pipeline.mvp_pipeline.load_historical_dataset")
+def test_pipeline_robust_match_normalization(
+    mock_load_data: MagicMock,
+    mock_train_and_save_ensemble: MagicMock,
+    mock_predict: MagicMock,
+    mock_fetch_odds: MagicMock,
+    minimal_config: PipelineConfig,
+):
+    """Pipeline should match odds even with naming variants."""
+
+    mock_load_data.return_value = pd.DataFrame({
+        "date": pd.to_datetime(["2023-01-01"]),
+        "home_team": ["Flamengo"],
+        "away_team": ["Vasco"],
+        "home_goals": [1], "away_goals": [0],
+        "home_corners": [5], "away_corners": [4],
+    })
+    mock_predict.return_value = (pd.Series([7.0]), pd.Series([4.0]))
+    mock_fetch_odds.return_value = pd.DataFrame({
+        "match": ["CR Flamengo vs Vasco da Gama"],
+        "line": [8.5],
+        "over_odds": [2.0],
+        "under_odds": [1.8],
+    })
+    mock_train_and_save_ensemble.return_value = (
+        [MagicMock(), MagicMock(), MagicMock()],
+        [],
+        [],
+    )
+
+    results_df = run_mvp_pipeline(minimal_config)
+
+    assert not results_df.empty
+    assert results_df.iloc[0]["match"] == "Flamengo vs Vasco"

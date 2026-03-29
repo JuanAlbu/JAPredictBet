@@ -381,6 +381,12 @@ class ConsensusEngine:
             self.edge_threshold,
             model_votes,
         )
+        logger.info(
+            "Ensemble lambda stats | mean=%.3f | std=%.3f | ranges=%s",
+            audit_report["mean_lambda"],
+            audit_report["std_lambda"],
+            audit_report["ranges"],
+        )
         logger.info("Audit report\n%s", audit_report["formatted_report"])
 
         return {
@@ -402,6 +408,8 @@ class ConsensusEngine:
             "model_votes": model_votes,
             "model_edges": model_edges,
             "audit_report": audit_report["formatted_report"],
+            "consensus_report": audit_report,
+            "lambda_ranges": audit_report["ranges"],
             "ensemble_mean_lambda": audit_report["mean_lambda"],
             "ensemble_std_lambda": audit_report["std_lambda"],
             "status_message": status_message,

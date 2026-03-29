@@ -52,6 +52,7 @@ Output:
 
 - structured match dataset
 - structured odds data
+- normalized match keys for robust team-name matching
 
 ---
 
@@ -72,6 +73,21 @@ Includes:
 
 Machine learning models are trained on historical data to produce predictions
 (e.g., expected corners).
+
+For consensus mode, training supports automated artifact generation with
+standardized names:
+
+- `xgb_model_1.pkl` to `xgb_model_10.pkl`
+- `lgbm_model_1.pkl` to `lgbm_model_10.pkl`
+- `rf_model_1.pkl` to `rf_model_10.pkl`
+
+When the MVP pipeline performs internal training (no preloaded ensemble passed),
+it persists the trained artifacts automatically in `artifacts/models`.
+
+Model diversity is deterministic: 10 variations per algorithm are trained with
+distinct hyperparameters. Tree-based learners are configured with Poisson-ready
+count objectives (`count:poisson` for XGBoost, `poisson` for LightGBM and
+Poisson criterion for RandomForest).
 
 ---
 
@@ -147,3 +163,8 @@ The pipeline returns threshold-level financial metrics:
 - `yield`
 - `roi`
 - `hit_rate`
+- `threshold_rank`
+- `is_best_threshold`
+
+The execution report also highlights the best threshold balance between ROI and
+bet volume.

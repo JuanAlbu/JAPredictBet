@@ -3,6 +3,7 @@
 from __future__ import annotations
 from dataclasses import asdict
 import logging
+from pathlib import Path
 from typing import Sequence
 
 import numpy as np
@@ -16,7 +17,10 @@ from japredictbet.features.matchup import add_matchup_features
 from japredictbet.features.rolling import add_result_rolling, add_stat_rolling
 from japredictbet.features.team_identity import add_team_target_encoding
 from japredictbet.models.predict import predict_expected_corners
-from japredictbet.models.train import TrainedModels, train_models
+from japredictbet.models.train import (
+    TrainedModels,
+    train_and_save_ensemble,
+)
 from japredictbet.odds.collector import fetch_odds
 
 logger = logging.getLogger(__name__)
@@ -108,14 +112,10 @@ def run_mvp_pipeline(
     # --- Odds and Value Evaluation using the new Engine ---
     odds_df = fetch_odds(config.odds.provider_name)
 
-    # Prepare data for joining
+    # Prepare data for robust matching
     data["source_row_id"] = data.index
     data["match_key"] = data["home_team"] + " vs " + data["away_team"]
-
-    # For simplicity, we assume the fetched odds are for the 'total' market
-    # A real implementation would require more robust joining and market handling
-    odds_df = odds_df.rename(columns={"match": "match_key"})
-    merged_data = pd.merge(data, odds_df, on="match_key", how="left")
+    merged_data = _merge_with_normalized_match_keys(data=data, odds_df=odds_df)
     merged_data = merged_data.dropna(subset=["line", "over_odds"])
 
     consensus_thresholds = _build_consensus_thresholds(config)
@@ -190,28 +190,32 @@ def _get_or_train_ensemble_models(
             raise ValueError("ensemble_models was provided but is empty.")
         return list(ensemble_models)
 
-    size = max(1, int(config.model.ensemble_size))
-    stride = max(1, int(config.model.ensemble_seed_stride))
-    algorithms = _normalize_algorithms(config.model.algorithms)
-    schedule = _build_ensemble_schedule(size=size, algorithms=algorithms)
-
-    trained: list[TrainedModels] = []
-    for idx, algorithm in enumerate(schedule):
-        seed = config.model.random_state + (idx * stride)
-        params = _build_variation_params(
-            algorithm=algorithm,
-            variation_index=idx,
+    output_dir = Path("artifacts") / "models"
+    trained, specs, paths = train_and_save_ensemble(
+        features=train_data,
+        home_target="home_corners",
+        away_target="away_corners",
+        output_dir=output_dir,
+        algorithms=_normalize_algorithms(config.model.algorithms),
+        ensemble_size=max(1, int(config.model.ensemble_size)),
+        sample_weight=train_weights,
+        random_state=config.model.random_state,
+        ensemble_seed_stride=max(1, int(config.model.ensemble_seed_stride)),
+    )
+    logger.info(
+        "Ensemble trained and saved | models=%d | output_dir=%s | files=%d",
+        len(trained),
+        output_dir,
+        len(paths),
+    )
+    if specs:
+        logger.info(
+            "Ensemble composition: %s",
+            ", ".join(
+                f"{spec.algorithm}:{spec.variation_index + 1}"
+                for spec in specs
+            ),
         )
-        model = train_models(
-            train_data,
-            home_target="home_corners",
-            away_target="away_corners",
-            sample_weight=train_weights,
-            random_state=seed,
-            algorithm=algorithm,
-            model_params=params,
-        )
-        trained.append(model)
     return trained
 
 
@@ -241,8 +245,15 @@ def _build_consensus_thresholds(config: PipelineConfig) -> list[float]:
     if end < start:
         raise ValueError("consensus_end must be >= consensus_start.")
 
-    thresholds = np.arange(start, end + (step / 2), step)
-    return [float(np.clip(round(threshold, 4), 0.0, 1.0)) for threshold in thresholds]
+    span = end - start
+    steps = int(round(span / step))
+    thresholds = [round(start + (idx * step), 4) for idx in range(steps + 1)]
+    if thresholds[-1] < round(end, 4):
+        thresholds.append(round(end, 4))
+
+    # Keep deterministic ordering and remove float duplicates.
+    normalized = sorted({float(np.clip(value, 0.0, 1.0)) for value in thresholds})
+    return normalized
 
 
 def _normalize_algorithms(algorithms: Sequence[str]) -> tuple[str, ...]:
@@ -254,54 +265,113 @@ def _normalize_algorithms(algorithms: Sequence[str]) -> tuple[str, ...]:
     return normalized if normalized else ("xgboost",)
 
 
-def _build_ensemble_schedule(size: int, algorithms: Sequence[str]) -> list[str]:
-    """Create a balanced algorithm schedule for ensemble training."""
+def _merge_with_normalized_match_keys(data: pd.DataFrame, odds_df: pd.DataFrame) -> pd.DataFrame:
+    """Merge dataset and odds using robust normalized team names."""
 
-    if size <= 0:
-        return ["xgboost"]
-    algo_list = list(algorithms) if algorithms else ["xgboost"]
-    schedule: list[str] = []
-    idx = 0
-    while len(schedule) < size:
-        schedule.append(algo_list[idx % len(algo_list)])
-        idx += 1
-    return schedule
+    prepared_data = data.copy()
+    prepared_odds = odds_df.copy()
+
+    prepared_data["match_key_normalized"] = prepared_data["match_key"].map(_normalize_match_key)
+    prepared_odds["match_key"] = prepared_odds["match"]
+    prepared_odds["match_key_normalized"] = prepared_odds["match_key"].map(_normalize_match_key)
+
+    merged = pd.merge(
+        prepared_data,
+        prepared_odds.drop(columns=["match_key"]),
+        on="match_key_normalized",
+        how="left",
+        suffixes=("", "_odds"),
+    )
+
+    # Fuzzy fallback to recover rows still unmatched after strict normalization.
+    odds_key_lookup = {
+        _normalize_match_key(raw_key): raw_key
+        for raw_key in prepared_odds["match_key"].dropna().tolist()
+    }
+
+    normalized_odds_keys = list(odds_key_lookup.keys())
+    if not normalized_odds_keys:
+        return merged
+
+    from difflib import get_close_matches
+
+    fuzzy_map: dict[str, str] = {}
+    for key in prepared_data["match_key_normalized"].dropna().unique().tolist():
+        close = get_close_matches(key, normalized_odds_keys, n=1, cutoff=0.82)
+        if close:
+            fuzzy_map[key] = close[0]
+
+    if not fuzzy_map:
+        return merged
+
+    prepared_data["fuzzy_odds_key"] = prepared_data["match_key_normalized"].map(fuzzy_map)
+    prepared_odds["fuzzy_odds_key"] = prepared_odds["match_key_normalized"]
+    fuzzy_merged = pd.merge(
+        prepared_data,
+        prepared_odds.drop(columns=["match_key_normalized", "match"]),
+        on="fuzzy_odds_key",
+        how="left",
+    )
+    # Fill only rows missing from strict merge using fuzzy merge values.
+    fill_columns = [col for col in ["line", "over_odds", "under_odds"] if col in merged.columns]
+    if not fill_columns:
+        return merged
+
+    fuzzy_lookup = fuzzy_merged.set_index("source_row_id")
+    for column in fill_columns:
+        if column not in fuzzy_lookup.columns:
+            continue
+        merged[column] = merged[column].fillna(
+            merged["source_row_id"].map(fuzzy_lookup[column])
+        )
+    return merged
 
 
-def _build_variation_params(algorithm: str, variation_index: int) -> dict:
-    """Generate deterministic hyperparameter variations per algorithm."""
+def _normalize_match_key(match_name: str) -> str:
+    """Normalize match key to improve odds matching robustness."""
 
-    algo = algorithm.strip().lower()
-    idx = variation_index % 10
+    if not isinstance(match_name, str):
+        return ""
 
-    if algo == "xgboost":
-        return {
-            "n_estimators": 320 + (idx * 35),
-            "learning_rate": max(0.03, 0.12 - (idx * 0.008)),
-            "max_depth": 4 + (idx % 4),
-            "min_child_weight": 1 + (idx % 3),
-            "subsample": 0.72 + ((idx % 3) * 0.08),
-            "colsample_bytree": 0.68 + ((idx % 4) * 0.06),
-        }
+    raw = match_name.lower().strip()
+    replacements = [
+        (" versus ", " vs "),
+        (" v ", " vs "),
+        (" x ", " vs "),
+        ("-", " "),
+        (".", " "),
+        ("'", ""),
+    ]
+    for old, new in replacements:
+        raw = raw.replace(old, new)
 
-    if algo == "lightgbm":
-        return {
-            "n_estimators": 300 + (idx * 30),
-            "learning_rate": max(0.02, 0.10 - (idx * 0.007)),
-            "num_leaves": 24 + (idx * 2),
-            "subsample": 0.75 + ((idx % 3) * 0.08),
-            "colsample_bytree": 0.72 + ((idx % 4) * 0.06),
-        }
+    if " vs " not in raw:
+        return _normalize_team_name(raw)
 
-    if algo == "randomforest":
-        return {
-            "n_estimators": 250 + (idx * 30),
-            "max_depth": 7 + (idx % 6),
-            "min_samples_leaf": 1 + (idx % 3),
-            "max_features": 0.55 + ((idx % 4) * 0.1),
-        }
+    home, away = raw.split(" vs ", maxsplit=1)
+    return f"{_normalize_team_name(home)} vs {_normalize_team_name(away)}"
 
-    return {}
+
+def _normalize_team_name(team_name: str) -> str:
+    """Normalize team names by removing aliases and noise tokens."""
+
+    import re
+    import unicodedata
+
+    if not isinstance(team_name, str):
+        return ""
+    name = unicodedata.normalize("NFKD", team_name)
+    name = "".join(ch for ch in name if not unicodedata.combining(ch))
+    name = name.lower()
+    name = re.sub(r"[^a-z0-9\\s]", " ", name)
+    tokens = [token for token in name.split() if token]
+
+    stop_tokens = {
+        "fc", "cf", "sc", "ac", "cr", "cd", "club", "clube", "de", "do", "da",
+        "the", "esporte", "sport", "athletic", "atletico",
+    }
+    filtered = [token for token in tokens if token not in stop_tokens]
+    return " ".join(filtered) if filtered else " ".join(tokens)
 
 
 def _attach_threshold_performance(decisions_df: pd.DataFrame) -> pd.DataFrame:
@@ -338,8 +408,24 @@ def _attach_threshold_performance(decisions_df: pd.DataFrame) -> pd.DataFrame:
         0.0,
     )
     summary["roi"] = summary["yield"]
+    summary["yield_pct"] = summary["yield"] * 100.0
+    summary["roi_pct"] = summary["roi"] * 100.0
     summary = summary.merge(hit_rate_summary, on="consensus_threshold", how="left")
     summary["hit_rate"] = summary["hit_rate"].fillna(0.0)
+    summary["hit_rate_pct"] = summary["hit_rate"] * 100.0
+
+    # Rank thresholds by financial quality (ROI first, then profit, then volume).
+    ordered = summary.sort_values(
+        by=["roi", "profit_total", "bets_placed", "consensus_threshold"],
+        ascending=[False, False, False, True],
+    ).reset_index(drop=True)
+    rank_map = {
+        float(row["consensus_threshold"]): int(idx + 1)
+        for idx, (_, row) in enumerate(ordered.iterrows())
+    }
+    best_threshold = float(ordered.iloc[0]["consensus_threshold"])
+    summary["threshold_rank"] = summary["consensus_threshold"].map(rank_map).astype(int)
+    summary["is_best_threshold"] = summary["consensus_threshold"] == best_threshold
 
     return decisions_df.merge(summary, on="consensus_threshold", how="left")
 
