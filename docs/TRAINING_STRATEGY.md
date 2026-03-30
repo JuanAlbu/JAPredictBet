@@ -230,6 +230,26 @@ Prediction accuracy alone does not guarantee profitable betting strategies.
 
 ---
 
+# 9.1 Experimental Consensus Sensitivity Mode
+
+For robustness and safety studies, `scripts/consensus_accuracy_report.py`
+implements an experimental council mode distinct from the default MVP run:
+
+- fixed 30-model hybrid council:
+  - 70% boosters (XGBoost/LightGBM)
+  - 30% linear models (Ridge/ElasticNet)
+- dynamic consensus thresholds:
+  - base `45%`
+  - short margin (`|mean_lambda - line| < 0.5`) -> `50%`
+- fixed edge threshold `0.01` for sensitivity calibration
+- line normalization to `X.5` markets only
+- per-model diversity controls:
+  - feature dropout `20%`
+  - feature blackout of 3 stats columns (per seed)
+- output is timestamped per run in `log-test/`
+
+---
+
 # 10. Retraining Strategy
 
 Football evolves constantly.

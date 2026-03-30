@@ -101,6 +101,9 @@ The system must:
 - discard low-consensus matches ("insecure" bets)
 - confirm bets only when agreement reaches configurable consensus threshold
 - log an explicit status message for each decision
+- support dynamic threshold escalation based on short margin scenarios
+  (example: when `|mean_lambda - line| < 0.5`)
+- enforce betting-line normalization to half-goal style (`X.5`)
 
 ### Feature 7 - Consensus Threshold Backtesting
 
@@ -112,6 +115,7 @@ The system must:
 - return outputs that allow ROI vs volume comparison by threshold
 - compute and expose threshold-level ROI and Yield metrics
 - rank thresholds by financial quality and mark the best threshold
+- support experimental sensitivity runs with fixed thresholds for controlled studies
 
 ---
 
@@ -127,8 +131,15 @@ The system must:
 - detect value bets
 - evaluate consensus agreement
 - produce auditable decision logs
+- generate one immutable consensus report per execution for experiment tracking
 - compute segmented financial performance (ROI/Yield) by consensus threshold
 - use a standardized consensus audit report block for each evaluated bet
+
+Experimental validation requirements:
+
+- support fixed-size hybrid ensemble tests (boosters + linear models)
+- support per-model feature dropout and feature blackout for diversity tests
+- expose model-level audit parameters (algorithm, alpha/l1_ratio where applicable)
 
 ---
 

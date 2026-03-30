@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import ElasticNet, Ridge
 
 try:
     import lightgbm as lgb
@@ -296,6 +297,24 @@ def _build_regressor(
         params.update(overrides)
         return RandomForestRegressor(**params)
 
+    if algo == "ridge":
+        params = {
+            "alpha": 1.0,
+            "random_state": random_state,
+        }
+        params.update(overrides)
+        return Ridge(**params)
+
+    if algo == "elasticnet":
+        params = {
+            "alpha": 0.1,
+            "l1_ratio": 0.5,
+            "max_iter": 10000,
+            "random_state": random_state,
+        }
+        params.update(overrides)
+        return ElasticNet(**params)
+
     if algo == "lightgbm":
         if lgb is None:
             raise ValueError(
@@ -317,7 +336,7 @@ def _build_regressor(
 
     raise ValueError(
         f"Unsupported algorithm '{algorithm}'. "
-        "Expected one of: xgboost, lightgbm, randomforest."
+        "Expected one of: xgboost, lightgbm, randomforest, ridge, elasticnet."
     )
 
 
@@ -361,14 +380,20 @@ def build_variation_params(algorithm: str, variation_index: int) -> dict[str, An
     idx = variation_index % 10
 
     if algo == "xgboost":
+        # Diversificacao guiada por seed/variacao:
+        # 1) max_depth alterna especialistas/generalistas
+        # 2) colsample_bytree varia combinacoes de estatisticas
+        # 3) subsample varia fatias do historico
+        rng = np.random.default_rng(10_000 + variation_index)
         return {
             "objective": "count:poisson",
-            "n_estimators": [320, 360, 400, 440, 480, 520, 560, 600, 640, 680][idx],
-            "learning_rate": [0.12, 0.11, 0.10, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03][idx],
-            "max_depth": [4, 5, 6, 7, 4, 5, 6, 7, 5, 6][idx],
-            "min_child_weight": [1, 1, 2, 2, 3, 1, 2, 3, 2, 1][idx],
-            "subsample": [0.72, 0.80, 0.88, 0.76, 0.84, 0.92, 0.74, 0.82, 0.90, 0.78][idx],
-            "colsample_bytree": [0.68, 0.74, 0.80, 0.86, 0.72, 0.78, 0.84, 0.90, 0.76, 0.82][idx],
+            "n_estimators": 100,
+            "learning_rate": 0.05,
+            "max_depth": int(rng.choice([3, 4, 5, 6])),
+            "subsample": float(rng.uniform(0.7, 0.9)),
+            "colsample_bytree": float(rng.uniform(0.7, 0.9)),
+            # Mantem leve variacao de regularizacao entre membros.
+            "min_child_weight": [1, 2, 3, 1, 2, 3, 2, 1, 3, 2][idx],
         }
 
     if algo == "lightgbm":

@@ -179,6 +179,35 @@ to run the pipeline without retraining.
 
 ---
 
+## Experimental Consensus Validation Path
+
+In addition to the MVP runtime flow, the project maintains an experimental
+consensus validation script:
+
+- `scripts/consensus_accuracy_report.py`
+
+Purpose:
+
+- stress-test ensemble disagreement behavior
+- evaluate vote safety under controlled sensitivity settings
+- produce auditable per-match reports for manual inspection
+
+Current experimental calibration:
+
+- fixed 30 models
+- hybrid mix: 70% boosters (XGBoost/LightGBM) and 30% linear models (Ridge/ElasticNet)
+- edge threshold fixed at `0.01`
+- dynamic consensus:
+  - base threshold: `45%`
+  - short-margin rule: if `|mean_lambda - line| < 0.5`, required consensus becomes `50%`
+- betting line normalization to half-goal style only (`X.5`)
+- per-model diversification:
+  - feature dropout (`20%`) on selected model features
+  - feature blackout (`3` stats-related columns) per seed
+- one report file per execution in `log-test/` with timestamped filename
+
+---
+
 ## Safe Match Pairing Policy
 
 To preserve data integrity when joining odds with historical matches:

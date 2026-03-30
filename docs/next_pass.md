@@ -15,15 +15,33 @@ Transformar o JAPredictBet em um ecossistema quantitativo robusto para deteccao 
 
 ---
 
+## TRILHA EXPERIMENTAL (CONSENSO) - JA ENTREGUE
+*Foco: registrar entregas recentes de sensibilidade sem conflitar com o MVP padrao.*
+
+- [x] Script dedicado de validacao por consenso: `scripts/consensus_accuracy_report.py`.
+- [x] Geracao de logs por execucao com timestamp em `log-test/` (um arquivo por teste).
+- [x] Linha de aposta normalizada para mercado `X.5` em todo o relatorio.
+- [x] Conselho hibrido experimental com 30 modelos (70% boosters + 30% lineares).
+- [x] Inclusao de Ridge/ElasticNet no fluxo de treino experimental.
+- [x] Parametros de sensibilidade fixados no modo experimental:
+  - edge threshold = 0.01
+  - consenso base = 45%
+  - consenso em margem curta (`|media_lambda - linha| < 0.5`) = 50%
+  - feature dropout = 20%
+  - feature blackout = 3 colunas por modelo
+- [x] Log de auditoria por modelo com algoritmo e parametros (incluindo `alpha` e `l1_ratio` quando aplicavel).
+
+---
+
 ## FASE 1: INTEGRIDADE DE DADOS E INFRAESTRUTURA (PRIORIDADE P0)
 *Foco: eliminar leakage, padronizar entrada e garantir rastreabilidade do pipeline.*
 
 - [ ] **Holdout Temporal Estrito:** Isolar os ultimos 3 meses para validacao final out-of-sample.
 - [ ] **Chave de Matching Definitiva:** Padronizar join por `Equipe + Data + Liga`.
-- [ ] **Imputacao Zero em Campos Criticos:** Descartar linhas incompletas em vez de media.
+- [x] **Imputacao Zero em Campos Criticos:** Descartar linhas incompletas em vez de media (aplicado no pipeline e no script de consenso).
 - [ ] **Paralelizacao via n_jobs/backend:** Otimizar treino dos 30 modelos com recursos nativos.
 - [ ] **Orquestracao de Pastas Fixas:** Consolidar fluxo `Raw -> Processed -> Models` no `update_pipeline.py`.
-- [ ] **Validacao de Schema de Entrada:** Falhar cedo quando colunas obrigatorias estiverem ausentes ou tipos forem invalidos.
+- [x] **Validacao de Schema de Entrada:** Falhar cedo quando colunas obrigatorias estiverem ausentes ou tipos forem invalidos.
 - [ ] **Versionamento de Artefatos e Dataset:** Registrar hash/versao de dataset, config e modelos por execucao.
 
 ---
@@ -34,8 +52,8 @@ Transformar o JAPredictBet em um ecossistema quantitativo robusto para deteccao 
 - [ ] **Calibracao de Probabilidades (Brier/ECE):** Garantir aderencia entre probabilidade prevista e frequencia real.
 - [ ] **Rolling Curto Prazo:** Adicionar janelas de 3 e 5 jogos como features extras, mantendo 5 e 10.
 - [ ] **Otimizacao de Hiperparametros:** Refinar XGB/LGBM/RF com protocolo deterministico.
-- [ ] **Isolamento de Odds no Treino:** Usar odds apenas para avaliacao de valor, nunca como feature.
-- [ ] **Walk-Forward de Validacao:** Complementar split temporal com walk-forward para reduzir risco de overfitting por regime.
+- [x] **Isolamento de Odds no Treino:** Usar odds apenas para avaliacao de valor, nunca como feature.
+- [x] **Walk-Forward de Validacao:** Complementar split temporal com walk-forward para reduzir risco de overfitting por regime.
 - [ ] **Relatorio de Importancia/Estabilidade de Features:** Monitorar variacao de importancia entre janelas temporais.
 
 ---

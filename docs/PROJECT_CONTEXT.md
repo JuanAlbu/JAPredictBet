@@ -88,6 +88,19 @@ The MVP execution now supports:
 - audit logs that record explicit odds-name to dataset-name mappings
 - support for loading pre-trained ensemble artifacts from `artifacts/models`
 
+Operational note:
+
+- The production MVP pipeline keeps the configured ensemble strategy from `config.yml`
+  (currently 30 members with configured algorithm list and consensus sweep).
+- In parallel, an experimental validation path exists in
+  `scripts/consensus_accuracy_report.py` for sensitivity studies. This path
+  currently uses:
+  - fixed 30-member hybrid council (70% boosters, 30% linear models)
+  - dynamic consensus rule (base 45%, rises to 50% on short margin)
+  - edge threshold fixed at 0.01 in the experiment
+  - per-model data dropout (20%) and feature blackout (3 stats columns)
+  - timestamped report generation in `log-test/`
+
 ---
 
 # Initial Scope

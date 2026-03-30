@@ -94,3 +94,24 @@ Resumo da rodada:
 Arquivos de suporte:
 - Detalhado por partida (linha fixa 9.5): docs/consensus_test_report_line95.txt
 - Detalhado por partida (linha dinamica): docs/consensus_test_report.txt
+
+Atualizacao Final - Calibracao de Sensibilidade (2026-03-29)
+- Script: scripts/consensus_accuracy_report.py
+- Configuracao ativa da rodada:
+  - Ensemble fixo: 30 modelos
+  - Mix: 70% boosters (XGBoost/LightGBM) + 30% lineares (Ridge/ElasticNet)
+  - Edge threshold: 0.01
+  - Consenso dinamico: base 45%, sobe para 50% em margem curta (|media lambda - linha| < 0.5)
+  - Data dropout: 20%
+  - Feature blackout: 3 colunas por modelo
+  - Linha de aposta: sempre mercado X.5
+
+Resultado observado na rodada validada:
+- Partidas no teste: 40
+- Apostas recomendadas: 1
+- Apostas avaliaveis (sem push): 1
+- Vitorias: 1
+- Acuracia: 100.00% (1/1)
+
+Auditoria detalhada:
+- log-test/consensus_test_report_20260329_211815.txt
