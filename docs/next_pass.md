@@ -1,69 +1,83 @@
-# JA PREDICT BET - ROADMAP E CHECKLIST DO PROJETO
+﻿# JA PREDICT BET - ROADMAP DE EVOLUCAO (CONSOLIDADO E EXECUTAVEL)
 
 ## Objetivo do Sistema
-Transformar um modelo de previsão de cantos (escanteios) num sistema automatizado e robusto de **deteção de value bets** baseado em Consenso.
-
-Fluxo principal:
-`dataset -> 30 modelos (poisson) -> edge individual -> consenso -> filtro de variância -> decisão de aposta -> ROI real`
+Transformar o JAPredictBet em um ecossistema quantitativo robusto para deteccao de Value Bets via consenso de modelos, com foco em integridade de dados, reprodutibilidade, calibracao e gestao de risco, mantendo as premissas do MVP (Poisson, arquitetura de dois modelos por membro e rolling features).
 
 ---
 
-# 🟢 FASE 0 - MVP CONCLUÍDO (BASE FUNCIONAL)
+## BASE ATUAL (MVP JA ENTREGUE)
+*Foco: registrar rapidamente o que ja existe para evitar retrabalho.*
 
-- [x] Contrato e recolha de odds padronizados (`odds/collector.py`).
-- [x] Motor de probabilidade (Poisson) e Edge (`betting/engine.py`).
-- [x] Validação de "Previsão Segura" via Consenso (Threshold dinâmico).
-- [x] Ensemble de 30 Modelos (10 XGB, 10 LGBM, 10 RF).
-- [x] Matching robusto com Fuzzy Match, Threshold de Segurança e Rejeição de Ambiguidade.
-- [x] Pipeline de Backtest a calcular ROI, Yield e Lucro Agregado por Threshold.
-- [x] Integridade de dados garantida (Zero Imputação em campos críticos).
+- [x] Ensemble deterministico de 30 modelos (10 XGB, 10 LGBM, 10 RF).
+- [x] Consenso com threshold configuravel e sweep de thresholds.
+- [x] Matching robusto de equipes com fuzzy seguro e descarte de ambiguidades.
+- [x] Backtest com metricas de ROI/Yield por threshold.
 
 ---
 
-# 🔴 FASE 1 - PRIORIDADE MÁXIMA (P0 - BLOQUEANTES)
+## FASE 1: INTEGRIDADE DE DADOS E INFRAESTRUTURA (PRIORIDADE P0)
+*Foco: eliminar leakage, padronizar entrada e garantir rastreabilidade do pipeline.*
 
-O objetivo desta fase é garantir que o ROI reportado no backtest não é fruto de vazamento de dados (leakage) e que é reprodutível no mundo real.
-
-- [ ] **Holdout Temporal Cego:** Definir e isolar um período final do dataset (ex: últimos 3 meses) que os modelos *nunca* viram durante o treino ou tuning. O ROI oficial deve vir apenas deste bloco.
-- [ ] **Chave de Matching Definitiva:** Atualizar o matching para utilizar `Nome da Equipa + Data do Jogo` (evita misturar jogos de ligas/taças diferentes que ocorrem na mesma semana).
-- [ ] **Paralelização de Treinamento (`n_jobs`):** Implementar `joblib` ou `multiprocessing` no `train.py` para treinar os 30 modelos simultaneamente e viabilizar backtests rápidos.
-
----
-
-# 🟠 FASE 2 - REALISMO DE MERCADO E MLOPS (P1)
-
-Ajustes necessários para que a performance teórica do backtest sobreviva às condições reais das casas de apostas.
-
-- [ ] **Pipeline de Atualização Contínua (CT):** Implementar `update_pipeline.py` para automatizar a ingestão de novas planilhas e o retreino do Ensemble de 30 modelos.
-- [ ] **Penalidade de Slippage:** Simular no backtest uma queda de odd (ex: descontar 0.03 de cada odd) para representar o atraso entre o alerta do sistema e a aposta real.
-- [ ] **Hard Block de Desvio Padrão:** Abortar a aposta se o $\sigma$ (variância) dos 30 modelos for superior a um limite $X$, mesmo que o consenso atinja os 70%.
-- [ ] **Log Estruturado por Aposta:** Guardar um ficheiro CSV/JSON no backtest com cada entrada, contendo: odd, média $\lambda$, desvio padrão, votos favoráveis, stake e resultado.
-- [ ] **Separação de Métricas:** Exibir o ROI isolado por mercado (Home, Away, Total) no relatório final.
+- [ ] **Holdout Temporal Estrito:** Isolar os ultimos 3 meses para validacao final out-of-sample.
+- [ ] **Chave de Matching Definitiva:** Padronizar join por `Equipe + Data + Liga`.
+- [ ] **Imputacao Zero em Campos Criticos:** Descartar linhas incompletas em vez de media.
+- [ ] **Paralelizacao via n_jobs/backend:** Otimizar treino dos 30 modelos com recursos nativos.
+- [ ] **Orquestracao de Pastas Fixas:** Consolidar fluxo `Raw -> Processed -> Models` no `update_pipeline.py`.
+- [ ] **Validacao de Schema de Entrada:** Falhar cedo quando colunas obrigatorias estiverem ausentes ou tipos forem invalidos.
+- [ ] **Versionamento de Artefatos e Dataset:** Registrar hash/versao de dataset, config e modelos por execucao.
 
 ---
 
-# 🟡 FASE 3 - REFINAMENTO DE MODELO E DADOS (P2)
+## FASE 2: REFINAMENTO DO MODELO E ENGENHARIA (PRIORIDADE P1)
+*Foco: melhorar performance sem quebrar as premissas da arquitetura atual.*
 
-Melhorias algorítmicas e arquiteturais para ganho de precisão e segurança.
-
-- [ ] **Otimização de Hiperparâmetros (Optuna):** Criar script `tune_hyperparameters.py` para otimizar as variações base dos 3 algoritmos usando a média dos folds, gerando um `best_params.json` a ser consumido pelo treino.
-- [ ] **Gestão de Banca (Bankroll):** Substituir a Stake Fixa (1.0) pelo **Critério de Kelly Fracionado**, onde o volume financeiro apostado é proporcional ao tamanho do Edge e ao nível de Consenso.
-- [ ] **Novas Features de Contexto:** Criar feature binária ou categórica a diferenciar "Mata-Mata" (Eliminatórias) de "Pontos Corridos" (Liga).
-- [ ] **Validação de Configurações:** Implementar validação estrita (ex: Pydantic) para o `config.yml` na inicialização do `run.py`.
-
----
-
-# 🔵 FASE 4 - TESTES E QUALIDADE (P2)
-
-- [ ] **Testes de Ingestão e Vazamento:** Criar testes unitários para garantir que nenhuma feature do futuro (ex: resultado final) vaza para as *rolling features* pré-jogo.
-- [ ] **Teste de Regressão de Homónimos:** Garantir que o sistema não confunde equipas com nomes idênticos em ligas diferentes.
-- [ ] **CI/CD Básico:** Configurar GitHub Actions para correr a suíte de testes do `pytest` a cada *push* na *branch* principal.
+- [ ] **Calibracao de Probabilidades (Brier/ECE):** Garantir aderencia entre probabilidade prevista e frequencia real.
+- [ ] **Rolling Curto Prazo:** Adicionar janelas de 3 e 5 jogos como features extras, mantendo 5 e 10.
+- [ ] **Otimizacao de Hiperparametros:** Refinar XGB/LGBM/RF com protocolo deterministico.
+- [ ] **Isolamento de Odds no Treino:** Usar odds apenas para avaliacao de valor, nunca como feature.
+- [ ] **Walk-Forward de Validacao:** Complementar split temporal com walk-forward para reduzir risco de overfitting por regime.
+- [ ] **Relatorio de Importancia/Estabilidade de Features:** Monitorar variacao de importancia entre janelas temporais.
 
 ---
 
-# ⚪ FASE 5 - MELHORIAS AVANÇADAS E FUTURO (P3)
+## FASE 3: GESTAO DE RISCO E AUDITORIA FINANCEIRA (PRIORIDADE P1)
+*Foco: validar edge real e proteger banca contra variancia e friccao de mercado.*
 
-- [ ] **Monitorização de CLV (Closing Line Value):** Implementar a remoção do *overround* (odd justa) estritamente para auditoria. Medir se as previsões do modelo estão a bater a linha de fecho das casas asiáticas (Pinnacle).
-- [ ] **Votação Ponderada (Weighted Consensus):** Atribuir pesos maiores no voto para algoritmos/variações que provarem maior acurácia no backtest longo.
-- [ ] **Line Shopping:** Integrar múltiplas fontes de odds para procurar a melhor cotação disponível no mercado antes do cálculo do Edge.
-- [ ] **Integração com Agentes/Bots:** Preparar *endpoint* para que um *bot* de Telegram consuma os alertas de "Value Bet" em tempo real.
+- [ ] **Refino do Value Bet Engine:** Padronizar calculo de EV `(Probabilidade * Odd) - 1`.
+- [ ] **Quarter Kelly:** Implementar stake fracionada (25% Kelly) com limites de seguranca.
+- [ ] **Auditoria de CLV:** Comparar odd de entrada vs fechamento para medir qualidade de preco.
+- [ ] **Monte Carlo de Drawdown:** Simular sequencias de perdas para validar robustez da banca.
+- [ ] **Stress Test de Slippage:** Recalcular ROI com penalidade de odd para aproximar execucao real.
+- [ ] **Limites de Exposicao:** Definir teto de stake por liga/mercado/dia para reduzir concentracao de risco.
+
+---
+
+## FASE 4: QUALIDADE, MONITORAMENTO E PRODUTO (PRIORIDADE P2)
+*Foco: confiabilidade operacional e escalabilidade segura do sistema.*
+
+- [ ] **Suite de Testes de Leakage:** Garantir que rolling features usem apenas historico passado.
+- [ ] **Teste de Regressao de Matching:** Evitar confusao entre equipes homonimas em ligas diferentes.
+- [ ] **CI Basico (pytest em push):** Automatizar validacao minima de qualidade.
+- [ ] **Logging Estruturado por Aposta:** Salvar decisao com lambdas, votos, edge, threshold, stake e resultado.
+- [ ] **Dashboard de Saude do Modelo:** Acompanhar volume, hit rate, ROI, CLV e calibracao por periodo.
+- [ ] **Integracao com APIs Real-time:** Conexao com provedores de odds e estatisticas.
+- [ ] **Bot de Alertas (Telegram):** Notificacao de oportunidades aprovadas pelo consenso.
+- [ ] **Estrategia Multi-Liga:** Especializar modelos por campeonato quando houver dados suficientes.
+
+---
+
+## FASE 5: PESQUISA E DESENVOLVIMENTO (R&D FUTURO)
+*Nota: itens desta fase exigem atualizacao formal de `PROJECT_CONTEXT.md`, `ARCHITECTURE.md` e `PRODUCT_REQUIREMENTS.md` antes da implementacao.*
+
+- [ ] **Estudo de Binomial Negativa Bivariada:** Avaliar migracao de Poisson para sobredispersao.
+- [ ] **Stacking Meta-Modelo:** Avaliar ponderacao aprendida dos 30 membros do ensemble.
+- [ ] **Game State / Live Variables:** Estudar impacto de estado de jogo em cantos.
+- [ ] **GNN Tatico:** Avaliar modelagem estrutural de interacoes entre jogadores.
+- [ ] **Favourite-Longshot Bias:** Pesquisar ajustes para vies sistematico de mercado.
+
+---
+
+## CHECKLIST DE VALIDACAO FINAL (MVP)
+- [ ] CLV >= 55% de acerto em janela representativa.
+- [ ] Brier Score <= 0.20 de forma consistente.
+- [ ] ROI temporal positivo e estavel apos 500 simulacoes de Monte Carlo.
