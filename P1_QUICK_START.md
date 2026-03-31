@@ -157,16 +157,17 @@ git push origin feature/p1a-<task>
 
 ---
 
-## Final Checklist: Ready to Code?
+## Final Checklist: Ready to Code P1.A2?
 
-✅ Understand what P1 does (consolidate pipeline + improve features)  
-✅ Know the order: P1-A first, then P1.B1+B2, then B3, then B4  
-✅ Have all 4 docs, know where to look  
-✅ Branch created  
-✅ Tests running (baseline 21/21)  
-✅ Ready to start P1.A1  
+✅ P1.A1 COMPLETO (31-MAR-2026): Hybrid ensemble [21+9] in core pipeline  
+✅ 34/34 tests passing (13 novos ensemble tests)  
+✅ Feature branch `feature/p1a-ensemble` committed  
+✅ Know what P1 does: consolidate pipeline + improve features  
+✅ Know the order: P1-A complete, P1.A2/A3 ready, then P1.B1+B2, then B3, then B4  
+✅ Have all 5 docs, know where to look  
+✅ Baseline: 34/34 tests running  
 
-**→ Open `P1_CHECKLIST.md`, go to P1.A1, start subtask 1.1 → Proceed!**
+**→ Next: Open `P1_CHECKLIST.md`, go to P1.A2 (Dynamic Margin Rule) → Proceed!**
 
 ---
 

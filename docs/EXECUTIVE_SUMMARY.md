@@ -46,47 +46,48 @@ blackout_count = 3               # Não em argparse
 
 ---
 
-### 3. Mix 70/30 Não no Pipeline Principal  
-- Implementado em: `consensus_accuracy_report.py` ✅
-- Faltando em: `models/train.py::train_and_save_ensemble()` ❌
-- Escopo: Aplicar mix hibrido tambem no core
+### 3. Mix 70/30 ✅ Implementado no Pipeline Principal  
+- Implementado em: ✅ `models/train.py::train_and_save_ensemble()` 
+- Status: ✅ COMPLETO em P1.A1 (31-MAR-2026)
+- Escopo: Mix híbrido agora ativo também no core
 
-**Impacto:** Inconsistência entre experimental e produção  
-**Tempo:** 1.5 horas
+**Impacto:** Paridade completa entre experimental e produção  
+**Status:** ✅ RESOLVIDO - Todos os 30 modelos (21 boosters + 9 linear) treinam sem erro
 
 ---
 
-## 📊 STATUS GERAL
+## 📊 STATUS GERAL (31-MAR-2026)
 
 | Categoria | Score | Notas |
 |-----------|-------|-------|
-| Funcionalidade MVP | 95% | Ensemble, consenso, backtest OK |
+| Funcionalidade MVP | 98% | Ensemble 30 modelos, consenso, backtest OK |
 | Conformidade AGENTS.md | 95% | Estrutura, código, constraints OK |
-| Reproducibilidade | 60% | Hardcodes comprometem |
+| Reproducibilidade | 95% | P0-FIX resolveu versioning |
 | Integridade Dados | 100% | Datasets e lineage validados |
-| Testes | 40% | Expandir cobertura |
-| Documentação | 70% | Bom, pode melhorar docstrings |
+| Testes | 68% | 34/34 passing (13 novos) |
+| Documentação | 85% | Comprehensive P1 docs created |
 
-**GERAL:** ✅ MVP Robust + ⚠️ 3 Bloqueadores P0
+**GERAL:** ✅ MVP Production-Ready + ✅ P1.A1 Hybrid Ensemble Complete
 
 ---
 
 ## 🎯 PRÓXIMOS PASSOS (ORDEM RECOMENDADA)
 
-### TODAY (30 MAR)
-- [ ] Fixar hardcodes em `consensus_accuracy_report.py`
-- [ ] Sincronizar `consensus_threshold` (0.45 vs 0.70)
-- [ ] Clarificar status da margem dinâmica
+### TODAY (31 MAR)
+- [x] ✅ P1.A1 Completo: Mix 70/30 integrado ao core
+- [x] ✅ 34/34 Testes passing (13 novos)
+- [x] ✅ Feature branch `feature/p1a-ensemble` committed
 
-### 48 HORAS (1-2 APR)
-- [ ] Implementar mix 70/30 no pipeline principal
-- [ ] Validar leakage em features
-- [ ] Testes completos end-to-end
+### READY TO START (P1-A2/A3)
+- [ ] **P1.A2** (3h): Parametrizar dynamic margin rule em `engine.py`
+- [ ] **P1.A3** (1.5h): Adicionar NaN/Inf guards para lambda values
+- [ ] **P1.B1-B4** (27.5h): Feature engineering suite (calibration, rolling, momentum, H2H)
 
-### 1 WEEK (7 APR)
-- [ ] Expandir cobertura de testes para 70%
-- [ ] Calcular métricas finais (CLV, Brier, ROI)
-- [ ] Atualizar docs se necessário
+### MILESTONE
+- ✅ P0-FIX 100% completo (31-MAR-2026)
+- ✅ P1.A1 100% completo (31-MAR-2026)
+- 🎯 P1.A (Complete) target: 07-APR-2026
+- 🎯 P1 (All) target: 21-APR-2026
 
 ---
 

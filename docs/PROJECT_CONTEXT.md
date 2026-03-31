@@ -1,9 +1,11 @@
-# Project Context (Atualizado 30-MAR-2026)
+# Project Context (Atualizado 31-MAR-2026)
 
 ## Status Atual
 - **MVP Baseline:** ✅ ENTREGUE
-- **P0 (Crítico):** ✅ 100% IMPLEMENTADO E VALIDADO (30-MAR-2026)
-- **P1 (Alto Impacto):** 🔄 PRONTO PARA COMEÇAR
+- **P0 (Crítico):** ✅ 100% IMPLEMENTADO E VALIDADO (31-MAR-2026)
+- **P1-A1 (Ensemble Híbrido):** ✅ COMPLETO (31-MAR-2026) - 30 modelos (21 boosters + 9 linear)
+- **P1-A2/A3 (Validação/Margem):** 🟢 PRONTO PARA COMEÇAR
+- **P1-B/C/D (Features/Otimização/Risk):** 🔄 A PLANEJAR APÓS P1-A
 
 ---
 

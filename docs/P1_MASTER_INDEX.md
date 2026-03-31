@@ -169,11 +169,11 @@ P1.B4 (H2H) ← depende de B3
 
 | Task | Status | Owner | Docs |
 |------|--------|-------|------|
-| **P1.A1** | 🟢 READY | You | [Development](P1_DEVELOPMENT_PLAN.md#p1a1), [Checklist](P1_CHECKLIST.md#p1a1) |
+| **P1.A1** | ✅ COMPLETE | You | [Development](P1_DEVELOPMENT_PLAN.md#p1a1), [Checklist](P1_CHECKLIST.md#p1a1) |
 | **P1.A2** | 🟢 READY | You | [Development](P1_DEVELOPMENT_PLAN.md#p1a2), [Checklist](P1_CHECKLIST.md#p1a2) |
 | **P1.A3** | 🟢 READY | You | [Development](P1_DEVELOPMENT_PLAN.md#p1a3), [Checklist](P1_CHECKLIST.md#p1a3) |
-| **P1.B1** | 🟡 BLOCKED (awaits P1.A1) | You | [Development](P1_DEVELOPMENT_PLAN.md#p1b1), [Checklist](P1_CHECKLIST.md#p1b1) |
-| **P1.B2** | 🟡 BLOCKED (awaits P1.A1) | You | [Development](P1_DEVELOPMENT_PLAN.md#p1b2), [Checklist](P1_CHECKLIST.md#p1b2) |
+| **P1.B1** | 🟢 READY (P1.A1 ✅) | You | [Development](P1_DEVELOPMENT_PLAN.md#p1b1), [Checklist](P1_CHECKLIST.md#p1b1) |
+| **P1.B2** | 🟢 READY (P1.A1 ✅) | You | [Development](P1_DEVELOPMENT_PLAN.md#p1b2), [Checklist](P1_CHECKLIST.md#p1b2) |
 | **P1.B3** | 🟡 BLOCKED (awaits P1.B2) | You | [Development](P1_DEVELOPMENT_PLAN.md#p1b3), [Checklist](P1_CHECKLIST.md#p1b3) |
 | **P1.B4** | 🟡 BLOCKED (awaits P1.B3) | You | [Development](P1_DEVELOPMENT_PLAN.md#p1b4), [Checklist](P1_CHECKLIST.md#p1b4) |
 

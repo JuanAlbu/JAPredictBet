@@ -1,40 +1,45 @@
-# P1 Development — Cronograma e Dependências Visuais
+# P1 Development — Cronograma e Dependências Visuais (Atualizado 31-MAR-2026)
 
 ## Timeline de Execução (Sprint Board)
 
-```
-SEMANA 1 (P1-A)                    SEMANA 2-3 (P1-B)              SEMANA 4 (Finalização)
-┌─────────────────────┐            ┌──────────────────────┐        ┌─────────────┐
-│ Mon-Tue: P1.A1      │            │ Mon-Tue: P1.B1+B2    │        │ Mon-Tue: B3 │
-│ Portar 70/30        │ ────────>  │ Calibração + EMA     │ ────> │ Record      │
-│ 3.5h                │            │ 6.5h                 │        │ 2.5h        │
-└─────────────────────┘            └──────────────────────┘        └─────────────┘
-                                                                     │
-┌─────────────────────┐            ┌──────────────────────┐        ├─> Wed-Thu: B4
-│ Wed: P1.A2          │            │ Wed-Thu: B2 + B1 cont│        │   H2H + Cross
-│ Dynamic Margin      │ ────────>  │ + Colinearidade      │        │   4h
-│ 4h                  │            │ 4h                   │        │
-└─────────────────────┘            └──────────────────────┘        ├─> Fri: MERGE
-                                                                     │   & Review
-┌─────────────────────┐            ┌──────────────────────┐        │
-│ Thu: P1.A3          │            │ Fri: Testes Integ.   │        └─────────────┘
-│ Lambda Validation   │ ────────>  │ & PR Review          │
-│ 2.5h                │            │                      │
-└─────────────────────┘            └──────────────────────┘
+### EXECUÇÃO COMPLETA (P1-A1 ✅ | P1-A2/A3 Ready 🟢)
 
-TOTAL: ~16h             TOTAL: ~13.5h          TOTAL: ~6.5h
-      (Week 1)              (Weeks 2-3)        (Week 4)
+```
+SEMANA 1 (P1-A) - INICIADO                             SEMANA 2-3 (P1-B) - PRONTO              
+┌─────────────────────┐                                ┌──────────────────────┐
+│ Mon-Tue: P1.A1 ✅   │    ┌─ COMPLETO ─┐            │ Mon-Tue: P1.B1+B2    │
+│ Portar 70/30        │    │             ├──────────> │ Calibração + EMA     │
+│ 3.5h (ON TIME)      │    │ 31-MAR-2026 │            │ 6.5h (DESBLOQUEADO)  │
+└─────────────────────┘    └─────────────┘            └──────────────────────┘
+       ✅ COMPLETO
+       - 30 modelos treinam
+       - 13 novos testes
+       - Pipeline merged
+                                                       ┌──────────────────────┐
+┌─────────────────────┐                                │ Wed-Thu: P1.B2cont   │
+│ Wed: P1.A2 🟢       │    ┌─ READY 🟢 ─┐            │ + Colinearidade      │
+│ Dynamic Margin      │    │             ├──────────> │ + Testing            │
+│ 3h est. (PRONTO)    │    │ NEXT PHASE  │            │ 4h                   │
+└─────────────────────┘    └─────────────┘            └──────────────────────┘
+
+┌─────────────────────┐                                ┌──────────────────────┐
+│ Thu: P1.A3 🟢       │                                │ Fri: Testes Integ.   │
+│ Lambda Validation   │    ┌─ READY 🟢 ─┐            │ & PR Review          │
+│ 1.5h est. (PRONTO)  │    │             ├──────────> │ (Validação)          │
+└─────────────────────┘    └─────────────┘            └──────────────────────┘
+
+COMPLETADO: 3.5h       PRONTO: 4.5h       TOTAL RESTANTE: ~13.5h
 ```
 
 ---
 
-## Dependency Graph
+## Dependency Graph (Updated Status)
 
 ```
                            ┌─────────────────┐
                            │    P0-FIX       │
                            │  ✅ COMPLETO    │
-                           │  (prereq)       │
+                           │  (31-MAR)       │
                            └────────┬────────┘
                                     │
                     ┌───────────────┼───────────────┐
@@ -42,12 +47,14 @@ TOTAL: ~16h             TOTAL: ~13.5h          TOTAL: ~6.5h
                ┌────▼────┐      ┌───▼───┐      ┌───▼────┐
                │ P1.A1   │      │ P1.A2 │      │ P1.A3  │
                │ Ensemble│      │ Margin│      │ Lambda │
-               │ 70/30   │      │ Rule  │      │ Valid  │
+               │ ✅ DONE │      │ 🟢 RDY│      │ 🟢 RDY │
                └────┬────┘      └───┬───┘      └────┬───┘
                     │               │              (parallel)
                     └───────────────┼───────────────┘
                                     │
-                             ┌──────▼──────┐
+                             ┌──────▼──────────┐
+                             │  P1-B DESBLOQ   │
+                             │ 🟢 6 TASKS RDY  │
                              │   P1-A      │
                              │  COMPLETE   │
                              │ (Now test   │

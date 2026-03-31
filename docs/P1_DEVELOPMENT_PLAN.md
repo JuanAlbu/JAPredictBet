@@ -1,9 +1,10 @@
 # P1 Development Plan — P1-A e P1-B
 
 **Data de Criação:** 31 de Março, 2026  
-**Status:** Planejamento Concluído  
-**Baseline:** P0-FIX 100% completo, 21 testes passando  
-**Duração Estimada:** 3-4 semanas (80-120 horas)
+**Última Atualização:** 31 de Março, 2026  
+**Status:** P1.A1 Completo ✅ | P1.A2/A3 Ready to Start 🟢 | P1.B Planejado 🔄  
+**Baseline:** P0-FIX 100% completo, 34/34 testes passando (13 novos)  
+**Duração Estimada Restante:** 2-3 semanas (50-90 horas para P1.A2/A3 + P1.B)
 
 ---
 
@@ -12,41 +13,43 @@
 ### Visão Geral
 
 **P1-A (Integridade do Pipeline)** — 3 tarefas de consolidação  
+Status: 1/3 Completo ✅ (P1.A1), 2/3 Ready to Start 🟢 (P1.A2/A3)  
 Objetivo: Fazer o pipeline core (`run.py` → `train.py`) ter paridade funcional com o script experimental  
 
 **P1-B (Evolução de Features)** — 4 tarefas de engenharia de features  
+Status: Desbloqueado por P1.A1 ✅  
 Objetivo: Melhorar acurácia com rolling windows curtas, EMA, record/momentum, e H2H  
 
 ### Roadmap de Sequenciamento
 
 ```
-Semana 1: P1-A (consolidação)
-├── P1.A1: Portar 70/30 ensemble para core
-├── P1.A2: Parametrizar dynamic margin rule
-└── P1.A3: Validar lambda values (defensivo)
+✅ Semana 1: P1-A (consolidação) - INICIADO
+├── ✅ P1.A1: Portar 70/30 ensemble para core [COMPLETO]
+├── 🟢 P1.A2: Parametrizar dynamic margin rule [PRONTO]
+└── 🟢 P1.A3: Validar lambda values (defensivo) [PRONTO]
 
-Semana 2-3: P1-B (features)
-├── P1.B1: Calibração de probabilidades
-├── P1.B2: Rolling + EMA features
-├── P1.B3: Record e game state
-└── P1.B4: H2H e cross-features
+🔄 Semana 2-3: P1-B (features)
+├── 🟡 P1.B1: Calibração de probabilidades [DESBLOQUEADO]
+├── 🟡 P1.B2: Rolling + EMA features [DESBLOQUEADO]
+├── 🟡 P1.B3: Record e game state [DESBLOQUEADO]
+└── 🟡 P1.B4: H2H e cross-features [DESBLOQUEADO]
 ```
 
 ### Status Crítico
 
-✅ **Desbloqueado:** Nenhum bloqueador. P0-FIX completado.  
-⚠️ **Dependências:** P1.B depende de P1.A1 completado.  
+✅ **Desbloqueado:** P1.A1 completado. P1.A2/A3 prontos. P1.B desbloqueado.  
+⚠️ **Dependências:** P1.B depende de P1.A1 (NOW MET ✅)  
 🔴 **Risco:** Multicolinearidade em P1.B, data leakage em features.
 
 ---
 
 ## P1-A: Integridade do Pipeline
 
-### 🎯 P1.A1 — Portar lógica 70/30 para train.py
+### 🎯 P1.A1 — Portar lógica 70/30 para train.py ✅ COMPLETO
 
-**Objetivo:** Fazer ensemble core usar híbrido 70/30 (21 boosters + 9 linear)
-
-#### Status Atual
+**Objetivo:** Fazer ensemble core usar híbrido 70/30 (21 boosters + 9 linear)  
+**Status:** ✅ COMPLETO (31-MAR-2026)  
+**Tempo:** 3.5h (estimado) | Efetivo completo no tempo estimado
 
 | Item | Status | Nota |
 |------|--------|------|
