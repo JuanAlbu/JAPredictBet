@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import List
 
 
 @dataclass(frozen=True)
@@ -19,7 +20,7 @@ class DataConfig:
 class FeatureConfig:
     """Feature engineering settings."""
 
-    rolling_window: int = 10
+    rolling_windows: List[int] = (10, 5)
 
 
 @dataclass(frozen=True)

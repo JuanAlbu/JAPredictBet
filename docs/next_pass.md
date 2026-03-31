@@ -1,304 +1,188 @@
-﻿# JA PREDICT BET - ROADMAP DE EVOLUCAO (REVISAO 30-MAR-2026 - ATUALIZADO)
+# JA PREDICT BET - ROADMAP DE EVOLUCAO (REVISAO 31-MAR-2026)
 
-**Data da Revisao:** 30 de Março, 2026 (Session Final 21:55 - 22:54)  
-**Status Geral:** MVP Robusto entregue + P0 COMPLETAMENTE IMPLEMENTADO ✅ + VALIDADO ✅  
-**Proxima Acao:** P1 - Alto Impacto (Calibracao, Rolling, Features)
-
----
-
-## Objetivo do Sistema
-Transformar o JAPredictBet em um ecossistema quantitativo robusto para deteccao de Value Bets via consenso de modelos, com foco em integridade de dados, reprodutibilidade, calibracao e gestao de risco, mantendo as premissas do MVP (Poisson, arquitetura de dois modelos por membro e rolling features).
+**Data da Revisao:** 31 de Março, 2026
+**Revisao Anterior:** 30-MAR-2026
+**Status Geral:** P0 Concluído com ressalvas (3 bugs críticos identificados na revisao de código). P1 em execução.
+**Proxima Acao:** Corrigir bugs bloqueantes (P0-FIX), depois executar P1.
 
 ---
 
-## BASE ATUAL (MVP JA ENTREGUE)
-*Foco: registrar rapidamente o que ja existe para evitar retrabalho.*
+## Roadmap e Próximas Ações
 
-- [x] Ensemble deterministico de 30 modelos (10 XGB, 10 LGBM, 10 RF) - **VALIDADO**
-- [x] Consenso com threshold configuravel e sweep de thresholds - **VALIDADO**
-- [x] Matching robusto de equipes com fuzzy seguro e descarte de ambiguidades - **VALIDADO**
-- [x] Backtest com metricas de ROI/Yield por threshold - **VALIDADO**
-- [x] Arquitetura estabelecida em `src/japredictbet/` com modulos por responsabilidade - **VALIDADO**
-- [x] Config centralizado em `config.yml` com parametros principais - **VALIDADO**
+Esta é a fonte única de verdade para o planejamento futuro do projeto.
+Atualizado com base na revisão completa de código, docs, configs e testes realizada em 31-MAR-2026.
 
 ---
 
-## TRILHA EXPERIMENTAL (CONSENSO) - JA ENTREGUE E VALIDADA ✅
-*Foco: todas as features experimentais foram implementadas, testadas e validadas com dados reais.*
+### Encerramento P0 (Registro Expresso)
 
-- [x] Script dedicado de validacao por consenso: `scripts/consensus_accuracy_report.py` - **✅ TOTALMENTE FUNCIONAL**
-  - Hardcodes removidos (P0.1)
-  - CLI parametrizado com --consensus-threshold, --edge-threshold, --blackout-count, etc
-  - Testado com 101 jogos + 50 jogos + múltiplas configurações
-- [x] Geracao de logs por execucao com timestamp em `log-test/` - **✅ VALIDADO (20+ logs)**
-- [x] Linha de aposta normalizada para mercado `X.5` em todo o relatorio - **✅ VALIDADO**
-- [x] Conselho hibrido experimental com 30 modelos (70% boosters + 30% lineares) - **✅ IMPLEMENTADO E TESTADO**
-- [x] Inclusao de Ridge/ElasticNet no fluxo de treino experimental - **✅ IMPLEMENTADO E TESTADO**
-- [x] Parametros de sensibilidade dinamicos - **✅ 100% FUNCIONAL**
-  - edge threshold = 0.01 (via --edge-threshold) ✓
-  - consenso base = 45% (via --consensus-threshold) ✓
-  - consenso em margem curta (`|media_lambda - linha| < 0.5`) = 50% ✓
-  - feature dropout = 20% (via --feature-dropout-rate) ✓
-  - feature blackout = 3 colunas por modelo (via --blackout-count) ✓
-- [x] Log de auditoria completo por modelo com algoritmo e parametros - **✅ IMPLEMENTADO**
-- [x] Suporte a linhas aleatórias para stress testing - **✅ NOVO (--random-lines, --line-min, --line-max)**
-- [x] Suporte a linhas fixadas para comparações - **✅ NOVO (--fixed-line)**
+- [x] **P0.3b - Encerrado e documentado:** a trilha crítica de P0 foi concluída e o item fica oficialmente fechado para evitar reabertura indevida no planejamento de agentes.
 
 ---
 
----
+### P0-FIX - Bugs Críticos Bloqueantes (Corrigir Antes de P1)
 
-## BACKLOG PRIORIZADO - ANALISE E STATUS (REVISADO 30-MAR-2026)
-*Foco: fila unica por prioridade com status preciso e bloqueios identificados.*
+> Descobertos na revisão de código de 31-MAR-2026. Impedem execução correta do pipeline de produção.
 
-### P0 - CRITICO (EXECUTAR PRIMEIRO)
+- [ ] **P0-FIX.1 - `_build_hybrid_ensemble_schedule()` não definida em `train.py`**
+  - **Severidade:** BLOQUEANTE
+  - **Arquivo:** `src/japredictbet/models/train.py` (~L207)
+  - **Problema:** A função `_build_ensemble_schedule()` chama `_build_hybrid_ensemble_schedule(size)` quando `25 <= size <= 35`, mas essa função não existe. Como o ensemble padrão é 30, qualquer chamada via `run.py` ou core pipeline causa `NameError`.
+  - **Solução:** Implementar `_build_hybrid_ensemble_schedule()` portando a lógica de 70/30 (21 boosters + 9 linear) que já existe em `scripts/consensus_accuracy_report.py` (L228-257).
 
-**STATUS GERAL P0:** 9/9 COMPLETOS ✅ - IMPLEMENTAÇÃO CONCLUÍDA
+- [ ] **P0-FIX.2 - `importance.py` assume XGBoost exclusivamente**
+  - **Severidade:** BLOQUEANTE
+  - **Arquivo:** `src/japredictbet/models/importance.py`
+  - **Problema:** Chama `.get_booster()` que só existe em XGBoost. Com o ensemble híbrido (LightGBM, Ridge, ElasticNet), o módulo crasha em qualquer modelo não-XGBoost.
+  - **Solução:** Adicionar dispatch por tipo de modelo: `feature_importances_` para tree-based, `coef_` para linear, SHAP como fallback genérico.
 
-- [x] **Orquestracao de Pastas Fixas:** consolidar fluxo `Raw -> Processed -> Models` - **VALIDADO**
-- [x] **Arquitetura Multi-Modelo Implementada:** `train_ensemble_models` com 30 membros - **VALIDADO**
-- [x] **Limpeza de Parametros no Script Experimental** - **✅ IMPLEMENTADO**
-  - Removidos hardcodes em `scripts/consensus_accuracy_report.py:410-413`
-  - Adicionado `--blackout-count` a argparse
-  - Script agora respeita CLI e config.yml
-  - Testado e validado: parametros funcionam corretamente
+- [ ] **P0-FIX.3 - Schema de config inconsistente entre YAMLs**
+  - **Severidade:** ALTO
+  - **Arquivos:** `config.yml` usa `rolling_windows: [10, 5]` (plural, lista), `config_test_50matches.yml` e `config_backup.yml` usam `rolling_window: 10` (singular, int).
+  - **Problema:** Dependendo de qual config é carregado, o código pode receber tipo inesperado (lista vs int), causando erro silencioso ou crash.
+  - **Solução:** Padronizar todos os configs para `rolling_windows: [10, 5]` (plural, lista). Validar o tipo no `config.py`.
 
-- [x] **Sincronizacao do Mix Hibrido no Pipeline Principal** - **✅ IMPLEMENTADO**
-  - Função `_build_hybrid_ensemble_schedule()` criada
-  - Mix 70% XGBoost/LightGBM + 30% Ridge/ElasticNet
-  - Automático para ensemble_size entre 25-35 modelos
-  - Resultado: 21 boosters + 9 lineares para 30 modelos
+- [ ] **P0-FIX.4 - Pinnar versões em `requirements.txt`**
+  - **Severidade:** ALTO
+  - **Arquivo:** `requirements.txt`
+  - **Problema:** Nenhuma dependência tem versão fixada. Quebra reprodutibilidade, que é princípio P0 do projeto ("Deterministic pipelines", "Reproducible experiments").
+  - **Solução:** Gerar `requirements.txt` com versões exatas (`pip freeze`). Manter `requirements-dev.txt` separado com pytest e ferramentas de dev.
 
-- [x] **Regra de Margem Dinamica no Core** - **✅ IMPLEMENTADO**
-  - Método `_compute_dynamic_threshold()` adicionado em ConsensusEngine
-  - Consensus threshold eleva para 50% quando `|media_lambda - linha| < 0.5`
-  - Default base: 45%, tight margin: 50%
-  - Auditoria com logging de margem
-
-- [x] **Refatoracao da Selecao de Features** - **✅ IMPLEMENTADO**
-  - `_is_allowed_feature()` agora aceita `allowed_prefixes` customizáveis
-  - Keywords expandidas: _last, _diff, _team_enc, _vs_, _ratio, _pressure, _total, elo, _rolling, _momentum
-  - Documentação melhorada com explicação de leakage prevention
-
-- [x] **Treinamento Paralelo do Ensemble** - **✅ IMPLEMENTADO**
-  - `n_jobs` mudado de 1 para -1 em XGBoost, LightGBM e RandomForest
-  - Usa todos os CPUs disponíveis (potencial aceleração 3-5x)
-  - Ridge/ElasticNet não suportam n_jobs mas podem ser otimizados depois
-
-- [x] **Holdout Temporal Estrito** - **✅ IMPLEMENTADO**
-  - `_build_temporal_split()` agora suporta 3 meses de holdout
-  - Parâmetro `use_strict_holdout=True` por default
-  - Holdout de ~25% do season mais recente (correspondente a 3 meses)
-  - Legacy mode ainda disponível com `use_strict_holdout=False`
-
-- [x] **Chave de Matching Definitiva** - **✅ AUDITADO E DOCUMENTADO**
-  - Estratégia atual: Equipe normalizada (Team A vs Team B)
-  - Fallback: Fuzzy matching com 95% threshold
-  - Ambiguidade rejection: Remove odds keys com múltiplas candidatas
-  - Documentação adicionada: Future -> 3-tuple match (Team + Date + League)
-  - Nota: Implementação futura de date/league columns recomendada
-
-- [x] **Versionamento de Artefatos e Dataset** - **✅ IMPLEMENTADO**
-  - Função `_create_execution_metadata()` com hash de arquivos
-  - Calcula SHA256 short hash de dataset e config
-  - Registra timestamp, ensemble_size, random_state, thresholds
-  - Logging automático de versioning no pipeline
-  - Rastreabilidade completa para reproducibilidade
-
-### P1 - ALTO IMPACTO (SEQUENCIA IMEDIATA APOS P0)
-
-**STATUS GERAL P1:** 0/13 completos. Iniciar apos P0.1 concluido.
-
-- [ ] **Calibracao de Probabilidades (Brier/ECE):** garantir aderencia entre probabilidade prevista e frequencia real.
-- [ ] **Rolling Curto Prazo:** adicionar janelas de 3 e 5 jogos como features extras (5 e 10 ja existem).
-- [ ] **Rolling de Volatilidade (STD):** incluir desvio padrao rolling para corners em `src/japredictbet/features/rolling.py`.
-- [ ] **Recorde de Momento (L5/L10):** consolidar metrica de recorde (V-E-D) em coluna dedicada no `rolling.py`.
-- [ ] **H2H Last 3:** adicionar media de corners nos ultimos 3 confrontos diretos em `src/japredictbet/features/matchup.py`.
-- [ ] **Otimizacao de Hiperparametros:** refinar XGB/LGBM/RF com protocolo deterministico e auditavel.
-- [ ] **Relatorio de Importancia/Estabilidade de Features:** monitorar variacao de importancia entre janelas temporais.
-- [ ] **Persistencia de Hiperparametros (Auditoria):** garantir persistencia auditavel de `alpha` e `l1_ratio` tambem no fluxo principal.
-- [ ] **Refino do Value Bet Engine:** padronizar calculo de EV como `(Probabilidade * Odd) - 1`.
-- [ ] **Quarter Kelly:** implementar stake fracionada (25% Kelly) com limites de seguranca.
-- [ ] **Auditoria de CLV:** comparar odd de entrada vs fechamento para medir qualidade de preco.
-- [ ] **Monte Carlo de Drawdown:** simular sequencias de perdas para validar robustez da banca.
-- [ ] **Stress Test de Slippage:** recalcular ROI com penalidade de odd para aproximar execucao real.
-
-### P2 - QUALIDADE, PRODUTO E MONITORAMENTO (PLANEJAR APOS P0/P1)
-
-**STATUS GERAL P2:** 0/9 completos. A comecar apos P0 concluded.
-
-- [ ] **Suite de Testes de Leakage:** garantir que rolling features usem apenas historico passado.
-- [ ] **Teste de Regressao de Matching:** evitar confusao entre equipes homonimas em ligas diferentes.
-- [ ] **CI Basico (pytest em push):** automatizar validacao minima de qualidade.
-- [ ] **Logging Estruturado por Aposta:** salvar decisao com lambdas, votos, edge, threshold, stake e resultado.
-- [ ] **Dashboard de Saude do Modelo:** acompanhar volume, hit rate, ROI, CLV e calibracao por periodo.
-- [ ] **Integracao com APIs Real-time:** conexao com provedores de odds e estatisticas.
-- [ ] **Favoritismo via Odds 1X2 (Estudo Aplicado):** avaliar extensao de `src/japredictbet/odds/collector.py` para capturar odds de vitoria.
-- [ ] **Perfil do Arbitro (Estudo Aplicado):** validar uso de `referee` com target encoding em `team_identity.py`.
-- [ ] **Bot de Alertas (Telegram):** notificacao de oportunidades aprovadas pelo consenso.
-
-### R&D FUTURO (REQUER DOCUMENTACAO FORMAL ANTES)
-
-*Nota: itens desta fase exigem atualizacao formal de `PROJECT_CONTEXT.md`, `ARCHITECTURE.md` e `PRODUCT_REQUIREMENTS.md` antes da implementacao.*
-
-- [ ] **Estudo de Binomial Negativa Bivariada:** avaliar migracao de Poisson para sobredispersao.
-- [ ] **Stacking Meta-Modelo:** avaliar ponderacao aprendida dos 30 membros do ensemble.
-- [ ] **Game State / Live Variables:** estudar impacto de estado de jogo em cantos.
-- [ ] **GNN Tatico:** avaliar modelagem estrutural de interacoes entre jogadores.
-- [ ] **Favourite-Longshot Bias:** pesquisar ajustes para vies sistematico de mercado.
+**Critério de Saída P0-FIX:** Pipeline `python run.py` executa sem erros com ensemble_size=30, importance funciona com todos os tipos de modelo, ambos os configs carregam sem erro, e todas as dependências têm versão pinada.
 
 ---
 
-## CHECKLIST DE VALIDACAO FINAL (MVP - 30-MAR-2026)
+### P1 - Alto Impacto (Em Execução)
 
-### Validacoes Tecnicas
+**Foco:** Consolidar pipeline de produção, melhorar features, calibrar modelo e gestão de risco.
 
-**Estrutura de Codigo:**
-- [x] Modulos separados por responsabilidade (data, features, models, betting, etc)
-- [x] Configuracao centralizada em `config.yml` com parametros documentados
-- [x] Ensemble de 30 modelos implementado e testado
-- [x] Consenso com threshold parametrizado funcionando
-- [x] Loggers por execucao em `log-test/` ativos
-- [x] PEP8 compliance verificado em modulos principais
-- [x] Docstrings nas funcoes core (train.py, engine.py, pipeline.py)
+#### P1-A: Integridade do Pipeline (Prioridade Máxima Dentro de P1)
 
-**Integridade de Dados:**
-- [x] Dataset raw em `data/raw/dataset.csv` validado
-- [x] Mock odds em `data/raw/mock_odds.json` disponivel
-- [x] Dados processados em `data/processed/` (11 arquivos CSV por season)
-- [x] Leakage check: rolling features nao usam dados futuros
+> Garantir que o pipeline core (`src/`) tenha paridade de funcionalidade com o script experimental.
 
-**Modelo e Predicao:**
-- [x] Regressores de dois modelos por membro (home/away lambdas) - VALIDADO
-- [x] Objetivo Poisson conforme `config.yml` - VALIDADO
-- [x] Mix 70% boosting / 30% linear no experimental - IMPLEMENTADO
-- [ ] CLV >= 55% de acerto em janela representativa - **AINDA NAO VALIDADO**
-- [ ] Brier Score <= 0.20 consistente - **AINDA NAO VALIDADO**
-- [ ] ROI temporal positivo apos 500 Monte Carlo - **AINDA NAO VALIDADO**
+- [ ] **P1.A1 - Portar lógica 70/30 para `train.py`**
+  - O mix 70/30 (21 boosters + 9 linear) existe apenas em `scripts/consensus_accuracy_report.py`. A função `train_and_save_ensemble()` em `src/japredictbet/models/train.py` não aplica esse mix. O pipeline de produção (`run.py`) usa `train.py`, portanto **não tem o ensemble híbrido**.
+  - **Ação:** Unificar a lógica de scheduling do script no core.
 
-**Alignment com Constraints (AGENTS.md):**
-- [x] Linguagem Python - OK
-- [x] PEP8 style guide - OK
-- [x] Bibliotecas preferidas (pandas, numpy, sklearn, xgboost, scipy) - OK
-- [x] Folder structure preservada - OK
-- [x] Docstrings presentes em modulos main - OK
-- [x] Funcoes pequenas e modulares - PARCIALMENTE (algumas podem ser refatoradas)
-- [x] Respeitadas module boundaries (data → features → models → betting) - OK
-- [x] Duas premissas modelo mantidas: Poisson + dois modelos por membro - OK
-- [x] Sem bets reais, sem conexao com bookmakers, sistema analitico puro - OK
+- [ ] **P1.A2 - Centralizar dynamic margin rule no `engine.py`**
+  - A regra de margem dinâmica (threshold +50% quando `|λ - line| < 0.5`) está implementada apenas no script (L545-548). O `ConsensusEngine` em `betting/engine.py` tem valores hardcoded (`tight_margin_threshold=0.5`, `tight_margin_consensus=0.50`) mas a lógica deveria ser configurável via `config.yml`.
+  - **Ação:** Parametrizar `tight_margin_threshold` e `tight_margin_consensus` no config e no `ConsensusEngine`.
 
----
+- [ ] **P1.A3 - Validar lambda values no `engine.py`**
+  - Valores de λ extraídos dos modelos não são validados. NaN ou Inf propagam silenciosamente nos cálculos de probabilidade Poisson.
+  - **Ação:** Adicionar guard `if not np.isfinite(lambda_total)` antes dos cálculos.
 
-## PROBLEMAS BLOQUEADORES - TODOS RESOLVIDOS ✅
+#### P1-B: Evolução de Features (Prioridade Alta)
 
-### [P0.1 - RESOLVIDO ✅] Hardcodes em consensus_accuracy_report.py
-**Severidade:** ERA CRITICA  
-**Status:** ✅ FIXADO  
-**O que foi feito:**
-- Removidos os 5 assigns hardcoded (linhas 410-413)
-- Adicionado `--blackout-count` ao argparse
-- Script agora respeita CLI completamente
-- Testado e validado com múltiplos parametros
+- [ ] **P1.B1 - Calibração de Probabilidades (Brier/ECE):** Garantir aderência entre a probabilidade prevista e a frequência real dos resultados. (antigo P1.1)
+- [ ] **P1.B2 - Rolling Features (Curto Prazo, Volatilidade e EMA):** Adicionar janelas de 3 e 5 jogos, incluir desvio padrão (STD) dos cantos e incorporar Time-Decay EMA para dar mais peso a jogos recentes. (antigo P1.2)
+- [ ] **P1.B3 - Recorde de Momento e Contexto de Jogo:** Consolidar métrica de recorde (V-E-D) e adicionar features de "game state" para capturar o comportamento tático. (antigo P1.3)
+- [ ] **P1.B4 - H2H e Cross-Features:** Adicionar média de cantos dos últimos 3 confrontos diretos (H2H) e criar features cruzadas entre ataque e defesa. (antigo P1.4)
+
+#### P1-C: Otimização e Análise (Prioridade Média)
+
+- [ ] **P1.C1 - Otimização de Hiperparâmetros:** Refinar os parâmetros de XGBoost, LightGBM e RF com um protocolo determinístico e auditável. Documentar origem dos valores atuais (ex: `learning_rate=0.08242879217471218` em train.py parece vir de hyperopt, mas não está documentado). (antigo P1.5)
+- [ ] **P1.C2 - Importância de Features e Votos Ponderados (SHAP):** Monitorar a estabilidade da importância das features e implementar votos ponderados pelo SHAP no ensemble. Popular `docs/FEATURE_IMPORTANCE_GUIDE.md` com resultados reais (atualmente só tem framework sem dados). (antigo P1.6)
+- [ ] **P1.C3 - Persistência de Hiperparâmetros (Auditoria):** Garantir que `alpha` e `l1_ratio` dos modelos lineares sejam persistidos de forma auditável. (antigo P1.7)
+
+#### P1-D: Value e Risco (Prioridade Média-Baixa)
+
+- [ ] **P1.D1 - Refino do Value Bet Engine:** Padronizar o cálculo de EV como `(Probabilidade * Odd) - 1`. (antigo P1.8)
+- [ ] **P1.D2 - Auditoria de CLV (Closing Line Value):** Comparar a odd de entrada com a de fechamento para medir a qualidade do preço obtido. Completar TODO pendente em `docs/VALIDATION.md`. (antigo P1.9)
+- [ ] **P1.D3 - Gestão de Risco (Kelly, Drawdown, Slippage):** Implementar staking com Quarter Kelly, simular drawdowns com Monte Carlo e aplicar stress tests de slippage. Completar validação de ROI temporal (500 Monte Carlo runs) pendente em VALIDATION.md. (antigo P1.10)
+
+**Dependências Críticas:**
+- P0-FIX.1 (hybrid schedule) é **pré-requisito** para P1.A1 (portar 70/30 para core).
+- P0-FIX.2 (importance multi-model) é **pré-requisito** para P1.C2 (SHAP ponderado).
+- P0-FIX.4 (pin versões) é **pré-requisito** de reprodutibilidade para qualquer experimento P1.
+- P1.B2 (EMA) é pré-requisito para outras features de rolling.
+- P1.C2 (importância de features) é pré-requisito para votos ponderados com SHAP.
 
 ---
 
-### [P0.2 - RESOLVIDO ✅] Regra de Margem Dinamica Não Encontrada
-**Severidade:** ERA ALTA  
-**Status:** ✅ IMPLEMENTADO  
-**O que foi feito:**
-- Implementado `_compute_dynamic_threshold()` em ConsensusEngine
-- Consenso sobe para 50% quando `|media_lambda - linha| < 0.5` ✓
-- Default threshold: 45%, tight margin: 50%
-- Auditoria com logging de margem inclusa
+### P2 - Qualidade, Testes e Infraestrutura (A Planejar)
+
+**Foco:** Aumentar a robustez, automatizar a validação e preparar o sistema para um ambiente de produção.
+
+#### P2-A: Cobertura de Testes (Prioridade Alta - Cobertura Atual ~40%)
+
+> Módulos inteiros sem nenhum teste. A meta é atingir 70% de cobertura.
+
+- [ ] **P2.A1 - Testes para `features/` (elo, rolling, matchup, team_identity):** 0/4 módulos têm cobertura. Testar: NaN handling em ELO, janelas rolling edge cases, divisão por zero em matchup ratios, **data leakage via train_mask inválido**.
+- [ ] **P2.A2 - Testes para `data/ingestion.py`:** Testar: Parquet loading, CSV malformado, dataset vazio, colunas ausentes, valores NaN em data.
+- [ ] **P2.A3 - Testes para `models/train.py`:** Testar: ensemble scheduling (incluindo hybrid), feature selection, minimum training rows, XGBoost feature name sanitization.
+- [ ] **P2.A4 - Ampliar testes de `odds/collector.py`:** Atual: 2 testes (mínimo). Adicionar: timeout de rede, JSON inválido, resposta vazia, campos ausentes, odds < 1.0.
+- [ ] **P2.A5 - Suite de Testes de Leakage:** Garantir que rolling features usem apenas histórico passado. (antigo P2 Core)
+- [ ] **P2.A6 - Teste de Regressão de Matching:** Evitar confusão entre equipes homônimas em ligas diferentes. (antigo P2 Core)
+- [ ] **P2.A7 - Adicionar timeout em `odds/collector.py`:** `requests.get()` é chamado sem timeout e pode travar indefinidamente. Adicionar `timeout=30` (configurável via config). (movido de P1.A3 — defensivo, não bloqueia funcionalidade)
+- [ ] **P2.A8 - Validar train_mask em `team_identity.py`:** A função `add_team_target_encoding()` aceita qualquer `train_mask` sem validação. Máscara vazia ou inválida causa data leakage silencioso. Validar que mask não está vazia, é booleana, e tem dimensão compatível. (movido de P1.A4 — defensivo, não bloqueia funcionalidade)
+
+#### P2-B: Infraestrutura e CI (Prioridade Média)
+
+- [ ] **P2.B1 - CI Básico (pytest em push):** Automatizar validação mínima de qualidade com coverage gate > 60%. (antigo P2 Core)
+- [ ] **P2.B2 - Logging Estruturado por Aposta:** Salvar decisão com lambdas, votos, edge, threshold, stake e resultado. (antigo P2 Core)
+- [ ] **P2.B3 - Completar `update_pipeline.py`:** Atualmente o script não implementa feature engineering (comentário diz "por brevidade, assumimos que data_features é o DF já com rolling features"). Integrar pipeline de features completo.
+- [ ] **P2.B4 - Migrar `run.py` de `print()` para `logging`:** Usar o módulo de logging já existente em `utils/logging.py`.
+- [ ] **P2.B5 - Completar `pyproject.toml`:** Adicionar metadata (author, description, license, requires-python), entry points (`[project.scripts]`), e dev dependencies.
+
+#### P2-C: Limpeza e Consistência (Prioridade Média-Baixa)
+
+- [ ] **P2.C1 - Remover código morto:**
+  - `value/value_engine.py` (217 linhas) - lógica 100% duplicada em `japredictbet.betting.engine`, não é importado por nenhum módulo ativo.
+  - `config_backup.yml` - backup manual desnecessário (usar git history).
+  - `src/japredictbet/agents/` - scaffolding vazio (`NotImplementedError`), sem uso.
+- [ ] **P2.C2 - Resolver módulo `probability/` vazio:** Toda lógica de probabilidade Poisson vive em `betting/engine.py`, violando a boundary definida no AGENTS.md (`probability → statistical calculations`). Opções: (a) mover funções Poisson para `probability/`, ou (b) atualizar ARCHITECTURE.md para refletir a realidade.
+- [ ] **P2.C3 - Padronizar linguagem dos comentários:** Código tem mix de português e inglês (engine.py, mvp_pipeline.py). Escolher um idioma e padronizar.
+- [ ] **P2.C4 - Sincronizar documentação contraditória:**
+  - `EXECUTIVE_SUMMARY.md` flagga hardcodes que já foram corrigidos no script.
+  - `VALIDATION_REPORT.md` diz "3 blockers", `PROJECT_CONTEXT.md` diz "100% complete".
+  - `P0_COMPLETION_SUMMARY.md` afirma que hybrid schedule está completo, mas a função não existe no core.
+  - `IMPLEMENTATION_CONSENSUS.md` spec diz 70/30 no core, core não tem.
+
+#### P2-D: Produto (Postergar Sem Bloquear)
+
+- [ ] **P2.D1 - Tratamento de Erros Robusto:** Implementar `try-except` em pontos críticos (ex: `fetch_odds`) para evitar falhas abruptas.
+- [ ] **P2.D2 - Dashboard de Saúde do Modelo:** Acompanhar volume, hit rate, ROI, CLV e calibração por período.
+- [ ] **P2.D3 - Integração com APIs Real-time:** Conexão com provedores de odds e estatísticas.
+- [ ] **P2.D4 - Bot de Alertas (Telegram):** Notificação de oportunidades aprovadas pelo consenso.
 
 ---
 
-### [RESOLVIDO ✅] Discrepancia entre config.yml e consensus_accuracy_report.py
-**Status:** ✅ SINCRONIZADO  
-**Resolução:**
-- config.yml agora usa consensus_threshold = 0.45 (alinhado com experimental)
-- Script respeita override via CLI para todos os parametros
+### P3 - Performance e Otimização (Futuro)
+
+- [ ] **P3.1 - Otimizar loop de consensus sweep:** `mvp_pipeline.py` (L256-276) tem loop `O(rows × thresholds × 30 models)` sem batch. Vectorizar com numpy ou paralelizar.
+- [ ] **P3.2 - Cache de computações caras:** Feature engineering recalcula rolling stats a cada execução. Implementar cache com invalidação por data.
 
 ---
 
-## HISTORICO DE RESOLUCOES (P0 - 30-MAR-2026)
+### R&D - Pesquisa e Desenvolvimento Futuro (A Pesquisar)
 
-Todos os 9 bloqueadores P0 foram resolvidos em uma sessão integrada:
+**Foco:** Explorar técnicas avançadas de modelagem e análise de mercado.
 
-1. ✅ **P0.1 (Limpeza Parametros)** - 30 min - Hardcodes removidos, CLI funcional
-2. ✅ **P0.2 (Mix Hibrido)** - 1h - 70/30 automático para 25-35 modelos
-3. ✅ **P0.3 (Margem Dinamica)** - 1h - Threshold eleva para 50% em margens curtas
-4. ✅ **P0.4 (Feature Selection)** - 30 min - Dynamic prefixes, documentação melhorada
-5. ✅ **P0.5 (Treinamento Paralelo)** - 30 min - n_jobs=-1 em XGB/LGBM/RF (3-5x speedup)
-6. ✅ **P0.6 (Holdout Temporal)** - 1h - 3 meses de holdout (~25% rigoroso)
-7. ✅ **P0.7 (Matching Audit)** - 30 min - Estratégia documentada, roadmap P1.X
-8. ✅ **P0.8 (Versionamento)** - 1h - SHA256 hashing, metadata logging completo
-9. ✅ **Scripts Melhorados** - +30 min - Random lines, fixed lines, full CLI support
-
-**Total de tempo:** ~5.5h implementação + testes  
-**Status:** 100% completo e validado com dados reais
+- [ ] **Estudo de Binomial Negativa Bivariada:** Avaliar migração de Poisson para modelos que lidam com sobredispersão.
+- [ ] **Stacking Meta-Modelo:** Avaliar ponderação aprendida dos membros do ensemble.
+- [ ] **Game State / Live Variables:** Estudar impacto de estado de jogo em cantos (expansão do P1.B3).
+- [ ] **GNN Tático:** Avaliar modelagem estrutural de interações entre jogadores.
+- [ ] **Favourite-Longshot Bias:** Pesquisar ajustes para vieses sistemáticos do mercado de apostas.
 
 ---
 
-## PROXIMAS ACOES - PRONTO PARA P1 ✅
+### Matriz de Maturidade do Projeto (31-MAR-2026)
 
-### P0 - ✅ COMPLETO
-Todos os 9 itens foram implementados, testados e validados com sucesso em 30-MAR-2026.
-
-### P1 - PRONTO PARA COMEÇAR
-Recomendação de sequência:
-
-**Curto Prazo (Esta Semana):**
-1. **P1.1 - Calibração de Probabilidades** (~3h)
-   - Implementar Brier Score tracking
-   - Implementar Expected Calibration Error (ECE)
-   - Validar que P(predicted) ≈ P(actual)
-
-2. **P1.9 - Refino Value Bet Engine** (~2h)
-   - Padronizar EV = (P_model × Odds) - 1
-   - Validar contra cálculos anteriores
-   - Atualizar documentação
-
-3. **P1.2 - Rolling Curto Prazo** (~2h)
-   - Adicionar janelas 3-game em `features/rolling.py`
-   - Manter 5-game e 10-game existentes
-   - Testar features overlap
-
-**Médio Prazo (Próximas 2 Semanas):**
-4. **P1.6 - Otimização de Hiperparâmetros** (~5h)
-   - Protocolo determinístico com auditoria
-   - Refinar XGB/LGBM/RF
-   - Testar impact em ensemble
-
-5. **P1.3 + P1.4 - Rolling Volatilidade + Momento** (~4h)
-   - STD rolling para corners
-   - Recorde (V-E-D) nas últimas janelas
-   - Integrar no pipeline
-
-6. **P1.5 - H2H Last 3** (~2h)
-   - Média de corners últimos 3 confrontos
-   - Adicionar a `features/matchup.py`
-   - Validar com dados históricos
+| Dimensão | Nota | Comentário |
+|----------|------|------------|
+| Arquitetura | 9/10 | Excelente design modular, bem documentada |
+| Implementação | 6/10 | Core funcional mas com bugs críticos (P0-FIX) e gaps (70/30 fora do core) |
+| Documentação | 7/10 | Abrangente mas com inconsistências entre documentos |
+| Testes | 3/10 | ~40% de cobertura, módulos críticos (features, data, models) sem testes |
+| Reprodutibilidade | 6/10 | SHA256 e seeds bons, mas requirements sem pinning |
+| Production-Ready | 5/10 | Script funciona, pipeline core tem bugs e gaps |
 
 ---
 
-## METRICAS ATUAIS DO PROJETO (ATUALIZADAS 30-MAR-2026)
+### Changelog
 
-| Metrica | Antes | Depois | Status |
-|---------|-------|--------|--------|
-| Reproducibilidade | 60% | 95% | ✅ +35% |
-| CLI Funcionalidade | 0% | 100% | ✅ Completa |
-| Hardcodes | 5 | 0 | ✅ Eliminados |
-| Consenso Dinamico | Não | Sim | ✅ Implementado |
-| Treino Paralelo | Não | 3-5x Speedup | ✅ Ativo |
-| Holdout Temporal | 50% | 25% (3 meses) | ✅ Rigoroso |
-| Versionamento | Nenhum | Completo SHA256 | ✅ Auditável |
-| Tests Reais Rodados | 0 | 3 (101 + 50 + random) | ✅ Validados |
-| Arquivos Python | ~15 | ~20 | ✅ Expandido |
-| Modelos no Ensemble | 30 | 30 | ✅ OK |
-| Logs de Teste | 15 | 20+ | ✅ OK |
-| Datasets Processados | 11 seasons | 11 seasons | ✅ OK |
-| Cobertura de Testes | ~40% | ~55% | ✅ Melhorado |
-| Documentação | 70% | 90% | ✅ Atualizada |
-| Status P0 | Bloqueado | ✅ 100% | ✅ CONCLUÍDO |
-| Status P1 | Pendente | Pronto | ✅ Ready |
+| Data | Ação |
+|------|------|
+| 30-MAR-2026 | Criação do roadmap. P0 encerrado. |
+| 31-MAR-2026 | Revisão completa de código: 26 arquivos Python, 3 configs, 17 docs. Adicionado P0-FIX (3 bugs bloqueantes). Reorganizado P1 em sub-grupos (A-D) por prioridade. Expandido P2 com gaps de testes e limpeza. Adicionado P3 (performance). Adicionada matriz de maturidade. |

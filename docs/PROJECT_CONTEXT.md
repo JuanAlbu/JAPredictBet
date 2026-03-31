@@ -135,3 +135,26 @@ Future extensions may include:
 - shots markets
 - goals markets
 - live betting analysis
+
+---
+
+## Contexto Histórico do MVP (Arquivado de next_pass.md em 30-MAR-2026)
+
+### BASE ATUAL (MVP JA ENTREGUE)
+*Foco: registrar rapidamente o que ja existe para evitar retrabalho.*
+
+- [x] Ensemble deterministico de 30 modelos (10 XGB, 10 LGBM, 10 RF) - **VALIDADO**
+- [x] Consenso com threshold configuravel e sweep de thresholds - **VALIDADO**
+- [x] Matching robusto de equipes com fuzzy seguro e descarte de ambiguidades - **VALIDADO**
+- [x] Backtest com metricas de ROI/Yield por threshold - **VALIDADO**
+- [x] Arquitetura estabelecida em `src/japredictbet/` com modulos por responsabilidade - **VALIDADO**
+- [x] Config centralizado em `config.yml` com parametros principais - **VALIDADO**
+
+### TRILHA EXPERIMENTAL (CONSENSO) - JA ENTREGUE E VALIDADA ✅
+*Foco: O script `scripts/consensus_accuracy_report.py` foi totalmente parametrizado e validado.*
+
+- [x] CLI completo com suporte para thresholds, blackouts e controle de features.
+- [x] Geração de logs com timestamp e relatórios de auditoria por modelo.
+- [x] Suporte a conselho híbrido (boosting + linear) e regras de consenso dinâmicas.
+- [x] Capacidade de stress testing com linhas de aposta fixas ou aleatórias.
+- [x] **Status:** Todas as funcionalidades experimentais foram implementadas e validadas.

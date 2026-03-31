@@ -105,14 +105,11 @@ def run_mvp_pipeline(
     data = _ensure_season_column(data, config.data.date_column)
 
     # --- Feature Engineering ---
-    data = _add_rolling_stats(data, config.features.rolling_window, season_col="season")
-    data = _add_rolling_stats(data, 5, season_col="season")
-    data = add_matchup_features(data, window=config.features.rolling_window)
-    data = add_matchup_features(data, window=5)
-    data = _add_total_corners_features(data, window=config.features.rolling_window)
-    data = _add_total_corners_features(data, window=5)
-    data = _add_total_goals_features(data, window=config.features.rolling_window)
-    data = _add_total_goals_features(data, window=5)
+    for window in config.features.rolling_windows:
+        data = _add_rolling_stats(data, window, season_col="season")
+        data = add_matchup_features(data, window=window)
+        data = _add_total_corners_features(data, window=window)
+        data = _add_total_goals_features(data, window=window)
     data["home_advantage"] = 1.0
 
     encoding_train_mask, _ = _build_temporal_split(
