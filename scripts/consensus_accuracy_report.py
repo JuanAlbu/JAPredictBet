@@ -435,13 +435,14 @@ def main() -> None:
     data = load_historical_dataset(cfg.data.raw_path, cfg.data.date_column)
     data = _ensure_season_column(data, cfg.data.date_column)
 
-    data = _add_rolling_stats(data, cfg.features.rolling_window)
+    primary_window = cfg.features.rolling_windows[0]
+    data = _add_rolling_stats(data, primary_window)
     data = _add_rolling_stats(data, 5)
-    data = add_matchup_features(data, window=cfg.features.rolling_window)
+    data = add_matchup_features(data, window=primary_window)
     data = add_matchup_features(data, window=5)
-    data = _add_total_corners_features(data, window=cfg.features.rolling_window)
+    data = _add_total_corners_features(data, window=primary_window)
     data = _add_total_corners_features(data, window=5)
-    data = _add_total_goals_features(data, window=cfg.features.rolling_window)
+    data = _add_total_goals_features(data, window=primary_window)
     data = _add_total_goals_features(data, window=5)
     data["home_advantage"] = 1.0
 

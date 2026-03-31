@@ -27,7 +27,7 @@ def minimal_config() -> PipelineConfig:
     """A minimal, valid PipelineConfig for testing."""
     return PipelineConfig(
         data=DataConfig(raw_path="dummy/path", processed_path="dummy/processed"),
-        features=FeatureConfig(rolling_window=10),
+        features=FeatureConfig(rolling_windows=[10, 5]),
         model=ModelConfig(random_state=42, ensemble_size=3),
         value=ValueConfig(
             threshold=0.05,

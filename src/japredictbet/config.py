@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List
 
@@ -20,7 +20,15 @@ class DataConfig:
 class FeatureConfig:
     """Feature engineering settings."""
 
-    rolling_windows: List[int] = (10, 5)
+    rolling_windows: List[int] = field(default_factory=lambda: [10, 5])
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.rolling_windows, (list, tuple)) or not self.rolling_windows:
+            raise ValueError(
+                "FeatureConfig.rolling_windows must be a non-empty list of integers. "
+                f"Got: {self.rolling_windows!r}. "
+                "Check your config YAML — the key must be 'rolling_windows' (plural)."
+            )
 
 
 @dataclass(frozen=True)

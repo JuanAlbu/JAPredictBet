@@ -4,7 +4,7 @@
   date_column: "date"
 
 features:
-  rolling_window: 10
+  rolling_windows: [10, 5]
 
 model:
   objective: "count:poisson"

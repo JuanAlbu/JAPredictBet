@@ -2,8 +2,8 @@
 
 **Data da Revisao:** 31 de Março, 2026
 **Revisao Anterior:** 30-MAR-2026
-**Status Geral:** P0 Concluído com ressalvas (3 bugs críticos identificados na revisao de código). P1 em execução.
-**Proxima Acao:** Corrigir bugs bloqueantes (P0-FIX), depois executar P1.
+**Status Geral:** P0-FIX 100% CONCLUÍDO (todos os 4 bugs críticos corrigidos em 31-MAR-2026). P1 em execução.
+**Proxima Acao:** Executar P1 (iniciar por P1-A: Integridade do Pipeline).
 
 ---
 
@@ -24,31 +24,27 @@ Atualizado com base na revisão completa de código, docs, configs e testes real
 
 > Descobertos na revisão de código de 31-MAR-2026. Impedem execução correta do pipeline de produção.
 
-- [ ] **P0-FIX.1 - `_build_hybrid_ensemble_schedule()` não definida em `train.py`**
+- [x] **P0-FIX.1 - `_build_hybrid_ensemble_schedule()` não definida em `train.py`**
   - **Severidade:** BLOQUEANTE
-  - **Arquivo:** `src/japredictbet/models/train.py` (~L207)
-  - **Problema:** A função `_build_ensemble_schedule()` chama `_build_hybrid_ensemble_schedule(size)` quando `25 <= size <= 35`, mas essa função não existe. Como o ensemble padrão é 30, qualquer chamada via `run.py` ou core pipeline causa `NameError`.
-  - **Solução:** Implementar `_build_hybrid_ensemble_schedule()` portando a lógica de 70/30 (21 boosters + 9 linear) que já existe em `scripts/consensus_accuracy_report.py` (L228-257).
+  - **Arquivo:** `src/japredictbet/models/train.py`
+  - **Status:** ✅ RESOLVIDO — função já estava implementada na linha 415 do `train.py` (build 70% boosters + 30% linear). Roadmap anterior continha informação desatualizada.
 
-- [ ] **P0-FIX.2 - `importance.py` assume XGBoost exclusivamente**
+- [x] **P0-FIX.2 - `importance.py` assume XGBoost exclusivamente**
   - **Severidade:** BLOQUEANTE
   - **Arquivo:** `src/japredictbet/models/importance.py`
-  - **Problema:** Chama `.get_booster()` que só existe em XGBoost. Com o ensemble híbrido (LightGBM, Ridge, ElasticNet), o módulo crasha em qualquer modelo não-XGBoost.
-  - **Solução:** Adicionar dispatch por tipo de modelo: `feature_importances_` para tree-based, `coef_` para linear, SHAP como fallback genérico.
+  - **Status:** ✅ RESOLVIDO — adicionado dispatch por tipo de modelo via `_extract_scores()`: XGBoost usa `get_booster().get_score()`, LightGBM e RandomForest usam `feature_importances_`, Ridge/ElasticNet usam `abs(coef_)`.
 
-- [ ] **P0-FIX.3 - Schema de config inconsistente entre YAMLs**
+- [x] **P0-FIX.3 - Schema de config inconsistente entre YAMLs**
   - **Severidade:** ALTO
-  - **Arquivos:** `config.yml` usa `rolling_windows: [10, 5]` (plural, lista), `config_test_50matches.yml` e `config_backup.yml` usam `rolling_window: 10` (singular, int).
-  - **Problema:** Dependendo de qual config é carregado, o código pode receber tipo inesperado (lista vs int), causando erro silencioso ou crash.
-  - **Solução:** Padronizar todos os configs para `rolling_windows: [10, 5]` (plural, lista). Validar o tipo no `config.py`.
+  - **Status:** ✅ RESOLVIDO — Corrigido em 4 lugares: `config_test_50matches.yml` e `config_backup.yml` atualizados para `rolling_windows: [10, 5]`; `scripts/consensus_accuracy_report.py` atualizado para usar `cfg.features.rolling_windows[0]`; `tests/pipeline/test_mvp_pipeline.py` corrigido para `FeatureConfig(rolling_windows=[10, 5])`; `config.py` adicionou `__post_init__` com validação de tipo.
 
-- [ ] **P0-FIX.4 - Pinnar versões em `requirements.txt`**
+- [x] **P0-FIX.4 - Pinnar versões em `requirements.txt`**
   - **Severidade:** ALTO
-  - **Arquivo:** `requirements.txt`
-  - **Problema:** Nenhuma dependência tem versão fixada. Quebra reprodutibilidade, que é princípio P0 do projeto ("Deterministic pipelines", "Reproducible experiments").
-  - **Solução:** Gerar `requirements.txt` com versões exatas (`pip freeze`). Manter `requirements-dev.txt` separado com pytest e ferramentas de dev.
+  - **Status:** ✅ RESOLVIDO — `requirements.txt` atualizado com versões exatas de todas as dependências de produção. Criado `requirements-dev.txt` com `-r requirements.txt` + `pytest==9.0.2`.
 
 **Critério de Saída P0-FIX:** Pipeline `python run.py` executa sem erros com ensemble_size=30, importance funciona com todos os tipos de modelo, ambos os configs carregam sem erro, e todas as dependências têm versão pinada.
+
+**✅ TODOS OS CRITÉRIOS ATENDIDOS — P0-FIX 100% CONCLUÍDO em 31-MAR-2026. 21 testes passando.**
 
 ---
 
@@ -186,3 +182,4 @@ Atualizado com base na revisão completa de código, docs, configs e testes real
 |------|------|
 | 30-MAR-2026 | Criação do roadmap. P0 encerrado. |
 | 31-MAR-2026 | Revisão completa de código: 26 arquivos Python, 3 configs, 17 docs. Adicionado P0-FIX (3 bugs bloqueantes). Reorganizado P1 em sub-grupos (A-D) por prioridade. Expandido P2 com gaps de testes e limpeza. Adicionado P3 (performance). Adicionada matriz de maturidade. |
+| 31-MAR-2026 | P0-FIX 100% concluído: FIX.1 já estava OK, FIX.2 (`importance.py` multi-model dispatch), FIX.3 (config schema padronizado + validação), FIX.4 (requirements.txt com versões pinadas + requirements-dev.txt). 21 testes passando. |

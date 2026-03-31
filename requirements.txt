@@ -1,9 +1,8 @@
-pandas
-numpy
-scikit-learn
-xgboost
-lightgbm
-scipy
-requests
-pytest
-PyYAML
+pandas==3.0.1
+numpy==2.4.3
+scikit-learn==1.8.0
+xgboost==3.2.0
+lightgbm==4.6.0
+scipy==1.17.1
+requests==2.32.5
+PyYAML==6.0.3
