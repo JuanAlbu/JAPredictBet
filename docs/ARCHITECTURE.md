@@ -82,17 +82,24 @@ Each trained member keeps the two-model architecture:
 For consensus mode, training supports automated artifact generation with
 standardized names:
 
+**Tree-based (21 models):**
 - `xgb_model_1.pkl` to `xgb_model_10.pkl`
 - `lgbm_model_1.pkl` to `lgbm_model_10.pkl`
-- `rf_model_1.pkl` to `rf_model_10.pkl`
+- `rf_model_1.pkl` to `rf_model_1.pkl`
+
+**Linear (9 models):**
+- `ridge_model_1.pkl` to `ridge_model_5.pkl` 
+- `elastic_model_1.pkl` to `elastic_model_4.pkl`
 
 When the MVP pipeline performs internal training (no preloaded ensemble passed),
 it persists the trained artifacts automatically in `artifacts/models`.
 
 Model diversity is deterministic: 10 variations per algorithm are trained with
-distinct hyperparameters. Tree-based learners are configured with Poisson-ready
-count objectives (`count:poisson` for XGBoost, `poisson` for LightGBM and
-Poisson criterion for RandomForest).
+distinct hyperparameters. Tree-based learners (XGBoost, LightGBM, RandomForest)
+are configured with Poisson-ready count objectives (`count:poisson` for XGBoost,
+`poisson` for LightGBM, Poisson criterion for RandomForest). Linear models 
+(Ridge, ElasticNet) use variable regularization (alpha, l1_ratio) for ensemble
+diversity.
 
 ---
 

@@ -56,17 +56,28 @@ Atualizado com base na revisão completa de código, docs, configs e testes real
 
 > Garantir que o pipeline core (`src/`) tenha paridade de funcionalidade com o script experimental.
 
-- [ ] **P1.A1 - Portar lógica 70/30 para `train.py`**
-  - O mix 70/30 (21 boosters + 9 linear) existe apenas em `scripts/consensus_accuracy_report.py`. A função `train_and_save_ensemble()` em `src/japredictbet/models/train.py` não aplica esse mix. O pipeline de produção (`run.py`) usa `train.py`, portanto **não tem o ensemble híbrido**.
-  - **Ação:** Unificar a lógica de scheduling do script no core.
+- [x] **P1.A1 - Portar lógica 70/30 para `train.py`** ✅ COMPLETO (31-MAR-2026)
+  - Mix 70/30 (21 boosters + 9 linear) agora implementado no `src/japredictbet/models/train.py`
+  - **Status:** ✅ CONCLUÍDO
+    - Ridge/ElasticNet params adicionados a `build_variation_params()` (10 variações cada)
+    - Filenames atualizado em `_build_model_filename()` (ridge → "ridge", elasticnet → "elastic")
+    - Ensemble scheduling (`_build_hybrid_ensemble_schedule()`) alternates 21 boosters + 9 linear
+    - run.py updated para descobrir ridge_model_*.pkl e elastic_model_*.pkl
+    - Config files updated (config.yml, config_test_50matches.yml, config_backup.yml) com Ridge/ElasticNet in algorithms
+    - 13 novos testes em tests/models/test_train.py - all passing
+    - 34/34 testes totais passando
+  - **Critério de Saída Atendido:** Todos os 30 modelos (21+9) treinam sem erro, ensemble discovers e carrega corretamente
+  - **Pr Nota:** Branch `feature/p1a-ensemble` pronto para criar
 
-- [ ] **P1.A2 - Centralizar dynamic margin rule no `engine.py`**
+- [ ] **P1.A2 - Centralizar dynamic margin rule no `engine.py`** (Ready to Start - 3h estimate)
   - A regra de margem dinâmica (threshold +50% quando `|λ - line| < 0.5`) está implementada apenas no script (L545-548). O `ConsensusEngine` em `betting/engine.py` tem valores hardcoded (`tight_margin_threshold=0.5`, `tight_margin_consensus=0.50`) mas a lógica deveria ser configurável via `config.yml`.
   - **Ação:** Parametrizar `tight_margin_threshold` e `tight_margin_consensus` no config e no `ConsensusEngine`.
+  - **Bloqueador:** None - pode começar após P1.A1 completo
 
-- [ ] **P1.A3 - Validar lambda values no `engine.py`**
+- [ ] **P1.A3 - Validar lambda values no `engine.py`** (Ready to Start - 1.5h estimate)
   - Valores de λ extraídos dos modelos não são validados. NaN ou Inf propagam silenciosamente nos cálculos de probabilidade Poisson.
   - **Ação:** Adicionar guard `if not np.isfinite(lambda_total)` antes dos cálculos.
+  - **Bloqueador:** None - pode começar após P1.A1 completo
 
 #### P1-B: Evolução de Features (Prioridade Alta)
 
