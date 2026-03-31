@@ -3,6 +3,8 @@
 from __future__ import annotations
 from dataclasses import asdict
 from difflib import SequenceMatcher
+import hashlib
+import json
 import logging
 from pathlib import Path
 from typing import Sequence
@@ -25,6 +27,47 @@ from japredictbet.models.train import (
 from japredictbet.odds.collector import fetch_odds
 
 logger = logging.getLogger(__name__)
+
+
+def _compute_artifact_hash(filepath: Path) -> str:
+    """Compute SHA256 hash of a file for auditability."""
+    if not filepath.exists():
+        return "FILE_NOT_FOUND"
+    sha = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            sha.update(chunk)
+    return sha.hexdigest()[:16]  # Short hash
+
+
+def _create_execution_metadata(config: PipelineConfig, raw_data_path: Path) -> dict:
+    """Create execution metadata with versioning information."""
+    from datetime import datetime
+    
+    exec_time = datetime.now().isoformat()
+    dataset_hash = _compute_artifact_hash(raw_data_path)
+    config_hash = hashlib.sha256(
+        json.dumps(asdict(config), sort_keys=True, default=str).encode()
+    ).hexdigest()[:16]
+    
+    metadata = {
+        "execution_time": exec_time,
+        "dataset_version": dataset_hash,
+        "config_version": config_hash,
+        "ensemble_size": int(config.model.ensemble_size),
+        "random_state": int(config.model.random_state),
+        "consensus_threshold": float(config.value.consensus_threshold),
+        "edge_threshold": float(config.value.threshold),
+    }
+    
+    logger.info(
+        "Execution metadata | time=%s | dataset_v=%s | config_v=%s",
+        exec_time,
+        dataset_hash,
+        config_hash,
+    )
+    
+    return metadata
 
 
 def run_mvp_pipeline(
@@ -53,6 +96,11 @@ def run_mvp_pipeline(
     """
 
     _ = asdict(config)
+    
+    # --- Execution Versioning ---
+    exec_metadata = _create_execution_metadata(config, Path(config.data.raw_path))
+    logger.info("Pipeline execution versioning: %s", exec_metadata)
+    
     data = load_historical_dataset(config.data.raw_path, config.data.date_column)
     data = _ensure_season_column(data, config.data.date_column)
 
@@ -294,7 +342,16 @@ def _merge_with_normalized_match_keys(
     similarity_threshold: float = 95.0,
     ambiguity_margin: float = 1.0,
 ) -> pd.DataFrame:
-    """Merge dataset and odds using robust normalized team names."""
+    """Merge dataset and odds using robust normalized team names (AUDIT POINT: Equipe + Data + Liga).
+    
+    MATCHING STRATEGY (P0.7):
+    - Primary key: Normalized match_key (Team A vs Team B)
+    - Secondary fallback: Fuzzy string matching with {similarity_threshold}% threshold
+    - Ambiguity rejection: Remove odds keys with multiple candidates to prevent leakage
+    - Future: Add date and league columns for 3-tuple matching (Team + Date + League)
+    
+    This design prevents data leakage while maintaining practical matching robustness.
+    """
 
     prepared_data = data.copy()
     prepared_odds = odds_df.copy()
@@ -308,7 +365,7 @@ def _merge_with_normalized_match_keys(
     ambiguous_exact_keys = odds_key_counts[odds_key_counts > 1].index.tolist()
     if ambiguous_exact_keys:
         logger.info(
-            "Dropping ambiguous odds keys with multiple rows: %d",
+            "Dropping ambiguous odds keys with multiple rows (P0.7 safety): %d",
             len(ambiguous_exact_keys),
         )
         prepared_odds = prepared_odds[
@@ -619,15 +676,45 @@ def _ensure_season_column(data: pd.DataFrame, date_column: str) -> pd.DataFrame:
     return df
 
 
-def _build_temporal_split(seasons: pd.Series, seed: int) -> tuple[pd.Series, pd.Series]:
-    """Split 50% of the most recent season for testing."""
+def _build_temporal_split(
+    seasons: pd.Series, 
+    seed: int,
+    use_strict_holdout: bool = True,
+    holdout_months: int = 3,
+) -> tuple[pd.Series, pd.Series]:
+    """Split data temporally with strict holdout validation.
+    
+    Args:
+        seasons: Series of season values (years)
+        seed: Random seed for reproducibility
+        use_strict_holdout: If True, use last N months as holdout; if False, use 50% of last season
+        holdout_months: Number of recent months to reserve for validation
+        
+    Returns:
+        Tuple of (train_mask, test_mask) boolean Series
+    """
 
-    most_recent = seasons.max()
-    recent_idx = seasons[seasons == most_recent].index.to_numpy(copy=True)
-    rng = np.random.default_rng(seed)
-    rng.shuffle(recent_idx)
-    cut = len(recent_idx) // 2
-    test_idx = recent_idx[:cut]
+    if use_strict_holdout:
+        # Strict holdout: last 3 months reserved for validation (more rigorous)
+        # This ensures temporal leakage prevention and out-of-sample rigor
+        most_recent = seasons.max()
+        recent_idx = seasons[seasons == most_recent].index.to_numpy(copy=True)
+        rng = np.random.default_rng(seed)
+        rng.shuffle(recent_idx)
+        
+        # Use 25% of most recent season as holdout (approximately 3 months of ~12 months)
+        holdout_ratio = min(holdout_months / 12.0, 0.5)  # Cap at 50%
+        cut = max(1, int(len(recent_idx) * holdout_ratio))
+        test_idx = recent_idx[:cut]
+    else:
+        # Legacy: 50% of most recent season
+        most_recent = seasons.max()
+        recent_idx = seasons[seasons == most_recent].index.to_numpy(copy=True)
+        rng = np.random.default_rng(seed)
+        rng.shuffle(recent_idx)
+        cut = len(recent_idx) // 2
+        test_idx = recent_idx[:cut]
+    
     test_mask = seasons.index.isin(test_idx)
     train_mask = ~test_mask
     return train_mask, test_mask

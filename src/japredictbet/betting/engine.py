@@ -295,16 +295,49 @@ class ConsensusEngine:
     This engine consumes a list of model predictions for the same match and
     market, computes each model edge independently, and then applies a
     configurable agreement threshold to decide whether to bet.
+    
+    Supports dynamic margin-based threshold adjustment: when the absolute
+    difference between mean lambda and betting line is tight (< 0.5),
+    consensus threshold increases to 50% for additional safety.
     """
 
-    def __init__(self, edge_threshold: float = 0.05):
+    def __init__(self, edge_threshold: float = 0.05, use_dynamic_margin: bool = True):
         self.edge_threshold = edge_threshold
+        self.use_dynamic_margin = use_dynamic_margin
+
+    def _compute_dynamic_threshold(
+        self,
+        mean_lambda: float,
+        line: float,
+        base_threshold: float = 0.45,
+        tight_margin_threshold: float = 0.5,
+        tight_margin_consensus: float = 0.50,
+    ) -> float:
+        """Compute dynamic consensus threshold based on lambda-line margin.
+        
+        When predictions are very close to the betting line (within 0.5),
+        increase consensus requirement to 50% for safety.
+        
+        Args:
+            mean_lambda: Mean prediction from ensemble
+            line: Betting line
+            base_threshold: Default consensus threshold
+            tight_margin_threshold: Margin threshold (0.5 corners)
+            tight_margin_consensus: Consensus required for tight margins (50%)
+            
+        Returns:
+            Adjusted consensus threshold
+        """
+        margin = abs(mean_lambda - line)
+        if margin < tight_margin_threshold and self.use_dynamic_margin:
+            return tight_margin_consensus
+        return base_threshold
 
     def evaluate_with_consensus(
         self,
         predictions_list: Iterable[Dict],
         odds_data: Dict,
-        threshold: float = 0.7,
+        threshold: float = 0.45,
     ) -> Dict:
         """Evaluate whether a bet is safe using model consensus.
 
@@ -316,7 +349,7 @@ class ConsensusEngine:
             odds_data:
                 Market payload with ``line``, ``odds`` and optional ``type``.
             threshold:
-                Minimum agreement ratio required to confirm the bet.
+                Base consensus ratio required to confirm the bet (may be adjusted dynamically).
 
         Returns:
             Dict with voting distribution, agreement and final decision.
@@ -350,10 +383,21 @@ class ConsensusEngine:
             model_probs.append(p_model)
             lambda_totals.append(lambda_total)
 
+        # Compute dynamic threshold based on margin if enabled
+        mean_lambda = float(sum(lambda_totals) / len(lambda_totals)) if lambda_totals else line
+        dynamic_threshold = self._compute_dynamic_threshold(
+            mean_lambda=mean_lambda,
+            line=line,
+            base_threshold=threshold,
+        )
+        
+        # Use dynamic threshold for decision
+        threshold_to_use = dynamic_threshold
+
         total_models = len(model_votes)
         positive_votes = int(sum(model_votes))
         agreement = positive_votes / total_models if total_models else 0.0
-        should_place_bet = agreement >= threshold
+        should_place_bet = agreement >= threshold_to_use
 
         status_message = (
             f"Aposta confirmada (Agreement: {agreement:.0%})"
@@ -371,21 +415,23 @@ class ConsensusEngine:
             odds=odds,
             line=line,
             threshold_edge=self.edge_threshold,
-            consensus_threshold=threshold,
+            consensus_threshold=threshold_to_use,
         )
 
         logger.info(
-            "%s | threshold=%.0f%% | edge_threshold=%.2f | votes=%s",
+            "%s | threshold=%.0f%% (base=%.0f%%) | edge_threshold=%.2f | votes=%s",
             consensus_label,
+            threshold_to_use * 100,
             threshold * 100,
             self.edge_threshold,
             model_votes,
         )
         logger.info(
-            "Ensemble lambda stats | mean=%.3f | std=%.3f | ranges=%s",
+            "Ensemble lambda stats | mean=%.3f | std=%.3f | ranges=%s | margin=%.2f",
             audit_report["mean_lambda"],
             audit_report["std_lambda"],
             audit_report["ranges"],
+            abs(mean_lambda - line),
         )
         logger.info("Audit report\n%s", audit_report["formatted_report"])
 

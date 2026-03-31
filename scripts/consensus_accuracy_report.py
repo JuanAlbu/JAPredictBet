@@ -385,10 +385,33 @@ def main() -> None:
     parser.add_argument("--odds", type=float, default=1.90)
     parser.add_argument("--fixed-line", type=float, default=None)
     parser.add_argument(
+        "--random-lines",
+        action="store_true",
+        help="Use random lines between --line-min and --line-max instead of mean_lambda.",
+    )
+    parser.add_argument(
+        "--line-min",
+        type=float,
+        default=5.5,
+        help="Minimum line value for random lines (default 5.5).",
+    )
+    parser.add_argument(
+        "--line-max",
+        type=float,
+        default=11.5,
+        help="Maximum line value for random lines (default 11.5).",
+    )
+    parser.add_argument(
         "--feature-dropout-rate",
         type=float,
         default=0.20,
         help="Per-model permanent feature dropout rate (0.0 to 0.95).",
+    )
+    parser.add_argument(
+        "--blackout-count",
+        type=int,
+        default=3,
+        help="Number of features to randomly blackout per model.",
     )
     parser.add_argument(
         "--output",
@@ -405,11 +428,9 @@ def main() -> None:
             "conforme arquitetura hibrida 70/30."
         )
     args.n_models = 30
-    # Final calibration requested.
-    args.edge_threshold = 0.01
-    args.consensus_threshold = 0.45
-    args.feature_dropout_rate = 0.20
-    blackout_count = 3
+    
+    # Use args values directly (respecting CLI overrides)
+    blackout_count = args.blackout_count
 
     data = load_historical_dataset(cfg.data.raw_path, cfg.data.date_column)
     data = _ensure_season_column(data, cfg.data.date_column)
@@ -578,6 +599,12 @@ def main() -> None:
     total_eval = 0
     total_wins = 0
 
+    # RNG for random lines if requested
+    if args.random_lines:
+        line_rng = np.random.default_rng(cfg.model.random_state + 999_999)
+        report_lines[-1] = f"MODO: Linhas aleatórias entre {args.line_min} e {args.line_max}"
+        report_lines.append("")
+
     for idx, row in test_df.iterrows():
         game = f"{row['home_team']} vs {row['away_team']}"
         lambda_values = lambdas[:, idx]
@@ -585,6 +612,10 @@ def main() -> None:
         std_lambda = float(np.std(lambda_values, ddof=1))
         if args.fixed_line is not None:
             line = _to_half_goal_line(float(args.fixed_line))
+        elif args.random_lines:
+            # Generate random line between line_min and line_max with .5 only
+            line_base = float(line_rng.uniform(args.line_min, args.line_max))
+            line = _to_half_goal_line(line_base)
         else:
             line = _to_half_goal_line(mean_lambda)
 

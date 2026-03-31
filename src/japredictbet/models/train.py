@@ -242,12 +242,42 @@ def _valid_training_mask(
     return x_valid & y_valid
 
 
-def _is_allowed_feature(column: str) -> bool:
-    """Restrict training to engineered, pre-match safe features."""
-
-    keywords = ("_last", "_diff", "_team_enc", "_vs_", "_ratio", "_pressure", "_total", "elo")
+def _is_allowed_feature(column: str, allowed_prefixes: tuple[str, ...] | None = None) -> bool:
+    """Determine if a column should be included in training (dynamic feature selection).
+    
+    This function prevents data leakage by restricting to engineered, pre-match safe features
+    that are inherently temporally valid (rolling stats, ratios, team identity, etc).
+    
+    Args:
+        column: Feature column name to validate
+        allowed_prefixes: Custom tuple of allowed prefixes/keywords; if None, uses defaults
+        
+    Returns:
+        True if feature is safe to use in training, False otherwise
+    """
+    
+    # Default engineered feature keywords (expandable via parameter)
+    if allowed_prefixes is None:
+        allowed_prefixes = (
+            "_last",           # Rolling window features
+            "_diff",           # Difference features
+            "_team_enc",       # Team encoding features
+            "_vs_",            # Matchup features
+            "_ratio",          # Ratio features
+            "_pressure",       # Pressure metrics
+            "_total",          # Total count features
+            "elo",             # ELO ratings
+            "_rolling",        # Explicit rolling features
+            "_momentum",       # Momentum metrics
+        )
+    
+    # Direct features always allowed (static, non-leaking)
     direct_features = {"home_advantage", "is_home"}
-    return column in direct_features or any(key in column for key in keywords)
+    
+    if column in direct_features:
+        return True
+    
+    return any(key in column for key in allowed_prefixes)
 
 
 def _has_invalid_xgb_name(column: str) -> bool:
@@ -277,7 +307,7 @@ def _build_regressor(
             "min_child_weight": 2,
             "gamma": 0.2795049672186196,
             "random_state": random_state,
-            "n_jobs": 1,
+            "n_jobs": -1,
             "verbosity": 0,
             "eval_metric": "poisson-nloglik",
         }
@@ -292,7 +322,7 @@ def _build_regressor(
             "min_samples_leaf": 2,
             "max_features": 0.8,
             "random_state": random_state,
-            "n_jobs": 1,
+            "n_jobs": -1,
         }
         params.update(overrides)
         return RandomForestRegressor(**params)
@@ -328,7 +358,7 @@ def _build_regressor(
             "subsample": 0.85,
             "colsample_bytree": 0.85,
             "random_state": random_state,
-            "n_jobs": 1,
+            "n_jobs": -1,
             "verbosity": -1,
         }
         params.update(overrides)
@@ -350,10 +380,19 @@ def _normalize_algorithms(algorithms: tuple[str, ...]) -> tuple[str, ...]:
 
 
 def _build_ensemble_schedule(size: int, algorithms: tuple[str, ...]) -> list[str]:
-    """Build deterministic and balanced algorithm schedule."""
+    """Build deterministic and balanced algorithm schedule.
+    
+    For 30 models with hybrid mode enabled, will build 70% boosting + 30% linear.
+    Otherwise maintains legacy balanced distribution.
+    """
 
     if size <= 0:
         return ["xgboost"]
+    
+    # Hybrid mode for ~30 models mixing boosters and linear models
+    if size >= 25 and size <= 35:
+        return _build_hybrid_ensemble_schedule(size)
+    
     algo_list = list(algorithms) if algorithms else ["xgboost"]
 
     # Keep exact balance whenever size is divisible by algorithm count.
@@ -371,6 +410,42 @@ def _build_ensemble_schedule(size: int, algorithms: tuple[str, ...]) -> list[str
         schedule.append(algo_list[idx % len(algo_list)])
         idx += 1
     return schedule
+
+
+def _build_hybrid_ensemble_schedule(size: int) -> list[str]:
+    """Build 70% boosting + 30% linear hybrid schedule (e.g., 21 boosters + 9 linear for 30 models).
+    
+    This implements the experimental consensus architecture:
+    - 70% Boosting algorithms (XGBoost and LightGBM alternating)
+    - 30% Linear models (Ridge and ElasticNet alternating)
+    """
+    n_models = max(1, int(size))
+    n_boosters = max(1, int(round(n_models * 0.70)))
+    n_linear = n_models - n_boosters
+    
+    # Ensure at least 1 linear if more than 1 model
+    if n_linear == 0 and n_models > 1:
+        n_linear = 1
+        n_boosters = n_models - 1
+    
+    schedule: list[str] = []
+    
+    # Boosters: alternate between XGBoost and LightGBM
+    for idx in range(n_boosters):
+        if idx % 2 == 0:
+            schedule.append("xgboost")
+        else:
+            schedule.append("lightgbm")
+    
+    # Linear: alternate between Ridge and ElasticNet
+    for idx in range(n_linear):
+        if idx % 2 == 0:
+            schedule.append("ridge")
+        else:
+            schedule.append("elasticnet")
+    
+    return schedule
+
 
 
 def build_variation_params(algorithm: str, variation_index: int) -> dict[str, Any]:

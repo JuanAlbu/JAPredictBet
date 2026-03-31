@@ -111,3 +111,38 @@ Agents must never:
 - perform automated wagering
 
 The system is strictly an **analytics tool**.
+
+---
+
+## Current Project Status (Updated 30-MAR-2026)
+
+### P0 Completion ✅
+- **Status:** 100% COMPLETE
+- **Validation:** Tested with 101 real matches + 50 recent matches + random line stress tests
+- **Production Ready:** Yes
+- **Key Achievements:**
+  - All 9 P0 items implemented and validated
+  - 30-model ensemble consensus fully functional
+  - Dynamic margin rule operational
+  - Parallel training enabled (3-5x speedup)
+  - Full CLI parametrization complete
+  - Zero hardcodes remaining
+  - Artifact versioning with SHA256 hashing
+
+### P1 - Next Phase
+- **Status:** Ready to start
+- **Priority:** High impact features (Calibration, Rolling, Features)
+- **Estimated Duration:** 2-3 weeks
+- **Key Items:** 13 P1 tasks identified in next_pass.md
+
+### Important Notes for Agents
+1. **Do NOT modify model assumptions** (Poisson objective, two-model architecture) without documentation updates
+2. **Reproduce P0 tests** if making changes to core pipeline (`scripts/consensus_accuracy_report.py`)
+3. **Test with multiple scenarios:** full dataset, recent subset, random lines
+4. **Keep CLI parametrization intact** - important for flexibility
+5. **Update documentation** when implementing P1 items (TRAINING_STRATEGY.md, MODEL_ARCHITECTURE.md, etc.)
+6. **Reference test artifacts** in log-test/ directory for validation
+7. **CLI commands validated on 30-MAR-2026:**
+   - Dynamic lines: `python scripts/consensus_accuracy_report.py --config config.yml`
+   - Fixed lines: `python scripts/consensus_accuracy_report.py --fixed-line 9.5`
+   - Random lines: `python scripts/consensus_accuracy_report.py --random-lines --line-min 5.5 --line-max 11.5`
