@@ -38,52 +38,76 @@ label encoding (fast but less informative).
 
 ## Rolling Performance
 
-Rolling statistics from the last N matches.
+Rolling statistics from the last N matches (default windows: 10, 5).
 
-Example:
-
+### Rolling Mean (base)
 home_corners_for_last10_home  
 home_corners_against_last10_home  
-
 away_corners_for_last10_away  
 away_corners_against_last10_away  
-
 home_shots_last10_home  
 away_shots_last10_away
 
+### Rolling STD (P1.B2)
+Volatility features per team/season:
+home_corners_for_std_last10_home  
+away_goals_for_std_last5_away  
+(pattern: `{stat}_std_last{N}_{venue}`)
+
+### Rolling EMA (P1.B2)
+Exponential moving average with α = 2/(window+1):
+home_corners_for_ema_last10_home  
+away_shots_ema_last5_away  
+(pattern: `{stat}_ema_last{N}_{venue}`)
+
+### Result Rolling (P1.B3)
+win_rate, points_per_game, wins, draws, losses per rolling window.
+
+### Redundancy Cleanup
+`drop_redundant_features()` removes perfectly correlated pairs:
+- wins → keep win_rate
+- points → keep points_per_game
+- EMA_last10 → keep EMA_last5
+
+Total feature count after cleanup: **106 features**.
+
 ---
 
-## Matchup Features
+## Matchup Features (P1.B4)
 
-Interaction between teams.
+Interaction between teams via `add_matchup_features()`.
 
-Example:
-
-attack_vs_defense
+Features generated:
+- corners_attack_vs_defense, shots_attack_vs_defense
+- corners_pressure_index
+- corners_diff, shots_diff, fouls_diff, cards_diff
 
 Example calculation:
 
-(home_attack + opponent_defense) / 2
+(home_corners_for + away_corners_against) / 2
 
 ---
 
 # Model Type
 
-Recommended algorithms:
+Algorithms in production:
 
 XGBoost Regressor  
 LightGBM Regressor  
-RandomForest Regressor
+Ridge Regressor  
+ElasticNet Regressor
 
 Objective:
 
-Poisson regression for count data.
+Poisson regression for count data (boosters).  
+L2/L1+L2 regularized regression (linear models).
 
-Current default consensus composition:
+Current default consensus composition (30 models, 70/30 hybrid):
 
-- 10 XGBoost models
-- 10 LightGBM models
-- 10 RandomForest models
+- 10 XGBoost models (Poisson objective)
+- 11 LightGBM models (Poisson loss)
+- 5 Ridge models (L2 regularization, variable alpha)
+- 4 ElasticNet models (L1+L2, variable l1_ratio)
 
 ---
 

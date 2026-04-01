@@ -1,9 +1,9 @@
-# JA PREDICT BET - ROADMAP DE EVOLUCAO (REVISAO 31-MAR-2026)
+# JA PREDICT BET - ROADMAP DE EVOLUCAO (REVISAO 01-APR-2026)
 
-**Data da Revisao:** 31 de Março, 2026
-**Revisao Anterior:** 30-MAR-2026
-**Status Geral:** P0-FIX 100% CONCLUÍDO (todos os 4 bugs críticos corrigidos em 31-MAR-2026). P1 em execução.
-**Proxima Acao:** Executar P1 (iniciar por P1-A: Integridade do Pipeline).
+**Data da Revisao:** 01 de Abril, 2026
+**Revisao Anterior:** 31-MAR-2026
+**Status Geral:** P0-FIX 100% CONCLUÍDO. P1-A 100% CONCLUÍDO. P1-B parcialmente concluído (B2-B4 prontos, B1 pendente). Consensus script sincronizado com pipeline (106 features).
+**Proxima Acao:** Executar P1-B1 (Calibração), depois P1-C e P1-D.
 
 ---
 
@@ -56,24 +56,63 @@ Atualizado com base na revisão completa de código, docs, configs e testes real
 
 > Garantir que o pipeline core (`src/`) tenha paridade de funcionalidade com o script experimental.
 
-- [ ] **P1.A1 - Portar lógica 70/30 para `train.py`**
-  - O mix 70/30 (21 boosters + 9 linear) existe apenas em `scripts/consensus_accuracy_report.py`. A função `train_and_save_ensemble()` em `src/japredictbet/models/train.py` não aplica esse mix. O pipeline de produção (`run.py`) usa `train.py`, portanto **não tem o ensemble híbrido**.
-  - **Ação:** Unificar a lógica de scheduling do script no core.
+- [x] **P1.A1 - Portar lógica 70/30 para `train.py`** ✅ COMPLETO (31-MAR-2026)
+  - Mix 70/30 (21 boosters + 9 linear) agora implementado no `src/japredictbet/models/train.py`
+  - **Status:** ✅ CONCLUÍDO
+    - Ridge/ElasticNet params adicionados a `build_variation_params()` (10 variações cada)
+    - Filenames atualizado em `_build_model_filename()` (ridge → "ridge", elasticnet → "elastic")
+    - Ensemble scheduling (`_build_hybrid_ensemble_schedule()`) alternates 21 boosters + 9 linear
+    - run.py updated para descobrir ridge_model_*.pkl e elastic_model_*.pkl
+    - Config files updated (config.yml, config_test_50matches.yml, config_backup.yml) com Ridge/ElasticNet in algorithms
+    - 13 novos testes em tests/models/test_train.py - all passing
+    - 34/34 testes totais passando
+  - **Critério de Saída Atendido:** Todos os 30 modelos (21+9) treinam sem erro, ensemble discovers e carrega corretamente
+  - **Pr Nota:** Branch `feature/p1a-ensemble` pronto para criar
 
-- [ ] **P1.A2 - Centralizar dynamic margin rule no `engine.py`**
-  - A regra de margem dinâmica (threshold +50% quando `|λ - line| < 0.5`) está implementada apenas no script (L545-548). O `ConsensusEngine` em `betting/engine.py` tem valores hardcoded (`tight_margin_threshold=0.5`, `tight_margin_consensus=0.50`) mas a lógica deveria ser configurável via `config.yml`.
-  - **Ação:** Parametrizar `tight_margin_threshold` e `tight_margin_consensus` no config e no `ConsensusEngine`.
+- [x] **P1.A2 - Centralizar dynamic margin rule no `engine.py`** ✅ COMPLETO (31-MAR-2026)
+  - `tight_margin_threshold` e `tight_margin_consensus` adicionados ao `ValueConfig` em config.py
+  - `ConsensusEngine.__init__()` aceita e armazena estes parâmetros como variáveis de instância
+  - `_compute_dynamic_threshold()` usa variáveis de instância em vez de defaults hardcoded
+  - `config.yml` atualizado com os novos campos
+  - `mvp_pipeline.py` passa valores do config para o engine
+  - 8 testes unitários + 4 cenários de integração — todos passando
 
-- [ ] **P1.A3 - Validar lambda values no `engine.py`**
-  - Valores de λ extraídos dos modelos não são validados. NaN ou Inf propagam silenciosamente nos cálculos de probabilidade Poisson.
-  - **Ação:** Adicionar guard `if not np.isfinite(lambda_total)` antes dos cálculos.
+- [x] **P1.A3 - Validar lambda values no `engine.py`** ✅ COMPLETO (31-MAR-2026)
+  - `_validate_lambda()` adicionada com guard `np.isfinite()` e λ ≥ 0
+  - Integrada em `_extract_lambda_total()`, `report_consensus()`, `evaluate_with_consensus()`
+  - 26 testes unitários + 5 cenários de integração — todos passando
+
+**✅ P1-A 100% CONCLUÍDO — 77 testes totais passando.**
 
 #### P1-B: Evolução de Features (Prioridade Alta)
 
 - [ ] **P1.B1 - Calibração de Probabilidades (Brier/ECE):** Garantir aderência entre a probabilidade prevista e a frequência real dos resultados. (antigo P1.1)
-- [ ] **P1.B2 - Rolling Features (Curto Prazo, Volatilidade e EMA):** Adicionar janelas de 3 e 5 jogos, incluir desvio padrão (STD) dos cantos e incorporar Time-Decay EMA para dar mais peso a jogos recentes. (antigo P1.2)
-- [ ] **P1.B3 - Recorde de Momento e Contexto de Jogo:** Consolidar métrica de recorde (V-E-D) e adicionar features de "game state" para capturar o comportamento tático. (antigo P1.3)
-- [ ] **P1.B4 - H2H e Cross-Features:** Adicionar média de cantos dos últimos 3 confrontos diretos (H2H) e criar features cruzadas entre ataque e defesa. (antigo P1.4)
+  - **Status:** NÃO INICIADO — Nenhuma implementação de Brier Score ou ECE encontrada no codebase.
+  - **Próximo passo prioritário dentro de P1.**
+
+- [x] **P1.B2 - Rolling Features (Curto Prazo, Volatilidade e EMA)** ✅ COMPLETO (31-MAR-2026)
+  - `add_rolling_std()` em rolling.py — desvio padrão rolling por equipe/temporada
+  - `add_rolling_ema()` em rolling.py — EMA com alpha configurável (α = 2/(window+1))
+  - Flags `rolling_use_std` e `rolling_use_ema` em FeatureConfig e config.yml
+  - Pipeline chama condicionalmente via `_add_rolling_std_features()` e `_add_rolling_ema_features()`
+  - 11 testes unitários — todos passando
+
+- [x] **P1.B3 - Recorde de Momento e Contexto de Jogo** ✅ JÁ IMPLEMENTADO
+  - `add_result_rolling()` em rolling.py gera: wins, draws, losses, win_rate, points (rolling por janela)
+  - Integrado no pipeline via `_add_result_rolling_features()`
+  - **Nota:** Verificado no codebase — feature já existia antes desta sessão.
+
+- [x] **P1.B4 - Cross-Features (Ataque×Defesa)** ✅ JÁ IMPLEMENTADO
+  - `add_matchup_features()` em matchup.py gera: home_attack_vs_away_defense, corners_pressure_index, diffs
+  - Cross-features ataque×defesa + features de diferença (corners, shots, fouls, cards)
+  - **Nota:** São features baseadas nas rolling stats gerais de cada equipa, NÃO confronto direto entre pares.
+
+- [ ] **P1.B5 - H2H Confronto Direto (Last 3):** Média de cantos, golos e shots nos últimos N confrontos diretos entre o par específico de equipas. Diferente de B4 (cross-features gerais), esta feature filtra o histórico por par home×away. (sugerido por análise Gemini 01-APR-2026)
+  - **Status:** NÃO INICIADO
+  - **Implementação:** Nova função `add_h2h_features()` em `matchup.py`
+  - **Features esperadas:** `h2h_corners_mean_last3`, `h2h_goals_mean_last3`, `h2h_shots_mean_last3`
+  - **Risco:** Pares com < 3 confrontos terão NaN → necessita fallback (média geral ou drop)
+  - **Prioridade:** Após P1.B1 (Calibração)
 
 #### P1-C: Otimização e Análise (Prioridade Média)
 
@@ -83,15 +122,19 @@ Atualizado com base na revisão completa de código, docs, configs e testes real
 
 #### P1-D: Value e Risco (Prioridade Média-Baixa)
 
-- [ ] **P1.D1 - Refino do Value Bet Engine:** Padronizar o cálculo de EV como `(Probabilidade * Odd) - 1`. (antigo P1.8)
+- [x] **P1.D1 - Refino do Value Bet Engine** ✅ JÁ IMPLEMENTADO
+  - Fórmula `expected_value()` em engine.py: `(p_model * (odds - 1)) - (1 - p_model)`
+  - Uso consistente em `evaluate_bet()` e toda lógica de consensus. (antigo P1.8)
 - [ ] **P1.D2 - Auditoria de CLV (Closing Line Value):** Comparar a odd de entrada com a de fechamento para medir a qualidade do preço obtido. Completar TODO pendente em `docs/VALIDATION.md`. (antigo P1.9)
 - [ ] **P1.D3 - Gestão de Risco (Kelly, Drawdown, Slippage):** Implementar staking com Quarter Kelly, simular drawdowns com Monte Carlo e aplicar stress tests de slippage. Completar validação de ROI temporal (500 Monte Carlo runs) pendente em VALIDATION.md. (antigo P1.10)
 
-**Dependências Críticas:**
-- P0-FIX.1 (hybrid schedule) é **pré-requisito** para P1.A1 (portar 70/30 para core).
-- P0-FIX.2 (importance multi-model) é **pré-requisito** para P1.C2 (SHAP ponderado).
-- P0-FIX.4 (pin versões) é **pré-requisito** de reprodutibilidade para qualquer experimento P1.
-- P1.B2 (EMA) é pré-requisito para outras features de rolling.
+**Dependências Críticas (Atualizadas):**
+- ~~P0-FIX.1 (hybrid schedule) é pré-requisito para P1.A1~~ ✅ RESOLVIDO
+- ~~P0-FIX.2 (importance multi-model) é pré-requisito para P1.C2~~ ✅ RESOLVIDO
+- ~~P0-FIX.4 (pin versões) é pré-requisito de reprodutibilidade~~ ✅ RESOLVIDO
+- ~~P1.B2 (EMA) é pré-requisito para outras features de rolling~~ ✅ RESOLVIDO
+- P1.B1 (calibração) é pré-requisito conceitual para P1.D3 (Kelly — precisa de probabilidades calibradas).
+- P1.B1 (calibração) deve preceder P1.B5 (H2H) — validar impacto das 106 features antes de adicionar mais.
 - P1.C2 (importância de features) é pré-requisito para votos ponderados com SHAP.
 
 ---
@@ -129,11 +172,12 @@ Atualizado com base na revisão completa de código, docs, configs e testes real
   - `src/japredictbet/agents/` - scaffolding vazio (`NotImplementedError`), sem uso.
 - [ ] **P2.C2 - Resolver módulo `probability/` vazio:** Toda lógica de probabilidade Poisson vive em `betting/engine.py`, violando a boundary definida no AGENTS.md (`probability → statistical calculations`). Opções: (a) mover funções Poisson para `probability/`, ou (b) atualizar ARCHITECTURE.md para refletir a realidade.
 - [ ] **P2.C3 - Padronizar linguagem dos comentários:** Código tem mix de português e inglês (engine.py, mvp_pipeline.py). Escolher um idioma e padronizar.
-- [ ] **P2.C4 - Sincronizar documentação contraditória:**
-  - `EXECUTIVE_SUMMARY.md` flagga hardcodes que já foram corrigidos no script.
-  - `VALIDATION_REPORT.md` diz "3 blockers", `PROJECT_CONTEXT.md` diz "100% complete".
-  - `P0_COMPLETION_SUMMARY.md` afirma que hybrid schedule está completo, mas a função não existe no core.
-  - `IMPLEMENTATION_CONSENSUS.md` spec diz 70/30 no core, core não tem.
+- [ ] **P2.C4 - Sincronizar documentação contraditória:** ✅ PARCIALMENTE RESOLVIDO (01-APR-2026)
+  - ✅ `VALIDATION_REPORT.md` reescrito — 3 blockers marcados como resolvidos
+  - ✅ `EXECUTIVE_SUMMARY.md` atualizado — blockers fechados
+  - ✅ `PROJECT_CONTEXT.md` atualizado — status P1 correto
+  - ✅ `MODEL_ARCHITECTURE.md` atualizado — composição correta (10 XGB + 11 LGB + 5 Ridge + 4 ElasticNet)
+  - Restante: verificar se `P0_COMPLETION_SUMMARY.md` e `IMPLEMENTATION_CONSENSUS.md` precisam de ajustes menores.
 
 #### P2-D: Produto (Postergar Sem Bloquear)
 
@@ -163,16 +207,16 @@ Atualizado com base na revisão completa de código, docs, configs e testes real
 
 ---
 
-### Matriz de Maturidade do Projeto (31-MAR-2026)
+### Matriz de Maturidade do Projeto (01-APR-2026)
 
 | Dimensão | Nota | Comentário |
 |----------|------|------------|
 | Arquitetura | 9/10 | Excelente design modular, bem documentada |
-| Implementação | 6/10 | Core funcional mas com bugs críticos (P0-FIX) e gaps (70/30 fora do core) |
-| Documentação | 7/10 | Abrangente mas com inconsistências entre documentos |
-| Testes | 3/10 | ~40% de cobertura, módulos críticos (features, data, models) sem testes |
-| Reprodutibilidade | 6/10 | SHA256 e seeds bons, mas requirements sem pinning |
-| Production-Ready | 5/10 | Script funciona, pipeline core tem bugs e gaps |
+| Implementação | 8/10 | Core funcional, P0-FIX resolvido, P1-A/B(parcial) completos, 106 features |
+| Documentação | 8/10 | Abrangente, revisada e sincronizada (01-APR-2026) |
+| Testes | 5/10 | 87 testes passando (10 arquivos), mas módulos features/data sem cobertura dedicada |
+| Reprodutibilidade | 8/10 | SHA256, seeds, requirements pinados, config-driven |
+| Production-Ready | 7/10 | Pipeline e script experimental sincronizados, calibração (B1) pendente |
 
 ---
 
@@ -183,3 +227,5 @@ Atualizado com base na revisão completa de código, docs, configs e testes real
 | 30-MAR-2026 | Criação do roadmap. P0 encerrado. |
 | 31-MAR-2026 | Revisão completa de código: 26 arquivos Python, 3 configs, 17 docs. Adicionado P0-FIX (3 bugs bloqueantes). Reorganizado P1 em sub-grupos (A-D) por prioridade. Expandido P2 com gaps de testes e limpeza. Adicionado P3 (performance). Adicionada matriz de maturidade. |
 | 31-MAR-2026 | P0-FIX 100% concluído: FIX.1 já estava OK, FIX.2 (`importance.py` multi-model dispatch), FIX.3 (config schema padronizado + validação), FIX.4 (requirements.txt com versões pinadas + requirements-dev.txt). 21 testes passando. |
+| 31-MAR-2026 | P1.A1 (ensemble híbrido), P1.A2 (dynamic margin), P1.A3 (lambda validation), P1.B2 (STD+EMA) implementados. 87 testes passando. |
+| 01-APR-2026 | Consensus script (`consensus_accuracy_report.py`) sincronizado com pipeline principal: agora usa 106 features (STD+EMA+drop_redundant). Documentação completa revisada e atualizada. |

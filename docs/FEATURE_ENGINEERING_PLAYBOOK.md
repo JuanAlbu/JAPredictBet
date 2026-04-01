@@ -24,40 +24,53 @@ short-term statistics.
 
 Rolling statistics from the last N matches.
 
-Default window:
+Default windows: [10, 5] matches.
 
-10 matches.
-
-Examples:
-
+## Rolling Mean (base)
 home_corners_for_last10_home  
 home_corners_against_last10_home  
-
 away_corners_for_last10_away  
 away_corners_against_last10_away  
-
 home_shots_last10_home  
 away_shots_last10_away
 
+Statistics: corners, goals, shots, fouls, cards (for/against per venue).
+
+## Rolling STD (P1.B2)
+Volatility features per team/season.
+Pattern: `{stat}_std_last{N}_{venue}`
+Enabling flag: `features.rolling_use_std: true`
+
+## Rolling EMA (P1.B2)
+Exponential moving average with α = 2/(window+1).
+Pattern: `{stat}_ema_last{N}_{venue}`
+Enabling flag: `features.rolling_use_ema: true`
+
+## Redundancy Cleanup
+`drop_redundant_features()` removes perfectly correlated pairs.
+Enabling flag: `features.drop_redundant: true`
+
+Total features after cleanup: **106**.
+
 ---
 
-# Matchup Features
+# Matchup Features (P1.B4)
 
-Features describing the interaction between teams.
+Features describing the interaction between teams via `add_matchup_features()`.
 
-Examples:
+Generated features:
 
 corners_attack_vs_defense  
-
 shots_attack_vs_defense  
-
+corners_pressure_index  
+corners_diff, shots_diff, fouls_diff, cards_diff  
 rating_difference
 
 Current pipeline also adds:
 
 - ELO-based team strength features
 - total corners/goals derived features (`*_total*`)
-- result-form rolling metrics (wins/draws/losses/points)
+- result-form rolling metrics (wins/draws/losses/win_rate/points_per_game)
 
 ---
 

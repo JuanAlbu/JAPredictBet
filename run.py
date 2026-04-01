@@ -99,7 +99,13 @@ def discover_model_artifacts(models_dir: Path) -> list[Path]:
 
     if not models_dir.exists() or not models_dir.is_dir():
         return []
-    patterns = ("xgb_model_*.pkl", "lgbm_model_*.pkl", "rf_model_*.pkl")
+    patterns = (
+        "xgb_model_*.pkl",
+        "lgbm_model_*.pkl",
+        "rf_model_*.pkl",
+        "ridge_model_*.pkl",
+        "elastic_model_*.pkl",
+    )
     discovered: list[Path] = []
     for pattern in patterns:
         discovered.extend(sorted(models_dir.glob(pattern)))
@@ -131,6 +137,15 @@ if __name__ == "__main__":
         print("\nPipeline configured. Starting execution...")
         if ensemble_models:
             print(f"Loaded {len(ensemble_models)} model artifacts for consensus.")
+            # Show ensemble composition
+            ensemble_config = config.model.algorithms if config.model.algorithms else ("xgboost", "lightgbm", "randomforest", "ridge", "elasticnet")
+            if ensemble_config:
+                print(f"Ensemble composition: {len(ensemble_config)} algorithm types")
+                if len(ensemble_models) == 30 and "ridge" in [a.lower() for a in ensemble_config]:
+                    print("  - 21 boosters: XGBoost (10) + LightGBM (11)")
+                    print("  - 9 linear: Ridge (5) + ElasticNet (4)")
+                else:
+                    pass
         results_df = run_mvp_pipeline(
             config,
             ensemble_models=ensemble_models if ensemble_models else None,

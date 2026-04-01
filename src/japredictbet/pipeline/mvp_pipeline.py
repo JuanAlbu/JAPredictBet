@@ -17,7 +17,13 @@ from japredictbet.config import PipelineConfig
 from japredictbet.data.ingestion import load_historical_dataset
 from japredictbet.features.elo import EloConfig, add_elo_ratings
 from japredictbet.features.matchup import add_matchup_features
-from japredictbet.features.rolling import add_result_rolling, add_stat_rolling
+from japredictbet.features.rolling import (
+    add_result_rolling,
+    add_stat_rolling,
+    add_rolling_std,
+    add_rolling_ema,
+    drop_redundant_features,
+)
 from japredictbet.features.team_identity import add_team_target_encoding
 from japredictbet.models.predict import predict_expected_corners
 from japredictbet.models.train import (
@@ -107,10 +113,23 @@ def run_mvp_pipeline(
     # --- Feature Engineering ---
     for window in config.features.rolling_windows:
         data = _add_rolling_stats(data, window, season_col="season")
+        
+        # P1.B2: Add rolling standard deviation if enabled
+        if config.features.rolling_use_std:
+            data = _add_rolling_std_features(data, window, season_col="season")
+        
+        # P1.B2: Add EMA features if enabled
+        if config.features.rolling_use_ema:
+            data = _add_rolling_ema_features(data, window, season_col="season")
+        
         data = add_matchup_features(data, window=window)
         data = _add_total_corners_features(data, window=window)
         data = _add_total_goals_features(data, window=window)
     data["home_advantage"] = 1.0
+
+    # Drop redundant features if enabled
+    if config.features.drop_redundant:
+        data = drop_redundant_features(data, config.features.rolling_windows)
 
     encoding_train_mask, _ = _build_temporal_split(
         data["season"], config.model.random_state
@@ -174,7 +193,11 @@ def run_mvp_pipeline(
     merged_data = merged_data.dropna(subset=["line", "over_odds"])
 
     consensus_thresholds = _build_consensus_thresholds(config)
-    consensus_engine = engine.ConsensusEngine(edge_threshold=config.value.threshold)
+    consensus_engine = engine.ConsensusEngine(
+        edge_threshold=config.value.threshold,
+        tight_margin_threshold=config.value.tight_margin_threshold,
+        tight_margin_consensus=config.value.tight_margin_consensus,
+    )
 
     all_bets = []
     for _, row in merged_data.iterrows():
@@ -789,6 +812,89 @@ def _add_rolling_stats(
         )
     return df
 
+
+def _add_rolling_std_features(
+    data: pd.DataFrame,
+    window: int,
+    season_col: str | None = None,
+) -> pd.DataFrame:
+    """Add rolling standard deviation features (P1.B2).
+    
+    Detects consistency/volatility in team performance.
+    High STD indicates inconsistent form.
+    """
+    df = data.copy()
+    stats = [
+        ("corners", "home_corners", "away_corners"),
+        ("goals", "home_goals", "away_goals"),
+        ("shots", "home_shots", "away_shots"),
+    ]
+
+    for stat_name, home_col, away_col in stats:
+        if home_col in df.columns and away_col in df.columns:
+            df = add_rolling_std(
+                df,
+                team_col="home_team",
+                for_col=home_col,
+                against_col=away_col,
+                window=window,
+                prefix="home",
+                stat_name=stat_name,
+                season_col=season_col,
+            )
+            df = add_rolling_std(
+                df,
+                team_col="away_team",
+                for_col=away_col,
+                against_col=home_col,
+                window=window,
+                prefix="away",
+                stat_name=stat_name,
+                season_col=season_col,
+            )
+    return df
+
+
+def _add_rolling_ema_features(
+    data: pd.DataFrame,
+    window: int,
+    season_col: str | None = None,
+) -> pd.DataFrame:
+    """Add exponential moving average features (P1.B2).
+    
+    Gives more weight to recent games for current form capture.
+    Alpha = 2 / (window + 1) by default.
+    """
+    df = data.copy()
+    stats = [
+        ("corners", "home_corners", "away_corners"),
+        ("goals", "home_goals", "away_goals"),
+        ("shots", "home_shots", "away_shots"),
+    ]
+
+    for stat_name, home_col, away_col in stats:
+        if home_col in df.columns and away_col in df.columns:
+            df = add_rolling_ema(
+                df,
+                team_col="home_team",
+                for_col=home_col,
+                against_col=away_col,
+                window=window,
+                prefix="home",
+                stat_name=stat_name,
+                season_col=season_col,
+            )
+            df = add_rolling_ema(
+                df,
+                team_col="away_team",
+                for_col=away_col,
+                against_col=home_col,
+                window=window,
+                prefix="away",
+                stat_name=stat_name,
+                season_col=season_col,
+            )
+    return df
 
 
 def _add_total_corners_features(data: pd.DataFrame, window: int) -> pd.DataFrame:

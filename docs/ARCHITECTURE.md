@@ -82,17 +82,23 @@ Each trained member keeps the two-model architecture:
 For consensus mode, training supports automated artifact generation with
 standardized names:
 
+**Booster Models (21 models = 70%):**
 - `xgb_model_1.pkl` to `xgb_model_10.pkl`
-- `lgbm_model_1.pkl` to `lgbm_model_10.pkl`
-- `rf_model_1.pkl` to `rf_model_10.pkl`
+- `lgbm_model_1.pkl` to `lgbm_model_11.pkl`
+
+**Linear Models (9 models = 30%):**
+- `ridge_model_1.pkl` to `ridge_model_5.pkl` 
+- `elastic_model_1.pkl` to `elastic_model_4.pkl`
 
 When the MVP pipeline performs internal training (no preloaded ensemble passed),
 it persists the trained artifacts automatically in `artifacts/models`.
 
-Model diversity is deterministic: 10 variations per algorithm are trained with
-distinct hyperparameters. Tree-based learners are configured with Poisson-ready
-count objectives (`count:poisson` for XGBoost, `poisson` for LightGBM and
-Poisson criterion for RandomForest).
+Model diversity is deterministic: variations per algorithm are trained with
+distinct hyperparameters. Booster learners (XGBoost, LightGBM)
+are configured with Poisson-ready count objectives (`count:poisson` for XGBoost,
+`poisson` for LightGBM). Linear models 
+(Ridge, ElasticNet) use variable regularization (alpha, l1_ratio) for ensemble
+diversity.
 
 ---
 
@@ -253,8 +259,14 @@ All accepted pairings are logged with explicit mapping for manual audit, e.g.:
 - ✅ Mean sigma: 0.45 (low ensemble dispersal)
 - ✅ Line distribution: 9.5 (30%), 10.5 (70%) from dynamic mode
 - ✅ Consensus voting: 20 matches analyzed, 2 bets approved
-- ✅ Accuracy: 2/2 wins (100% on approved bets)
+- ✅ Accuracy: 2/2 wins (100% on approved bets) [77 features]
 - 📁 Artifact: `log-test/consensus_test_report_20260330_212639.txt`
+
+### Post-Sync Test with 106 Features (31-MAR-2026)
+- ✅ Consensus script synchronized with pipeline (STD + EMA + drop_redundant)
+- ✅ Dynamic lines (20 matches): 3 bets, 33% accuracy
+- ✅ Random lines 50-match: 10 bets, 100% accuracy
+- 📁 Artifact: `log-test/consensus_test_report_20260331_*.txt`
 
 ### Recent Season Subset Test (50 Matches with Historical Context)
 - ✅ Dataset: 50 random matches from 2025-09-27 to 2026-03-22
