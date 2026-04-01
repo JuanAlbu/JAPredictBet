@@ -61,6 +61,8 @@ class ValueConfig:
     consensus_start: float = 0.35
     consensus_end: float = 1.0
     consensus_step: float = 0.05
+    tight_margin_threshold: float = 0.5  # Dynamic margin rule: trigger when |lambda - line| < this
+    tight_margin_consensus: float = 0.50  # Consensus required when margin is tight (e.g., 50%)
 
 
 @dataclass(frozen=True)

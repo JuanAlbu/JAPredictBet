@@ -174,7 +174,11 @@ def run_mvp_pipeline(
     merged_data = merged_data.dropna(subset=["line", "over_odds"])
 
     consensus_thresholds = _build_consensus_thresholds(config)
-    consensus_engine = engine.ConsensusEngine(edge_threshold=config.value.threshold)
+    consensus_engine = engine.ConsensusEngine(
+        edge_threshold=config.value.threshold,
+        tight_margin_threshold=config.value.tight_margin_threshold,
+        tight_margin_consensus=config.value.tight_margin_consensus,
+    )
 
     all_bets = []
     for _, row in merged_data.iterrows():
