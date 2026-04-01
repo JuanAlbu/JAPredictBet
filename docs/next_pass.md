@@ -1,8 +1,8 @@
-# JA PREDICT BET - ROADMAP DE EVOLUCAO (REVISAO 31-MAR-2026)
+# JA PREDICT BET - ROADMAP DE EVOLUCAO (REVISAO 01-APR-2026)
 
-**Data da Revisao:** 31 de Março, 2026
-**Revisao Anterior:** 30-MAR-2026
-**Status Geral:** P0-FIX 100% CONCLUÍDO. P1-A 100% CONCLUÍDO. P1-B parcialmente concluído (B2-B4 prontos, B1 pendente).
+**Data da Revisao:** 01 de Abril, 2026
+**Revisao Anterior:** 31-MAR-2026
+**Status Geral:** P0-FIX 100% CONCLUÍDO. P1-A 100% CONCLUÍDO. P1-B parcialmente concluído (B2-B4 prontos, B1 pendente). Consensus script sincronizado com pipeline (106 features).
 **Proxima Acao:** Executar P1-B1 (Calibração), depois P1-C e P1-D.
 
 ---
@@ -102,10 +102,17 @@ Atualizado com base na revisão completa de código, docs, configs e testes real
   - Integrado no pipeline via `_add_result_rolling_features()`
   - **Nota:** Verificado no codebase — feature já existia antes desta sessão.
 
-- [x] **P1.B4 - H2H e Cross-Features** ✅ JÁ IMPLEMENTADO
+- [x] **P1.B4 - Cross-Features (Ataque×Defesa)** ✅ JÁ IMPLEMENTADO
   - `add_matchup_features()` em matchup.py gera: home_attack_vs_away_defense, corners_pressure_index, diffs
   - Cross-features ataque×defesa + features de diferença (corners, shots, fouls, cards)
-  - **Nota:** Verificado no codebase — feature já existia antes desta sessão.
+  - **Nota:** São features baseadas nas rolling stats gerais de cada equipa, NÃO confronto direto entre pares.
+
+- [ ] **P1.B5 - H2H Confronto Direto (Last 3):** Média de cantos, golos e shots nos últimos N confrontos diretos entre o par específico de equipas. Diferente de B4 (cross-features gerais), esta feature filtra o histórico por par home×away. (sugerido por análise Gemini 01-APR-2026)
+  - **Status:** NÃO INICIADO
+  - **Implementação:** Nova função `add_h2h_features()` em `matchup.py`
+  - **Features esperadas:** `h2h_corners_mean_last3`, `h2h_goals_mean_last3`, `h2h_shots_mean_last3`
+  - **Risco:** Pares com < 3 confrontos terão NaN → necessita fallback (média geral ou drop)
+  - **Prioridade:** Após P1.B1 (Calibração)
 
 #### P1-C: Otimização e Análise (Prioridade Média)
 
@@ -126,8 +133,9 @@ Atualizado com base na revisão completa de código, docs, configs e testes real
 - ~~P0-FIX.2 (importance multi-model) é pré-requisito para P1.C2~~ ✅ RESOLVIDO
 - ~~P0-FIX.4 (pin versões) é pré-requisito de reprodutibilidade~~ ✅ RESOLVIDO
 - ~~P1.B2 (EMA) é pré-requisito para outras features de rolling~~ ✅ RESOLVIDO
-- P1.C2 (importância de features) é pré-requisito para votos ponderados com SHAP.
 - P1.B1 (calibração) é pré-requisito conceitual para P1.D3 (Kelly — precisa de probabilidades calibradas).
+- P1.B1 (calibração) deve preceder P1.B5 (H2H) — validar impacto das 106 features antes de adicionar mais.
+- P1.C2 (importância de features) é pré-requisito para votos ponderados com SHAP.
 
 ---
 
@@ -164,11 +172,12 @@ Atualizado com base na revisão completa de código, docs, configs e testes real
   - `src/japredictbet/agents/` - scaffolding vazio (`NotImplementedError`), sem uso.
 - [ ] **P2.C2 - Resolver módulo `probability/` vazio:** Toda lógica de probabilidade Poisson vive em `betting/engine.py`, violando a boundary definida no AGENTS.md (`probability → statistical calculations`). Opções: (a) mover funções Poisson para `probability/`, ou (b) atualizar ARCHITECTURE.md para refletir a realidade.
 - [ ] **P2.C3 - Padronizar linguagem dos comentários:** Código tem mix de português e inglês (engine.py, mvp_pipeline.py). Escolher um idioma e padronizar.
-- [ ] **P2.C4 - Sincronizar documentação contraditória:**
-  - `EXECUTIVE_SUMMARY.md` flagga hardcodes que já foram corrigidos no script.
-  - `VALIDATION_REPORT.md` diz "3 blockers", `PROJECT_CONTEXT.md` diz "100% complete".
-  - `P0_COMPLETION_SUMMARY.md` afirma que hybrid schedule está completo, mas a função não existe no core.
-  - `IMPLEMENTATION_CONSENSUS.md` spec diz 70/30 no core, core não tem.
+- [ ] **P2.C4 - Sincronizar documentação contraditória:** ✅ PARCIALMENTE RESOLVIDO (01-APR-2026)
+  - ✅ `VALIDATION_REPORT.md` reescrito — 3 blockers marcados como resolvidos
+  - ✅ `EXECUTIVE_SUMMARY.md` atualizado — blockers fechados
+  - ✅ `PROJECT_CONTEXT.md` atualizado — status P1 correto
+  - ✅ `MODEL_ARCHITECTURE.md` atualizado — composição correta (10 XGB + 11 LGB + 5 Ridge + 4 ElasticNet)
+  - Restante: verificar se `P0_COMPLETION_SUMMARY.md` e `IMPLEMENTATION_CONSENSUS.md` precisam de ajustes menores.
 
 #### P2-D: Produto (Postergar Sem Bloquear)
 
@@ -198,16 +207,16 @@ Atualizado com base na revisão completa de código, docs, configs e testes real
 
 ---
 
-### Matriz de Maturidade do Projeto (31-MAR-2026)
+### Matriz de Maturidade do Projeto (01-APR-2026)
 
 | Dimensão | Nota | Comentário |
 |----------|------|------------|
 | Arquitetura | 9/10 | Excelente design modular, bem documentada |
-| Implementação | 6/10 | Core funcional mas com bugs críticos (P0-FIX) e gaps (70/30 fora do core) |
-| Documentação | 7/10 | Abrangente mas com inconsistências entre documentos |
-| Testes | 3/10 | ~40% de cobertura, módulos críticos (features, data, models) sem testes |
-| Reprodutibilidade | 6/10 | SHA256 e seeds bons, mas requirements sem pinning |
-| Production-Ready | 5/10 | Script funciona, pipeline core tem bugs e gaps |
+| Implementação | 8/10 | Core funcional, P0-FIX resolvido, P1-A/B(parcial) completos, 106 features |
+| Documentação | 8/10 | Abrangente, revisada e sincronizada (01-APR-2026) |
+| Testes | 5/10 | 87 testes passando (10 arquivos), mas módulos features/data sem cobertura dedicada |
+| Reprodutibilidade | 8/10 | SHA256, seeds, requirements pinados, config-driven |
+| Production-Ready | 7/10 | Pipeline e script experimental sincronizados, calibração (B1) pendente |
 
 ---
 
@@ -218,3 +227,5 @@ Atualizado com base na revisão completa de código, docs, configs e testes real
 | 30-MAR-2026 | Criação do roadmap. P0 encerrado. |
 | 31-MAR-2026 | Revisão completa de código: 26 arquivos Python, 3 configs, 17 docs. Adicionado P0-FIX (3 bugs bloqueantes). Reorganizado P1 em sub-grupos (A-D) por prioridade. Expandido P2 com gaps de testes e limpeza. Adicionado P3 (performance). Adicionada matriz de maturidade. |
 | 31-MAR-2026 | P0-FIX 100% concluído: FIX.1 já estava OK, FIX.2 (`importance.py` multi-model dispatch), FIX.3 (config schema padronizado + validação), FIX.4 (requirements.txt com versões pinadas + requirements-dev.txt). 21 testes passando. |
+| 31-MAR-2026 | P1.A1 (ensemble híbrido), P1.A2 (dynamic margin), P1.A3 (lambda validation), P1.B2 (STD+EMA) implementados. 87 testes passando. |
+| 01-APR-2026 | Consensus script (`consensus_accuracy_report.py`) sincronizado com pipeline principal: agora usa 106 features (STD+EMA+drop_redundant). Documentação completa revisada e atualizada. |
