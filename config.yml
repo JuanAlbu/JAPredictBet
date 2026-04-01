@@ -5,6 +5,8 @@ data:
 
 features:
   rolling_windows: [10, 5]
+  rolling_use_std: true  # P1.B2: Include rolling standard deviation (consistency metric)
+  rolling_use_ema: true  # P1.B2: Include EMA for recent form (time-decay)
 
 model:
   objective: "count:poisson"

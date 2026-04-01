@@ -133,3 +133,107 @@ def add_result_rolling(
         group["_tmp_points"].shift(1).rolling(window).mean()
     )
     return data.drop(columns=["_tmp_win", "_tmp_draw", "_tmp_loss", "_tmp_points"])
+
+
+def add_rolling_std(
+    df: pd.DataFrame,
+    team_col: str,
+    for_col: str,
+    against_col: str,
+    window: int,
+    prefix: str,
+    stat_name: str,
+    season_col: str | None = None,
+) -> pd.DataFrame:
+    """Add rolling standard deviation features for a given stat.
+    
+    Useful for detecting consistency/volatility in a team's performance.
+    High STD indicates inconsistent performance.
+    
+    Args:
+        df: Input DataFrame
+        team_col: Column with team names
+        for_col: Column with team's stat values (e.g., corners for)
+        against_col: Column with opponent's stat values (e.g., corners against)
+        window: Rolling window size
+        prefix: Prefix for generated feature columns (e.g., 'home')
+        stat_name: Name of the stat (e.g., 'corners', 'goals')
+        season_col: Optional season column for grouping
+        
+    Returns:
+        DataFrame with rolling std features appended
+    """
+
+    df = df.copy()
+    if season_col and season_col in df.columns:
+        group = df.groupby([team_col, season_col], sort=False)
+    else:
+        group = df.groupby(team_col, sort=False)
+
+    df[f"{prefix}_{stat_name}_for_std_last{window}"] = (
+        group[for_col].shift(1).rolling(window).std()
+    )
+    df[f"{prefix}_{stat_name}_against_std_last{window}"] = (
+        group[against_col].shift(1).rolling(window).std()
+    )
+    return df
+
+
+def add_rolling_ema(
+    df: pd.DataFrame,
+    team_col: str,
+    for_col: str,
+    against_col: str,
+    window: int,
+    prefix: str,
+    stat_name: str,
+    season_col: str | None = None,
+    alpha: float | None = None,
+) -> pd.DataFrame:
+    """Add exponential moving average (EMA) features.
+    
+    EMA gives more weight to recent games. Useful for capturing current form.
+    By default, alpha is calculated from window: alpha = 2 / (window + 1)
+    (standard EMA formula).
+    
+    Args:
+        df: Input DataFrame
+        team_col: Column with team names
+        for_col: Column with team's stat values
+        against_col: Column with opponent's stat values
+        window: Window size (used to calculate alpha if not provided)
+        prefix: Prefix for generated feature columns
+        stat_name: Name of the stat
+        season_col: Optional season column for grouping
+        alpha: Smoothing factor (0 < alpha <= 1). If None, calculated from window.
+               Higher alpha = more weight to recent observations.
+        
+    Returns:
+        DataFrame with EMA features appended
+    """
+
+    if alpha is None:
+        # Use standard EMA formula: alpha = 2 / (window + 1)
+        alpha = 2.0 / (window + 1)
+    elif not (0 < alpha <= 1):
+        raise ValueError(f"alpha must be in (0, 1], got {alpha}")
+
+    df = df.copy()
+    if season_col and season_col in df.columns:
+        group = df.groupby([team_col, season_col], sort=False)
+    else:
+        group = df.groupby(team_col, sort=False)
+
+    # Helper function to compute EMA after shifting
+    def compute_ema(series):
+        shifted = series.shift(1)
+        return shifted.ewm(alpha=alpha, adjust=False).mean()
+
+    # EMA with automatic handling of NaN values - use transform to preserve index
+    df[f"{prefix}_{stat_name}_for_ema_last{window}"] = group[for_col].transform(
+        compute_ema
+    )
+    df[f"{prefix}_{stat_name}_against_ema_last{window}"] = group[against_col].transform(
+        compute_ema
+    )
+    return df
