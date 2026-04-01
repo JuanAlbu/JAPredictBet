@@ -23,6 +23,7 @@ class FeatureConfig:
     rolling_windows: List[int] = field(default_factory=lambda: [10, 5])
     rolling_use_std: bool = True  # Include rolling standard deviation (P1.B2)
     rolling_use_ema: bool = True  # Include rolling EMA for current form (P1.B2)
+    drop_redundant: bool = True  # Drop highly correlated redundant features
 
     def __post_init__(self) -> None:
         if not isinstance(self.rolling_windows, (list, tuple)) or not self.rolling_windows:

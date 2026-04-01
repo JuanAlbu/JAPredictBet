@@ -22,6 +22,7 @@ from japredictbet.features.rolling import (
     add_stat_rolling,
     add_rolling_std,
     add_rolling_ema,
+    drop_redundant_features,
 )
 from japredictbet.features.team_identity import add_team_target_encoding
 from japredictbet.models.predict import predict_expected_corners
@@ -125,6 +126,10 @@ def run_mvp_pipeline(
         data = _add_total_corners_features(data, window=window)
         data = _add_total_goals_features(data, window=window)
     data["home_advantage"] = 1.0
+
+    # Drop redundant features if enabled
+    if config.features.drop_redundant:
+        data = drop_redundant_features(data, config.features.rolling_windows)
 
     encoding_train_mask, _ = _build_temporal_split(
         data["season"], config.model.random_state

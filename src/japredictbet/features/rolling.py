@@ -237,3 +237,45 @@ def add_rolling_ema(
         compute_ema
     )
     return df
+
+
+def drop_redundant_features(
+    df: pd.DataFrame,
+    rolling_windows: list[int],
+) -> pd.DataFrame:
+    """Drop features identified as redundant by correlation analysis.
+
+    Removes:
+    1. wins_last{N} — perfectly correlated with win_rate_last{N} (r=1.0)
+    2. points_last{N} — perfectly correlated with points_per_game_last{N} (r=1.0)
+    3. EMA with largest window — EMA_last10 ↔ EMA_last5 (r>0.92)
+       Keeps EMA with smallest window (most reactive to recent form).
+
+    Args:
+        df: DataFrame with all features already computed.
+        rolling_windows: List of windows used (e.g. [10, 5]).
+
+    Returns:
+        DataFrame with redundant columns dropped.
+    """
+    to_drop = []
+    for window in rolling_windows:
+        for prefix in ("home", "away"):
+            # wins/points are redundant with their rate/per_game variants
+            to_drop.append(f"{prefix}_wins_last{window}")
+            to_drop.append(f"{prefix}_points_last{window}")
+
+    # Drop EMA with larger windows (keep smallest only)
+    if len(rolling_windows) > 1:
+        smallest_window = min(rolling_windows)
+        larger_windows = [w for w in rolling_windows if w != smallest_window]
+        for window in larger_windows:
+            to_drop.extend(
+                col for col in df.columns
+                if "_ema_last" in col and col.endswith(f"_last{window}")
+            )
+
+    existing = [c for c in to_drop if c in df.columns]
+    if existing:
+        df = df.drop(columns=existing)
+    return df

@@ -2,8 +2,8 @@
 
 **Data da Revisao:** 31 de Março, 2026
 **Revisao Anterior:** 30-MAR-2026
-**Status Geral:** P0-FIX 100% CONCLUÍDO (todos os 4 bugs críticos corrigidos em 31-MAR-2026). P1 em execução.
-**Proxima Acao:** Executar P1 (iniciar por P1-A: Integridade do Pipeline).
+**Status Geral:** P0-FIX 100% CONCLUÍDO. P1-A 100% CONCLUÍDO. P1-B parcialmente concluído (B2-B4 prontos, B1 pendente).
+**Proxima Acao:** Executar P1-B1 (Calibração), depois P1-C e P1-D.
 
 ---
 
@@ -69,22 +69,43 @@ Atualizado com base na revisão completa de código, docs, configs e testes real
   - **Critério de Saída Atendido:** Todos os 30 modelos (21+9) treinam sem erro, ensemble discovers e carrega corretamente
   - **Pr Nota:** Branch `feature/p1a-ensemble` pronto para criar
 
-- [ ] **P1.A2 - Centralizar dynamic margin rule no `engine.py`** (Ready to Start - 3h estimate)
-  - A regra de margem dinâmica (threshold +50% quando `|λ - line| < 0.5`) está implementada apenas no script (L545-548). O `ConsensusEngine` em `betting/engine.py` tem valores hardcoded (`tight_margin_threshold=0.5`, `tight_margin_consensus=0.50`) mas a lógica deveria ser configurável via `config.yml`.
-  - **Ação:** Parametrizar `tight_margin_threshold` e `tight_margin_consensus` no config e no `ConsensusEngine`.
-  - **Bloqueador:** None - pode começar após P1.A1 completo
+- [x] **P1.A2 - Centralizar dynamic margin rule no `engine.py`** ✅ COMPLETO (31-MAR-2026)
+  - `tight_margin_threshold` e `tight_margin_consensus` adicionados ao `ValueConfig` em config.py
+  - `ConsensusEngine.__init__()` aceita e armazena estes parâmetros como variáveis de instância
+  - `_compute_dynamic_threshold()` usa variáveis de instância em vez de defaults hardcoded
+  - `config.yml` atualizado com os novos campos
+  - `mvp_pipeline.py` passa valores do config para o engine
+  - 8 testes unitários + 4 cenários de integração — todos passando
 
-- [ ] **P1.A3 - Validar lambda values no `engine.py`** (Ready to Start - 1.5h estimate)
-  - Valores de λ extraídos dos modelos não são validados. NaN ou Inf propagam silenciosamente nos cálculos de probabilidade Poisson.
-  - **Ação:** Adicionar guard `if not np.isfinite(lambda_total)` antes dos cálculos.
-  - **Bloqueador:** None - pode começar após P1.A1 completo
+- [x] **P1.A3 - Validar lambda values no `engine.py`** ✅ COMPLETO (31-MAR-2026)
+  - `_validate_lambda()` adicionada com guard `np.isfinite()` e λ ≥ 0
+  - Integrada em `_extract_lambda_total()`, `report_consensus()`, `evaluate_with_consensus()`
+  - 26 testes unitários + 5 cenários de integração — todos passando
+
+**✅ P1-A 100% CONCLUÍDO — 77 testes totais passando.**
 
 #### P1-B: Evolução de Features (Prioridade Alta)
 
 - [ ] **P1.B1 - Calibração de Probabilidades (Brier/ECE):** Garantir aderência entre a probabilidade prevista e a frequência real dos resultados. (antigo P1.1)
-- [ ] **P1.B2 - Rolling Features (Curto Prazo, Volatilidade e EMA):** Adicionar janelas de 3 e 5 jogos, incluir desvio padrão (STD) dos cantos e incorporar Time-Decay EMA para dar mais peso a jogos recentes. (antigo P1.2)
-- [ ] **P1.B3 - Recorde de Momento e Contexto de Jogo:** Consolidar métrica de recorde (V-E-D) e adicionar features de "game state" para capturar o comportamento tático. (antigo P1.3)
-- [ ] **P1.B4 - H2H e Cross-Features:** Adicionar média de cantos dos últimos 3 confrontos diretos (H2H) e criar features cruzadas entre ataque e defesa. (antigo P1.4)
+  - **Status:** NÃO INICIADO — Nenhuma implementação de Brier Score ou ECE encontrada no codebase.
+  - **Próximo passo prioritário dentro de P1.**
+
+- [x] **P1.B2 - Rolling Features (Curto Prazo, Volatilidade e EMA)** ✅ COMPLETO (31-MAR-2026)
+  - `add_rolling_std()` em rolling.py — desvio padrão rolling por equipe/temporada
+  - `add_rolling_ema()` em rolling.py — EMA com alpha configurável (α = 2/(window+1))
+  - Flags `rolling_use_std` e `rolling_use_ema` em FeatureConfig e config.yml
+  - Pipeline chama condicionalmente via `_add_rolling_std_features()` e `_add_rolling_ema_features()`
+  - 11 testes unitários — todos passando
+
+- [x] **P1.B3 - Recorde de Momento e Contexto de Jogo** ✅ JÁ IMPLEMENTADO
+  - `add_result_rolling()` em rolling.py gera: wins, draws, losses, win_rate, points (rolling por janela)
+  - Integrado no pipeline via `_add_result_rolling_features()`
+  - **Nota:** Verificado no codebase — feature já existia antes desta sessão.
+
+- [x] **P1.B4 - H2H e Cross-Features** ✅ JÁ IMPLEMENTADO
+  - `add_matchup_features()` em matchup.py gera: home_attack_vs_away_defense, corners_pressure_index, diffs
+  - Cross-features ataque×defesa + features de diferença (corners, shots, fouls, cards)
+  - **Nota:** Verificado no codebase — feature já existia antes desta sessão.
 
 #### P1-C: Otimização e Análise (Prioridade Média)
 
@@ -94,16 +115,19 @@ Atualizado com base na revisão completa de código, docs, configs e testes real
 
 #### P1-D: Value e Risco (Prioridade Média-Baixa)
 
-- [ ] **P1.D1 - Refino do Value Bet Engine:** Padronizar o cálculo de EV como `(Probabilidade * Odd) - 1`. (antigo P1.8)
+- [x] **P1.D1 - Refino do Value Bet Engine** ✅ JÁ IMPLEMENTADO
+  - Fórmula `expected_value()` em engine.py: `(p_model * (odds - 1)) - (1 - p_model)`
+  - Uso consistente em `evaluate_bet()` e toda lógica de consensus. (antigo P1.8)
 - [ ] **P1.D2 - Auditoria de CLV (Closing Line Value):** Comparar a odd de entrada com a de fechamento para medir a qualidade do preço obtido. Completar TODO pendente em `docs/VALIDATION.md`. (antigo P1.9)
 - [ ] **P1.D3 - Gestão de Risco (Kelly, Drawdown, Slippage):** Implementar staking com Quarter Kelly, simular drawdowns com Monte Carlo e aplicar stress tests de slippage. Completar validação de ROI temporal (500 Monte Carlo runs) pendente em VALIDATION.md. (antigo P1.10)
 
-**Dependências Críticas:**
-- P0-FIX.1 (hybrid schedule) é **pré-requisito** para P1.A1 (portar 70/30 para core).
-- P0-FIX.2 (importance multi-model) é **pré-requisito** para P1.C2 (SHAP ponderado).
-- P0-FIX.4 (pin versões) é **pré-requisito** de reprodutibilidade para qualquer experimento P1.
-- P1.B2 (EMA) é pré-requisito para outras features de rolling.
+**Dependências Críticas (Atualizadas):**
+- ~~P0-FIX.1 (hybrid schedule) é pré-requisito para P1.A1~~ ✅ RESOLVIDO
+- ~~P0-FIX.2 (importance multi-model) é pré-requisito para P1.C2~~ ✅ RESOLVIDO
+- ~~P0-FIX.4 (pin versões) é pré-requisito de reprodutibilidade~~ ✅ RESOLVIDO
+- ~~P1.B2 (EMA) é pré-requisito para outras features de rolling~~ ✅ RESOLVIDO
 - P1.C2 (importância de features) é pré-requisito para votos ponderados com SHAP.
+- P1.B1 (calibração) é pré-requisito conceitual para P1.D3 (Kelly — precisa de probabilidades calibradas).
 
 ---
 
