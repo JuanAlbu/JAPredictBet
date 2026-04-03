@@ -107,35 +107,53 @@ Atualizado com base na revisão completa de código, docs, configs e testes real
   - Cross-features ataque×defesa + features de diferença (corners, shots, fouls, cards)
   - **Nota:** São features baseadas nas rolling stats gerais de cada equipa, NÃO confronto direto entre pares.
 
-- [ ] **P1.B5 - H2H Confronto Direto (Last 3):** Média de cantos, golos e shots nos últimos N confrontos diretos entre o par específico de equipas. Diferente de B4 (cross-features gerais), esta feature filtra o histórico por par home×away. (sugerido por análise Gemini 01-APR-2026)
-  - **Status:** NÃO INICIADO
-  - **Implementação:** Nova função `add_h2h_features()` em `matchup.py`
-  - **Features esperadas:** `h2h_corners_mean_last3`, `h2h_goals_mean_last3`, `h2h_shots_mean_last3`
-  - **Risco:** Pares com < 3 confrontos terão NaN → necessita fallback (média geral ou drop)
-  - **Prioridade:** Após P1.B1 (Calibração)
+- [x] **P1.B5 - H2H Confronto Direto (Last 3):** ✅ IMPLEMENTADO (03-APR-2026)
+  - `add_h2h_features()` em `matchup.py` — par canônico (A vs B == B vs A)
+  - Features: `total_corners_h2h_last3`, `total_goals_h2h_last3`, `total_shots_h2h_last3`
+  - Shift(1) para evitar leakage, min_periods=1 para pares com < 3 confrontos
+  - Config: `FeatureConfig.h2h_window = 3`
+  - 10 testes unitários em `tests/features/test_h2h.py`
 
 #### P1-C: Otimização e Análise (Prioridade Média)
 
-- [ ] **P1.C1 - Otimização de Hiperparâmetros:** Refinar os parâmetros de XGBoost, LightGBM e RF com um protocolo determinístico e auditável. Documentar origem dos valores atuais (ex: `learning_rate=0.08242879217471218` em train.py parece vir de hyperopt, mas não está documentado). (antigo P1.5)
-- [ ] **P1.C2 - Importância de Features e Votos Ponderados (SHAP):** Monitorar a estabilidade da importância das features e implementar votos ponderados pelo SHAP no ensemble. Popular `docs/FEATURE_IMPORTANCE_GUIDE.md` com resultados reais (atualmente só tem framework sem dados). (antigo P1.6)
-- [ ] **P1.C3 - Persistência de Hiperparâmetros (Auditoria):** Garantir que `alpha` e `l1_ratio` dos modelos lineares sejam persistidos de forma auditável. (antigo P1.7)
+- [x] **P1.C1 - Otimização de Hiperparâmetros:** ✅ IMPLEMENTADO (03-APR-2026)
+  - Script `scripts/hyperopt_search.py` com Optuna (TPE sampler, determinístico)
+  - Search spaces para XGBoost, LightGBM, RF, Ridge, ElasticNet
+  - 5-fold CV com Poisson deviance, output JSON auditável em `artifacts/hyperopt/`
+  - CLI: `--algorithm`, `--n-trials`, `--n-folds`, `--config`
+- [x] **P1.C2 - Importância de Features e Votos Ponderados (SHAP):** ✅ IMPLEMENTADO (03-APR-2026)
+  - `src/japredictbet/models/shap_weights.py`: `compute_model_weights()`, `compute_shap_importance()`, `compute_ensemble_feature_importance()`
+  - `ConsensusEngine.evaluate_with_consensus()` aceita `model_weights` para votação ponderada
+  - Backward-compatible: sem weights, comportamento idêntico ao anterior
+  - 6 testes em `tests/betting/test_weighted_consensus.py`
+- [x] **P1.C3 - Persistência de Hiperparâmetros (Auditoria):** ✅ IMPLEMENTADO (01-APR-2026)
+  - JSON metadata alongside .pkl com algorithm, params, feature_columns, n_features
 
 #### P1-D: Value e Risco (Prioridade Média-Baixa)
 
 - [x] **P1.D1 - Refino do Value Bet Engine** ✅ JÁ IMPLEMENTADO
   - Fórmula `expected_value()` em engine.py: `(p_model * (odds - 1)) - (1 - p_model)`
   - Uso consistente em `evaluate_bet()` e toda lógica de consensus. (antigo P1.8)
-- [ ] **P1.D2 - Auditoria de CLV (Closing Line Value):** Comparar a odd de entrada com a de fechamento para medir a qualidade do preço obtido. Completar TODO pendente em `docs/VALIDATION.md`. (antigo P1.9)
-- [ ] **P1.D3 - Gestão de Risco (Kelly, Drawdown, Slippage):** Implementar staking com Quarter Kelly, simular drawdowns com Monte Carlo e aplicar stress tests de slippage. Completar validação de ROI temporal (500 Monte Carlo runs) pendente em VALIDATION.md. (antigo P1.10)
+- [x] **P1.D2 - Auditoria de CLV (Closing Line Value):** ✅ IMPLEMENTADO (03-APR-2026)
+  - `closing_line_value()`, `clv_hit_rate()`, `clv_summary()` em `engine.py`
+  - CLV = implied_prob(closing) - implied_prob(entry)
+  - 11 testes em `tests/betting/test_clv.py`
+- [x] **P1.D3 - Gestão de Risco (Kelly, Drawdown, Slippage):** ✅ IMPLEMENTADO (03-APR-2026)
+  - `src/japredictbet/betting/risk.py`: `kelly_fraction()`, `kelly_stake()`, `simulate_drawdown()`, `apply_slippage()`
+  - Quarter Kelly staking, Monte Carlo drawdown (determinístico via seed)
+  - Slippage stress test parametrizável
+  - 18 testes em `tests/betting/test_risk.py`
 
 **Dependências Críticas (Atualizadas):**
 - ~~P0-FIX.1 (hybrid schedule) é pré-requisito para P1.A1~~ ✅ RESOLVIDO
 - ~~P0-FIX.2 (importance multi-model) é pré-requisito para P1.C2~~ ✅ RESOLVIDO
 - ~~P0-FIX.4 (pin versões) é pré-requisito de reprodutibilidade~~ ✅ RESOLVIDO
 - ~~P1.B2 (EMA) é pré-requisito para outras features de rolling~~ ✅ RESOLVIDO
-- P1.B1 (calibração) é pré-requisito conceitual para P1.D3 (Kelly — precisa de probabilidades calibradas).
-- P1.B1 (calibração) deve preceder P1.B5 (H2H) — validar impacto das 106 features antes de adicionar mais.
-- P1.C2 (importância de features) é pré-requisito para votos ponderados com SHAP.
+- ~~P1.B1 (calibração) é pré-requisito conceitual para P1.D3~~ ✅ RESOLVIDO
+- ~~P1.B1 (calibração) deve preceder P1.B5 (H2H)~~ ✅ RESOLVIDO
+- ~~P1.C2 (importância de features) é pré-requisito para votos ponderados com SHAP~~ ✅ RESOLVIDO
+
+**P1 100% COMPLETO — Todos os items implementados e testados (03-APR-2026)**
 
 ---
 

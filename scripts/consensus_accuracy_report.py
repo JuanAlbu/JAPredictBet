@@ -26,7 +26,7 @@ from japredictbet.config import (
 )
 from japredictbet.data.ingestion import load_historical_dataset
 from japredictbet.features.elo import EloConfig, add_elo_ratings
-from japredictbet.features.matchup import add_matchup_features
+from japredictbet.features.matchup import add_h2h_features, add_matchup_features
 from japredictbet.features.rolling import (
     add_result_rolling,
     add_rolling_ema,
@@ -493,6 +493,9 @@ def main() -> None:
         data = add_matchup_features(data, window=window)
         data = _add_total_corners_features(data, window=window)
         data = _add_total_goals_features(data, window=window)
+
+    # P1.B5: Head-to-head features
+    data = add_h2h_features(data, h2h_window=cfg.features.h2h_window)
     data["home_advantage"] = 1.0
     if cfg.features.drop_redundant:
         data = drop_redundant_features(data, rolling_windows)

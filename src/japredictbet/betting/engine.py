@@ -2,7 +2,7 @@
 
 import logging
 import math
-from typing import Dict, Iterable, Optional
+from typing import Dict, Iterable, Optional, Sequence
 
 import numpy as np
 from scipy.stats import poisson
@@ -110,6 +110,67 @@ def expected_value(p_model: float, odds: float) -> float:
     EV esperado da aposta
     """
     return (p_model * (odds - 1)) - (1 - p_model)
+
+
+# =========================
+# CLV (P1.D2)
+# =========================
+
+
+def closing_line_value(entry_odds: float, closing_odds: float) -> float:
+    """Compute Closing Line Value.
+
+    CLV = implied_prob(closing) - implied_prob(entry).
+    Positive CLV means the bettor captured better odds than the closing line.
+
+    Args:
+        entry_odds: Decimal odds at the time of bet placement.
+        closing_odds: Decimal odds at market close.
+
+    Returns:
+        CLV as a probability difference (positive = beat the close).
+    """
+    return implied_probability(closing_odds) - implied_probability(entry_odds)
+
+
+def clv_hit_rate(clv_values: Sequence[float]) -> float:
+    """Compute the fraction of bets that beat the closing line (CLV >= 0).
+
+    Args:
+        clv_values: Sequence of CLV values from placed bets.
+
+    Returns:
+        Hit rate in [0, 1]. Returns 0.0 for empty input.
+    """
+    if not clv_values:
+        return 0.0
+    positives = sum(1 for v in clv_values if v >= 0)
+    return positives / len(clv_values)
+
+
+def clv_summary(clv_values: Sequence[float]) -> Dict:
+    """Compute CLV audit summary statistics.
+
+    Args:
+        clv_values: Sequence of CLV values from placed bets.
+
+    Returns:
+        Dict with mean_clv, median_clv, hit_rate, n_bets.
+    """
+    if not clv_values:
+        return {
+            "mean_clv": 0.0,
+            "median_clv": 0.0,
+            "hit_rate": 0.0,
+            "n_bets": 0,
+        }
+    arr = np.array(clv_values, dtype=float)
+    return {
+        "mean_clv": float(arr.mean()),
+        "median_clv": float(np.median(arr)),
+        "hit_rate": clv_hit_rate(clv_values),
+        "n_bets": len(clv_values),
+    }
 
 
 # =========================
@@ -412,6 +473,7 @@ class ConsensusEngine:
         predictions_list: Iterable[Dict],
         odds_data: Dict,
         threshold: float = 0.45,
+        model_weights: Sequence[float] | None = None,
     ) -> Dict:
         """Evaluate whether a bet is safe using model consensus.
 
@@ -424,6 +486,9 @@ class ConsensusEngine:
                 Market payload with ``line``, ``odds`` and optional ``type``.
             threshold:
                 Base consensus ratio required to confirm the bet (may be adjusted dynamically).
+            model_weights:
+                Optional per-model weights for weighted voting (P1.C2 SHAP).
+                If None, all models vote with equal weight.
 
         Returns:
             Dict with voting distribution, agreement and final decision.
@@ -474,8 +539,19 @@ class ConsensusEngine:
         threshold_to_use = dynamic_threshold
 
         total_models = len(model_votes)
-        positive_votes = int(sum(model_votes))
-        agreement = positive_votes / total_models if total_models else 0.0
+
+        # P1.C2: Weighted voting when model_weights are provided
+        if model_weights is not None and len(model_weights) == total_models:
+            weighted_positive = sum(
+                w * v for w, v in zip(model_weights, model_votes)
+            )
+            total_weight = sum(model_weights)
+            agreement = weighted_positive / total_weight if total_weight > 0 else 0.0
+            positive_votes = int(sum(model_votes))  # raw count for reporting
+        else:
+            positive_votes = int(sum(model_votes))
+            agreement = positive_votes / total_models if total_models else 0.0
+
         should_place_bet = agreement >= threshold_to_use
 
         status_message = (
@@ -547,6 +623,7 @@ class ConsensusEngine:
         predictions_list: Iterable[Dict],
         odds_data: Dict,
         threshold: float = 0.7,
+        model_weights: Sequence[float] | None = None,
     ) -> Dict:
         """Alias explicito para integracao com pipeline/backtest."""
 
@@ -554,6 +631,7 @@ class ConsensusEngine:
             predictions_list=predictions_list,
             odds_data=odds_data,
             threshold=threshold,
+            model_weights=model_weights,
         )
 
 

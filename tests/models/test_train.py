@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import json
 import pytest
+import tempfile
+from pathlib import Path
 
 from japredictbet.models.train import (
     _build_ensemble_schedule,
     _build_hybrid_ensemble_schedule,
     build_variation_params,
     _build_model_filename,
+    save_ensemble_models,
+    TrainedModels,
+    EnsembleModelSpec,
 )
 
 
@@ -141,3 +147,89 @@ class TestModelFilenames:
         
         assert "ridge_model_1" in name_0
         assert "ridge_model_2" in name_1
+
+
+class TestHyperparameterPersistence:
+    """Tests for P1.C3: JSON metadata saved alongside .pkl files."""
+
+    def _make_dummy_model(self, features=("feat_a", "feat_b")):
+        """Create a minimal TrainedModels for testing."""
+        return TrainedModels(
+            home_model="dummy_home",
+            away_model="dummy_away",
+            feature_columns=tuple(features),
+        )
+
+    def _make_spec(self, algorithm="xgboost", variation=0, seed=42):
+        """Create a minimal EnsembleModelSpec for testing."""
+        params = build_variation_params(algorithm, variation)
+        name = _build_model_filename(algorithm, variation)
+        return EnsembleModelSpec(
+            algorithm=algorithm,
+            variation_index=variation,
+            random_state=seed,
+            model_name=name,
+            params=params,
+        )
+
+    def test_json_metadata_created(self):
+        """save_ensemble_models should create .json alongside .pkl."""
+        model = self._make_dummy_model()
+        spec = self._make_spec("ridge", 0, 42)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            save_ensemble_models([model], [spec], tmpdir)
+            pkl_path = Path(tmpdir) / spec.model_name
+            json_path = pkl_path.with_suffix(".json")
+
+            assert pkl_path.exists(), "PKL file should exist"
+            assert json_path.exists(), "JSON metadata file should exist"
+
+    def test_json_contains_required_fields(self):
+        """JSON metadata should contain algorithm, params, features."""
+        model = self._make_dummy_model(("corner_for_last10", "elo_rating"))
+        spec = self._make_spec("elasticnet", 2, 100)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            save_ensemble_models([model], [spec], tmpdir)
+            json_path = (Path(tmpdir) / spec.model_name).with_suffix(".json")
+
+            with open(json_path, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+
+            assert meta["algorithm"] == "elasticnet"
+            assert meta["variation_index"] == 2
+            assert meta["random_state"] == 100
+            assert "params" in meta
+            assert "alpha" in meta["params"]
+            assert "l1_ratio" in meta["params"]
+            assert meta["feature_columns"] == ["corner_for_last10", "elo_rating"]
+            assert meta["n_features"] == 2
+
+    def test_json_for_all_ensemble_members(self):
+        """All 3 models should get JSON metadata."""
+        models = [self._make_dummy_model() for _ in range(3)]
+        specs = [
+            self._make_spec("xgboost", 0, 42),
+            self._make_spec("lightgbm", 0, 43),
+            self._make_spec("ridge", 0, 44),
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            save_ensemble_models(models, specs, tmpdir)
+            json_files = list(Path(tmpdir).glob("*.json"))
+            assert len(json_files) == 3
+
+    def test_json_is_valid_json(self):
+        """JSON file should be parseable."""
+        model = self._make_dummy_model()
+        spec = self._make_spec("xgboost", 0)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            save_ensemble_models([model], [spec], tmpdir)
+            json_path = (Path(tmpdir) / spec.model_name).with_suffix(".json")
+
+            with open(json_path, "r", encoding="utf-8") as f:
+                meta = json.load(f)  # Should not raise
+
+            assert isinstance(meta, dict)

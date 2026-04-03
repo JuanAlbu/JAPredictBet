@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import pickle
 from dataclasses import dataclass
 from pathlib import Path
@@ -165,7 +166,11 @@ def save_ensemble_models(
     specs: list[EnsembleModelSpec],
     output_dir: Path | str,
 ) -> list[Path]:
-    """Persist trained ensemble members to disk with standard names."""
+    """Persist trained ensemble members to disk with standard names.
+    
+    Each model is saved as a .pkl file alongside a .json metadata file
+    containing auditable hyperparameters (P1.C3).
+    """
 
     if len(models) != len(specs):
         raise ValueError("models and specs must have the same length.")
@@ -180,7 +185,32 @@ def save_ensemble_models(
             pickle.dump(model, handle)
         saved_paths.append(output_path)
 
+        # P1.C3: Save auditable hyperparameter metadata as JSON
+        meta_path = output_path.with_suffix(".json")
+        metadata = {
+            "algorithm": spec.algorithm,
+            "variation_index": spec.variation_index,
+            "random_state": spec.random_state,
+            "model_name": spec.model_name,
+            "params": _serialize_params(spec.params),
+            "feature_columns": list(model.feature_columns),
+            "n_features": len(model.feature_columns),
+        }
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(metadata, f, indent=2, ensure_ascii=False)
+
     return saved_paths
+
+
+def _serialize_params(params: dict[str, Any]) -> dict[str, Any]:
+    """Serialize model params to JSON-safe types."""
+    result = {}
+    for k, v in params.items():
+        if isinstance(v, (int, float, str, bool, type(None))):
+            result[k] = v
+        else:
+            result[k] = str(v)
+    return result
 
 
 def train_and_save_ensemble(

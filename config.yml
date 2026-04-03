@@ -8,6 +8,7 @@ features:
   rolling_use_std: true  # P1.B2: Include rolling standard deviation (consistency metric)
   rolling_use_ema: true  # P1.B2: Include EMA for recent form (time-decay)
   drop_redundant: true  # Drop wins/points (keep win_rate/points_per_game) + EMA window10 (keep window5)
+  h2h_window: 3  # P1.B5: Head-to-head last N meetings
 
 model:
   objective: "count:poisson"

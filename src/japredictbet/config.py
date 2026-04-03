@@ -24,6 +24,7 @@ class FeatureConfig:
     rolling_use_std: bool = True  # Include rolling standard deviation (P1.B2)
     rolling_use_ema: bool = True  # Include rolling EMA for current form (P1.B2)
     drop_redundant: bool = True  # Drop highly correlated redundant features
+    h2h_window: int = 3  # Head-to-head last N meetings (P1.B5)
 
     def __post_init__(self) -> None:
         if not isinstance(self.rolling_windows, (list, tuple)) or not self.rolling_windows:

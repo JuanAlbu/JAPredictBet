@@ -16,7 +16,7 @@ from japredictbet.betting import engine
 from japredictbet.config import PipelineConfig
 from japredictbet.data.ingestion import load_historical_dataset
 from japredictbet.features.elo import EloConfig, add_elo_ratings
-from japredictbet.features.matchup import add_matchup_features
+from japredictbet.features.matchup import add_h2h_features, add_matchup_features
 from japredictbet.features.rolling import (
     add_result_rolling,
     add_stat_rolling,
@@ -125,6 +125,9 @@ def run_mvp_pipeline(
         data = add_matchup_features(data, window=window)
         data = _add_total_corners_features(data, window=window)
         data = _add_total_goals_features(data, window=window)
+
+    # P1.B5: Head-to-head features (computed once, not per window)
+    data = add_h2h_features(data, h2h_window=config.features.h2h_window)
     data["home_advantage"] = 1.0
 
     # Drop redundant features if enabled

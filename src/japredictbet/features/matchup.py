@@ -2,7 +2,57 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
+
+
+def add_h2h_features(df: pd.DataFrame, h2h_window: int = 3) -> pd.DataFrame:
+    """Add head-to-head features from last N meetings between the same pair.
+
+    For each match, looks up previous encounters between the same two teams
+    (regardless of venue) and computes rolling averages of match totals.
+
+    Args:
+        df: DataFrame with columns home_team, away_team, and raw match stats.
+        h2h_window: Number of past H2H meetings to average over.
+
+    Returns:
+        DataFrame with new H2H feature columns.
+    """
+    df = df.copy()
+
+    # Canonical pair key (alphabetical order so A-vs-B == B-vs-A)
+    team_a = df["home_team"].values
+    team_b = df["away_team"].values
+    pair_key = np.where(
+        team_a < team_b,
+        team_a + " vs " + team_b,
+        team_b + " vs " + team_a,
+    )
+    df["_h2h_pair"] = pair_key
+
+    suffix = f"_h2h_last{h2h_window}"
+
+    stat_pairs = [
+        ("home_corners", "away_corners", f"total_corners{suffix}"),
+        ("home_goals", "away_goals", f"total_goals{suffix}"),
+        ("home_shots", "away_shots", f"total_shots{suffix}"),
+    ]
+
+    for home_col, away_col, feature_name in stat_pairs:
+        if home_col in df.columns and away_col in df.columns:
+            total = df[home_col] + df[away_col]
+            # Shift by 1 to exclude current match, then rolling mean
+            df[feature_name] = (
+                total
+                .groupby(df["_h2h_pair"])
+                .transform(
+                    lambda x: x.shift(1).rolling(h2h_window, min_periods=1).mean()
+                )
+            )
+
+    df.drop(columns=["_h2h_pair"], inplace=True)
+    return df
 
 
 def add_matchup_features(df: pd.DataFrame, window: int) -> pd.DataFrame:

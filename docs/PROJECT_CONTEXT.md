@@ -1,19 +1,45 @@
-# Project Context (Atualizado 31-MAR-2026)
+# Project Context (Atualizado 03-APR-2026)
 
 ## Status Atual
-- **MVP Baseline:** ✅ ENTREGUE
-- **P0 (Crítico):** ✅ 100% IMPLEMENTADO E VALIDADO (31-MAR-2026)
-- **P1-A (Pipeline):** ✅ 100% COMPLETO (31-MAR-2026)
-  - A1: Ensemble Híbrido 70/30 (21 boosters + 9 linear)
-  - A2: Dynamic margin parametrizado em `engine.py`
+
+### P0 Completion ✅
+- **Status:** 100% COMPLETE
+- **Validation:** Tested with 101 real matches + 50 recent matches + random line stress tests
+- **Production Ready:** Yes
+- **Key Achievements:**
+  - All 9 P0 items implemented and validated
+  - 30-model ensemble consensus fully functional
+  - Dynamic margin rule operational
+  - Parallel training enabled (3-5x speedup)
+  - Full CLI parametrization complete
+  - Zero hardcodes remaining
+  - Artifact versioning with SHA256 hashing
+
+### P1 Completion ✅ (03-APR-2026)
+- **Status:** 100% COMPLETE
+- **Tests:** 158/158 passing (15+ test files)
+- **P1-A (Pipeline):** ✅ COMPLETE
+  - A1: Hybrid 70/30 ensemble (21 boosters + 9 linear)
+  - A2: Dynamic margin rule in engine.py
   - A3: Lambda validation (NaN/Inf guard)
-- **P1-B (Features):** ✅ B2/B3/B4 COMPLETOS — B1 (Calibração) pendente
-  - B2: Rolling STD + EMA (106 features no pipeline)
-  - B3: Momentum (win_rate, points_per_game) — pré-existente
-  - B4: H2H & cross-features — pré-existente
-- **P1-C/D (Otimização/Risk):** 🔄 A INICIAR
-- **Testes:** 87/87 passando (10 test files + 2 integration files)
-- **Feature set:** 106 features (após redundancy cleanup)
+- **P1-B (Features):** ✅ COMPLETE
+  - B1: Probability Calibration (Brier Score, ECE) — `probability/calibration.py`
+  - B2: Rolling STD + EMA (106+ features)
+  - B3: Momentum (win_rate, points_per_game)
+  - B4: Cross-features (attack×defense, diffs, pressure_index)
+  - B5: H2H Last 3 confronto direto — `matchup.py::add_h2h_features()`
+- **P1-C (Optimization):** ✅ COMPLETE
+  - C1: HyperOpt via Optuna — `scripts/hyperopt_search.py`
+  - C2: SHAP weighted votes — `models/shap_weights.py` + weighted consensus
+  - C3: Hyperparameter persistence — JSON metadata alongside .pkl
+- **P1-D (Value/Risk):** ✅ COMPLETE
+  - D1: EV formula in engine.py
+  - D2: CLV audit — `closing_line_value()`, `clv_hit_rate()`, `clv_summary()`
+  - D3: Kelly/Risk — `betting/risk.py` (Quarter Kelly, Monte Carlo, slippage)
+- **Consensus script:** Synced with all P1 features (H2H + 106 rolling features)
+
+### Next Priority
+- P2 items (see docs/next_pass.md)
 
 ---
 

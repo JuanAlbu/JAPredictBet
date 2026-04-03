@@ -64,6 +64,7 @@ Includes:
 
 - rolling statistics
 - matchup interaction features
+- H2H (Head-to-Head) statistics
 - team strength (ELO ratings)
 - team identity features
 
@@ -80,7 +81,7 @@ Each trained member keeps the two-model architecture:
 - one regressor for `lambda_away`
 
 For consensus mode, training supports automated artifact generation with
-standardized names:
+standardized names.
 
 **Booster Models (21 models = 70%):**
 - `xgb_model_1.pkl` to `xgb_model_10.pkl`
@@ -99,6 +100,9 @@ are configured with Poisson-ready count objectives (`count:poisson` for XGBoost,
 `poisson` for LightGBM). Linear models 
 (Ridge, ElasticNet) use variable regularization (alpha, l1_ratio) for ensemble
 diversity.
+
+As of P1, each saved model (`.pkl`) is accompanied by a `.json` metadata file,
+which includes the exact hyperparameters used, providing full auditability (P1.C3).
 
 ---
 
@@ -140,6 +144,9 @@ Responsibilities:
 5. Confirm bet only when agreement reaches a configurable threshold.
 6. Emit audit fields such as vote distribution, individual votes, and explicit decision status.
 
+As of P1, the consensus engine also supports **weighted voting** based on model quality
+(see SHAP-based Model Weighting below).
+
 Example audit output:
 
 - `21/30 modelos concordam`
@@ -154,6 +161,50 @@ which generates:
 - lambda-range distribution
 - vote count and agreement
 - formatted conclusion block used for backtest logs
+
+---
+
+# P1 Architectural Enhancements
+
+P1 introduced several new components to improve model performance, auditability, and risk assessment.
+
+## Hyperparameter Optimization (`scripts/hyperopt_search.py`)
+
+- **Purpose:** Find optimal hyperparameters for all model types in the ensemble.
+- **Technology:** Uses Optuna with a Tree-structured Parzen Estimator (TPE) sampler for efficient search.
+- **Process:** Runs K-fold cross-validation, minimizing Poisson deviance. The process is deterministic and auditable.
+- **Output:** JSON artifacts with the best parameter set for each algorithm.
+
+## SHAP-based Model Weighting (`models/shap_weights.py`)
+
+- **Purpose:** Assign weights to ensemble members based on their quality, allowing better models to have a stronger influence on the final consensus.
+- **Methodology:**
+    1. For each model, calculate the mean absolute SHAP values for a sample of the training data.
+    2. The sum of these values represents the model's overall feature attribution capability.
+    3. This "quality score" is used to compute a weight for the model.
+- **Integration:** The `ConsensusEngine` can use these weights to perform a weighted vote, rather than a simple majority vote.
+
+## Probability Calibration (`probability/calibration.py`)
+
+- **Purpose:** Measure how well the model's predicted probabilities match the real-world frequencies of outcomes. This is critical for reliable staking.
+- **Metrics:**
+    - **Brier Score:** Mean squared error between predicted probabilities and outcomes.
+    - **Expected Calibration Error (ECE):** Measures the gap between confidence and accuracy.
+- **Output:** A calibration report that helps validate if the model's probabilities are trustworthy.
+
+## Closing Line Value (CLV) Auditing (`betting/engine.py`)
+
+- **Purpose:** Measure the quality of the odds captured by the system.
+- **Methodology:** Compares the implied probability of the odds at bet placement (`entry_odds`) with the odds at market close (`closing_odds`).
+- **Metric:** `CLV = implied_prob(closing) - implied_prob(entry)`. A positive CLV indicates the system "beat the closing line," which is a strong indicator of a sophisticated betting strategy.
+
+## Risk Management (`betting/risk.py`)
+
+- **Purpose:** Provide tools for bankroll management and risk simulation.
+- **Components:**
+    - **Kelly Criterion:** `kelly_fraction()` and `kelly_stake()` calculate the optimal stake size to maximize long-term growth, with support for fractional Kelly (e.g., Quarter Kelly) to reduce variance.
+    - **Drawdown Simulation:** A Monte Carlo simulator (`simulate_drawdown`) that runs thousands of bankroll path simulations to estimate potential drawdowns and risk of ruin.
+    - **Slippage Simulation:** A function (`apply_slippage`) to stress-test strategies against unfavorable odds movements.
 
 ---
 

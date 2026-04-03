@@ -37,6 +37,8 @@ The system must:
 - include rolling windows for last 5 and last 10 matches
 - add matchup and total-corners derived features
 - add rolling goal averages and recent form metrics (wins/draws/losses/points)
+- add rolling Standard Deviation and EMA features for recent form and consistency
+- add H2H (Head-to-Head) features for the last N direct matchups
 - include team strength ratings (ELO-style)
 - standardize match statistics to the common cross-season set (corners, goals, shots, shots on target, fouls, cards, referee)
 
@@ -57,6 +59,7 @@ The system must:
 - enforce balanced hybrid ensemble training: 70% boosters (XGBoost/LightGBM) + 30% linear (Ridge/ElasticNet)
 - vary hyperparameters deterministically across model members
 - allow loading pre-trained ensemble artifacts from disk to skip retraining
+- save auditable JSON metadata with hyperparameters alongside each model file
 
 ---
 
@@ -89,7 +92,9 @@ The system must:
 
 - compute bookmaker implied probability
 - compare with model probability
-- detect value opportunities
+- detect value opportunities using Expected Value (EV) formula
+
+---
 
 ### Feature 6 - Consensus Safety Decision
 
@@ -98,12 +103,14 @@ The system must:
 - evaluate value using an ensemble of model predictions
 - compute one vote per model based on `edge >= threshold`
 - calculate agreement ratio and vote distribution
+- support weighted voting based on model quality (e.g., SHAP-based weights)
 - discard low-consensus matches ("insecure" bets)
 - confirm bets only when agreement reaches configurable consensus threshold
 - log an explicit status message for each decision
 - support dynamic threshold escalation based on short margin scenarios
-  (example: when `|mean_lambda - line| < 0.5`)
 - enforce betting-line normalization to half-goal style (`X.5`)
+
+---
 
 ### Feature 7 - Consensus Threshold Backtesting
 
@@ -116,6 +123,39 @@ The system must:
 - compute and expose threshold-level ROI and Yield metrics
 - rank thresholds by financial quality and mark the best threshold
 - support experimental sensitivity runs with fixed thresholds for controlled studies
+
+---
+
+### Feature 8 - Advanced Model Optimization
+
+The system must:
+
+- provide a script for automated hyperparameter optimization (e.g., using Optuna)
+- search for the best parameters for all model types in the ensemble
+- use cross-validation and a relevant metric (e.g., Poisson deviance)
+- produce auditable JSON reports with the best found parameters
+
+---
+
+### Feature 9 - Probability & Value Auditing
+
+The system must:
+
+- compute probability calibration metrics (Brier Score, ECE) to validate model probabilities
+- produce a calibration report to show the relationship between predicted confidence and actual accuracy
+- compute Closing Line Value (CLV) to measure if the system is systematically beating the market's closing odds
+- produce a CLV summary report (mean CLV, hit rate)
+
+---
+
+### Feature 10 - Risk Management Simulation
+
+The system must:
+
+- provide tools to simulate betting risk and bankroll management
+- calculate optimal stake sizes using the Kelly Criterion (including fractional Kelly)
+- run Monte Carlo simulations to estimate potential drawdowns and risk of ruin
+- simulate the effect of odds slippage on performance
 
 ---
 
@@ -160,6 +200,8 @@ Modularity:
 Reproducibility:
 
 - training pipeline must be deterministic
+- hyperparameter searches must be reproducible
+- risk simulations must be deterministic via seeding
 
 ---
 
@@ -169,57 +211,43 @@ Model metrics:
 
 MAE  
 RMSE  
+Brier Score  
+Expected Calibration Error (ECE)
 
 Betting metrics:
 
 ROI  
 Yield  
-Hit rate
+Hit rate  
+Closing Line Value (CLV)
 
 ---
 
-## P0 Completion Status (30-MAR-2026)
+## P1 Completion Status (03-APR-2026)
 
-### ✅ All P0 Requirements Implemented
+### ✅ All P0 and P1 Requirements Implemented
 
-| Requirement | P0 Task | Status | Notes |
-|------------|---------|--------|-------|
-| MVP validation | P0.1 | ✅ | CLI hardcodes removed, fully parametrized |
-| Ensemble consensus | P0.2 | ✅ | 30-model hybrid ensemble (21 boosters + 9 linear) |
-| Dynamic margin rule | P0.3 | ✅ | Threshold escalation when \|λ - line\| < 0.5 |
-| Feature diversity | P0.4 | ✅ | Dropout 20%, blackout 3 columns per model |
-| Parallel training | P0.5 | ✅ | n_jobs=-1 across all tree-based models |
-| Temporal holdout | P0.6 | ✅ | ~25% rigor (3-month strict separation) |
-| Model versioning | P0.7 | ✅ | SHA256 artifact hashing + metadata |
-| Audit logging | P0.8 | ✅ | Full model params logged per execution |
-| CLI parametrization | P0.9 | ✅ | --random-lines, --fixed-line, --consensus-threshold, etc. |
+| Category | Requirement | P1 Task | Status | Notes |
+|---|---|---|---|---|
+| **Pipeline** | Hybrid Ensemble | A1 | ✅ | 70/30 Booster/Linear mix |
+| | Dynamic Margin | A2 | ✅ | `engine.py` |
+| | NaN/Inf Guard | A3 | ✅ | Lambda validation |
+| **Features** | Probability Calibration | B1 | ✅ | Brier Score, ECE in `probability/calibration.py` |
+| | Advanced Rolling Stats | B2 | ✅ | Rolling STD + EMA |
+| | Momentum & Cross-Features| B3/B4 | ✅ | `win_rate`, `pressure_index`, etc. |
+| | H2H Confronto Direto | B5 | ✅ | `matchup.py::add_h2h_features()` |
+| **Optimization**| Hyperparameter Search | C1 | ✅ | `scripts/hyperopt_search.py` with Optuna |
+| | SHAP Weighted Votes | C2 | ✅ | `models/shap_weights.py` + engine integration |
+| | Hyperparameter Persistence | C3 | ✅ | JSON metadata saved with model .pkl files |
+| **Value/Risk** | EV Formula | D1 | ✅ | `expected_value()` in `engine.py` |
+| | CLV Audit | D2 | ✅ | `closing_line_value()` in `engine.py` |
+| | Risk/Staking Simulation | D3 | ✅ | Kelly, Drawdown, Slippage in `betting/risk.py` |
 
-### Validation with Real Data
+### Validation
 
-**Full Dataset (101 matches):**
-- ✅ 30 models trained and converged
-- ✅ Sigma: 0.45 (excellent ensemble agreement)
-- ✅ Consensus voting: 2 bets approved, 2 won (100% accuracy)
-- ✅ All requirements verified end-to-end
-
-**Recent Season Subset (50 matches):**
-- ✅ Temporal constraints respected
-- ✅ Sigma: 0.93 (appropriate on smaller sample)
-- ✅ Rolling features calculated correctly
-- ✅ 13 matches in proper holdout period
-
-**Random Line Stress Test:**
-- ✅ CLI parameter --random-lines functional
-- ✅ 7 unique lines across 5.5-11.5 range
-- ✅ Consensus voting responsive to line variation
-- ✅ Edge threshold calculations correct
-
-### Reproducibility Validated
-
-- ✅ Deterministic seeds produce identical predictions (95%+)
-- ✅ Artifact versioning maintains consistency
-- ✅ Parameter logging enables exact replication
-- ✅ Configuration system fully functional
+- **Tests:** 158/158 passing across more than 15 test files.
+- **Reproducibility:** All components, including hyperparameter search and risk simulations, are deterministic.
+- **Auditability:** Model parameters, SHAP values, calibration reports, and CLV metrics provide deep insight into system behavior.
 
 ---
 
