@@ -133,3 +133,149 @@ def add_result_rolling(
         group["_tmp_points"].shift(1).rolling(window).mean()
     )
     return data.drop(columns=["_tmp_win", "_tmp_draw", "_tmp_loss", "_tmp_points"])
+
+
+def add_rolling_std(
+    df: pd.DataFrame,
+    team_col: str,
+    for_col: str,
+    against_col: str,
+    window: int,
+    prefix: str,
+    stat_name: str,
+    season_col: str | None = None,
+) -> pd.DataFrame:
+    """Add rolling standard deviation features for a given stat.
+    
+    Useful for detecting consistency/volatility in a team's performance.
+    High STD indicates inconsistent performance.
+    
+    Args:
+        df: Input DataFrame
+        team_col: Column with team names
+        for_col: Column with team's stat values (e.g., corners for)
+        against_col: Column with opponent's stat values (e.g., corners against)
+        window: Rolling window size
+        prefix: Prefix for generated feature columns (e.g., 'home')
+        stat_name: Name of the stat (e.g., 'corners', 'goals')
+        season_col: Optional season column for grouping
+        
+    Returns:
+        DataFrame with rolling std features appended
+    """
+
+    df = df.copy()
+    if season_col and season_col in df.columns:
+        group = df.groupby([team_col, season_col], sort=False)
+    else:
+        group = df.groupby(team_col, sort=False)
+
+    df[f"{prefix}_{stat_name}_for_std_last{window}"] = (
+        group[for_col].shift(1).rolling(window).std()
+    )
+    df[f"{prefix}_{stat_name}_against_std_last{window}"] = (
+        group[against_col].shift(1).rolling(window).std()
+    )
+    return df
+
+
+def add_rolling_ema(
+    df: pd.DataFrame,
+    team_col: str,
+    for_col: str,
+    against_col: str,
+    window: int,
+    prefix: str,
+    stat_name: str,
+    season_col: str | None = None,
+    alpha: float | None = None,
+) -> pd.DataFrame:
+    """Add exponential moving average (EMA) features.
+    
+    EMA gives more weight to recent games. Useful for capturing current form.
+    By default, alpha is calculated from window: alpha = 2 / (window + 1)
+    (standard EMA formula).
+    
+    Args:
+        df: Input DataFrame
+        team_col: Column with team names
+        for_col: Column with team's stat values
+        against_col: Column with opponent's stat values
+        window: Window size (used to calculate alpha if not provided)
+        prefix: Prefix for generated feature columns
+        stat_name: Name of the stat
+        season_col: Optional season column for grouping
+        alpha: Smoothing factor (0 < alpha <= 1). If None, calculated from window.
+               Higher alpha = more weight to recent observations.
+        
+    Returns:
+        DataFrame with EMA features appended
+    """
+
+    if alpha is None:
+        # Use standard EMA formula: alpha = 2 / (window + 1)
+        alpha = 2.0 / (window + 1)
+    elif not (0 < alpha <= 1):
+        raise ValueError(f"alpha must be in (0, 1], got {alpha}")
+
+    df = df.copy()
+    if season_col and season_col in df.columns:
+        group = df.groupby([team_col, season_col], sort=False)
+    else:
+        group = df.groupby(team_col, sort=False)
+
+    # Helper function to compute EMA after shifting
+    def compute_ema(series):
+        shifted = series.shift(1)
+        return shifted.ewm(alpha=alpha, adjust=False).mean()
+
+    # EMA with automatic handling of NaN values - use transform to preserve index
+    df[f"{prefix}_{stat_name}_for_ema_last{window}"] = group[for_col].transform(
+        compute_ema
+    )
+    df[f"{prefix}_{stat_name}_against_ema_last{window}"] = group[against_col].transform(
+        compute_ema
+    )
+    return df
+
+
+def drop_redundant_features(
+    df: pd.DataFrame,
+    rolling_windows: list[int],
+) -> pd.DataFrame:
+    """Drop features identified as redundant by correlation analysis.
+
+    Removes:
+    1. wins_last{N} — perfectly correlated with win_rate_last{N} (r=1.0)
+    2. points_last{N} — perfectly correlated with points_per_game_last{N} (r=1.0)
+    3. EMA with largest window — EMA_last10 ↔ EMA_last5 (r>0.92)
+       Keeps EMA with smallest window (most reactive to recent form).
+
+    Args:
+        df: DataFrame with all features already computed.
+        rolling_windows: List of windows used (e.g. [10, 5]).
+
+    Returns:
+        DataFrame with redundant columns dropped.
+    """
+    to_drop = []
+    for window in rolling_windows:
+        for prefix in ("home", "away"):
+            # wins/points are redundant with their rate/per_game variants
+            to_drop.append(f"{prefix}_wins_last{window}")
+            to_drop.append(f"{prefix}_points_last{window}")
+
+    # Drop EMA with larger windows (keep smallest only)
+    if len(rolling_windows) > 1:
+        smallest_window = min(rolling_windows)
+        larger_windows = [w for w in rolling_windows if w != smallest_window]
+        for window in larger_windows:
+            to_drop.extend(
+                col for col in df.columns
+                if "_ema_last" in col and col.endswith(f"_last{window}")
+            )
+
+    existing = [c for c in to_drop if c in df.columns]
+    if existing:
+        df = df.drop(columns=existing)
+    return df

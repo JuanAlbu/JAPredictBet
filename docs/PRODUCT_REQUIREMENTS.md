@@ -54,8 +54,8 @@ The system must:
 - include team identity encoding as model features
 - use XGBoost with Poisson objective and deterministic seed
 - generate and persist the 30-model ensemble artifacts with standardized names
-- enforce balanced 10/10/10 training across XGBoost, LightGBM and RandomForest
-- vary hyperparameters deterministically across the 10 members of each algorithm
+- enforce balanced hybrid ensemble training: 70% boosters (XGBoost/LightGBM) + 30% linear (Ridge/ElasticNet)
+- vary hyperparameters deterministically across model members
 - allow loading pre-trained ensemble artifacts from disk to skip retraining
 
 ---

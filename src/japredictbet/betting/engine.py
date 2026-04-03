@@ -33,6 +33,44 @@ def poisson_under_prob(lambda_: float, line: float) -> float:
 
 
 # =========================
+# LAMBDA VALIDATION
+# =========================
+
+def _validate_lambda(lambda_: float, context: str = "") -> None:
+    """Validate that lambda is a valid Poisson parameter.
+    
+    Poisson distribution requires lambda >= 0 and finite.
+    Raises ValueError with context if validation fails. Logs warning if lambda is 0.
+    
+    Args:
+        lambda_: Predicted lambda value
+        context: Context string for error messages (e.g., 'Model 5')
+    
+    Raises:
+        ValueError: If lambda is NaN, infinite, or negative
+    """
+    if not np.isfinite(lambda_):
+        msg = f"Lambda is not finite: {lambda_}"
+        if context:
+            msg = f"[{context}] {msg}"
+        logger.error(msg)
+        raise ValueError(msg)
+    
+    if lambda_ < 0:
+        msg = f"Lambda must be non-negative, got {lambda_}"
+        if context:
+            msg = f"[{context}] {msg}"
+        logger.error(msg)
+        raise ValueError(msg)
+    
+    if lambda_ == 0:
+        msg = f"Lambda is 0 (no corners expected)"
+        if context:
+            msg = f"[{context}] {msg}"
+        logger.warning(msg)
+
+
+# =========================
 # ODDS UTILITIES
 # =========================
 
@@ -224,12 +262,36 @@ def report_consensus(
     threshold_edge: float,
     consensus_threshold: float,
 ) -> Dict:
-    """Gera o output resumido da Analise de Concordancia."""
+    """Gera o output resumido da Analise de Concordancia.
+    
+    Validates all lambdas before computing statistics.
+    
+    Args:
+        lambdas: List of predicted lambda values from ensemble models
+        odds: Betting odds
+        line: Betting line
+        threshold_edge: Edge threshold for voting
+        consensus_threshold: Agreement threshold for decision
+    
+    Returns:
+        Dict with consensus statistics and decision
+    
+    Raises:
+        ValueError: If lambdas list empty, odds invalid, or any lambda invalid
+    """
 
     if not lambdas:
         raise ValueError("lambdas must contain at least one value.")
     if odds <= 0:
         raise ValueError("odds must be positive.")
+
+    # Validate all lambdas before processing
+    for i, lambda_ in enumerate(lambdas):
+        try:
+            _validate_lambda(lambda_, context=f"Model {i+1}/{len(lambdas)}")
+        except ValueError as e:
+            logger.error(f"Invalid lambda in ensemble: {e}")
+            raise
 
     # 1. Estatisticas Basicas
     mean_lambda = float(np.mean(lambdas))
@@ -301,36 +363,48 @@ class ConsensusEngine:
     consensus threshold increases to 50% for additional safety.
     """
 
-    def __init__(self, edge_threshold: float = 0.05, use_dynamic_margin: bool = True):
+    def __init__(
+        self,
+        edge_threshold: float = 0.05,
+        use_dynamic_margin: bool = True,
+        tight_margin_threshold: float = 0.5,
+        tight_margin_consensus: float = 0.50,
+    ):
+        """Initialize consensus engine.
+        
+        Args:
+            edge_threshold: Minimum edge for a model to vote positive
+            use_dynamic_margin: Enable dynamic margin-based threshold adjustment
+            tight_margin_threshold: Margin threshold to trigger tight mode (corners)
+            tight_margin_consensus: Consensus required when margin is tight (0.5 = 50%)
+        """
         self.edge_threshold = edge_threshold
         self.use_dynamic_margin = use_dynamic_margin
+        self.tight_margin_threshold = tight_margin_threshold
+        self.tight_margin_consensus = tight_margin_consensus
 
     def _compute_dynamic_threshold(
         self,
         mean_lambda: float,
         line: float,
         base_threshold: float = 0.45,
-        tight_margin_threshold: float = 0.5,
-        tight_margin_consensus: float = 0.50,
     ) -> float:
         """Compute dynamic consensus threshold based on lambda-line margin.
         
-        When predictions are very close to the betting line (within 0.5),
-        increase consensus requirement to 50% for safety.
+        When predictions are very close to the betting line (within tight_margin_threshold),
+        increase consensus requirement to tight_margin_consensus for additional safety.
         
         Args:
             mean_lambda: Mean prediction from ensemble
             line: Betting line
             base_threshold: Default consensus threshold
-            tight_margin_threshold: Margin threshold (0.5 corners)
-            tight_margin_consensus: Consensus required for tight margins (50%)
             
         Returns:
             Adjusted consensus threshold
         """
         margin = abs(mean_lambda - line)
-        if margin < tight_margin_threshold and self.use_dynamic_margin:
-            return tight_margin_consensus
+        if margin < self.tight_margin_threshold and self.use_dynamic_margin:
+            return self.tight_margin_consensus
         return base_threshold
 
     def evaluate_with_consensus(
@@ -368,8 +442,13 @@ class ConsensusEngine:
         odds = float(odds_data["odds"])
         bet_type = str(odds_data.get("type", "over")).lower()
 
-        for prediction in normalized_predictions:
-            lambda_total = _extract_lambda_total(prediction)
+        for idx, prediction in enumerate(normalized_predictions):
+            try:
+                lambda_total = _extract_lambda_total(prediction)
+            except ValueError as e:
+                logger.error(f"Failed to extract lambda from prediction {idx+1}/{len(normalized_predictions)}: {e}")
+                raise
+            
             if bet_type == "over":
                 p_model = poisson_over_prob(lambda_total, line)
             else:
@@ -479,15 +558,23 @@ class ConsensusEngine:
 
 
 def _extract_lambda_total(prediction: Dict) -> float:
-    """Extract total lambda from a prediction payload."""
+    """Extract total lambda from a prediction payload.
+    
+    Validates that lambda is finite and non-negative.
+    
+    Raises:
+        ValueError: If required fields missing or lambda is invalid
+    """
 
     if "lambda_total" in prediction:
-        return float(prediction["lambda_total"])
-
-    if "lambda_home" in prediction and "lambda_away" in prediction:
-        return float(prediction["lambda_home"]) + float(prediction["lambda_away"])
-
-    raise ValueError(
-        "Each prediction must contain either 'lambda_total' or "
-        "'lambda_home' and 'lambda_away'."
-    )
+        lambda_total = float(prediction["lambda_total"])
+    elif "lambda_home" in prediction and "lambda_away" in prediction:
+        lambda_total = float(prediction["lambda_home"]) + float(prediction["lambda_away"])
+    else:
+        raise ValueError(
+            "Each prediction must contain either 'lambda_total' or "
+            "'lambda_home' and 'lambda_away'."
+        )
+    
+    _validate_lambda(lambda_total, context="_extract_lambda_total")
+    return lambda_total

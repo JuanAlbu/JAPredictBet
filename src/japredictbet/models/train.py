@@ -188,7 +188,7 @@ def train_and_save_ensemble(
     home_target: str,
     away_target: str,
     output_dir: Path | str,
-    algorithms: tuple[str, ...] = ("xgboost", "lightgbm", "randomforest"),
+    algorithms: tuple[str, ...] = ("xgboost", "lightgbm", "randomforest", "ridge", "elasticnet"),
     ensemble_size: int = 30,
     sample_weight: pd.Series | None = None,
     random_state: int = 42,
@@ -489,6 +489,23 @@ def build_variation_params(algorithm: str, variation_index: int) -> dict[str, An
             "max_features": [0.55, 0.65, 0.75, 0.85, 0.60, 0.70, 0.80, 0.90, 0.58, 0.68][idx],
         }
 
+    if algo == "ridge":
+        # Ridge regression with variable alpha (regularization strength)
+        return {
+            "alpha": [0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 10.0, 0.02, 0.08, 2.0][idx],
+            "solver": "auto",
+            "max_iter": 10000,
+        }
+
+    if algo == "elasticnet":
+        # ElasticNet with variable alpha and l1_ratio
+        rng = np.random.default_rng(20_000 + variation_index)
+        return {
+            "alpha": [0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 10.0, 0.02, 0.08, 2.0][idx],
+            "l1_ratio": [0.1, 0.3, 0.5, 0.7, 0.9, 0.2, 0.4, 0.6, 0.8, 0.5][idx],
+            "max_iter": 20000,
+        }
+
     return {}
 
 
@@ -500,6 +517,8 @@ def _build_model_filename(algorithm: str, variation_index: int) -> str:
         "xgboost": "xgb",
         "lightgbm": "lgbm",
         "randomforest": "rf",
+        "ridge": "ridge",
+        "elasticnet": "elastic",
     }
     prefix = prefix_map.get(algo, algo)
     return f"{prefix}_model_{variation_index + 1}.pkl"

@@ -114,7 +114,7 @@ The system is strictly an **analytics tool**.
 
 ---
 
-## Current Project Status (Updated 30-MAR-2026)
+## Current Project Status (Updated 01-APR-2026)
 
 ### P0 Completion ✅
 - **Status:** 100% COMPLETE
@@ -129,11 +129,21 @@ The system is strictly an **analytics tool**.
   - Zero hardcodes remaining
   - Artifact versioning with SHA256 hashing
 
-### P1 - Next Phase
-- **Status:** Ready to start
-- **Priority:** High impact features (Calibration, Rolling, Features)
-- **Estimated Duration:** 2-3 weeks
-- **Key Items:** 13 P1 tasks identified in next_pass.md
+### P1 Progress (01-APR-2026)
+- **P1-A (Pipeline):** ✅ 100% COMPLETE
+  - A1: Hybrid 70/30 ensemble in core (21 boosters + 9 linear)
+  - A2: Dynamic margin rule in engine.py
+  - A3: Lambda validation (NaN/Inf guard)
+- **P1-B (Features):** ✅ B2/B3/B4 COMPLETE — B1 (Calibration) pending
+  - B2: Rolling STD + EMA (106 features)
+  - B3: Momentum (win_rate, points_per_game)
+  - B4: H2H & cross-features
+- **P1-C/D:** Not started
+- **Tests:** 87/87 passing (10 test files)
+- **Consensus script:** Synchronized with pipeline (106 features)
+
+### Next Priority
+- P1.B1 (Probability Calibration — Brier Score, ECE)
 
 ### Important Notes for Agents
 1. **Do NOT modify model assumptions** (Poisson objective, two-model architecture) without documentation updates
@@ -142,7 +152,9 @@ The system is strictly an **analytics tool**.
 4. **Keep CLI parametrization intact** - important for flexibility
 5. **Update documentation** when implementing P1 items (TRAINING_STRATEGY.md, MODEL_ARCHITECTURE.md, etc.)
 6. **Reference test artifacts** in log-test/ directory for validation
-7. **CLI commands validated on 30-MAR-2026:**
+7. **Feature set:** 106 features (rolling mean + STD + EMA + matchup + result + ELO - redundant)
+8. **Ensemble composition:** 10 XGBoost + 11 LightGBM + 5 Ridge + 4 ElasticNet = 30 models
+9. **CLI commands validated:**
    - Dynamic lines: `python scripts/consensus_accuracy_report.py --config config.yml`
    - Fixed lines: `python scripts/consensus_accuracy_report.py --fixed-line 9.5`
    - Random lines: `python scripts/consensus_accuracy_report.py --random-lines --line-min 5.5 --line-max 11.5`

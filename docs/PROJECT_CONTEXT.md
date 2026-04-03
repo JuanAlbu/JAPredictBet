@@ -1,9 +1,19 @@
-# Project Context (Atualizado 30-MAR-2026)
+# Project Context (Atualizado 31-MAR-2026)
 
 ## Status Atual
 - **MVP Baseline:** ✅ ENTREGUE
-- **P0 (Crítico):** ✅ 100% IMPLEMENTADO E VALIDADO (30-MAR-2026)
-- **P1 (Alto Impacto):** 🔄 PRONTO PARA COMEÇAR
+- **P0 (Crítico):** ✅ 100% IMPLEMENTADO E VALIDADO (31-MAR-2026)
+- **P1-A (Pipeline):** ✅ 100% COMPLETO (31-MAR-2026)
+  - A1: Ensemble Híbrido 70/30 (21 boosters + 9 linear)
+  - A2: Dynamic margin parametrizado em `engine.py`
+  - A3: Lambda validation (NaN/Inf guard)
+- **P1-B (Features):** ✅ B2/B3/B4 COMPLETOS — B1 (Calibração) pendente
+  - B2: Rolling STD + EMA (106 features no pipeline)
+  - B3: Momentum (win_rate, points_per_game) — pré-existente
+  - B4: H2H & cross-features — pré-existente
+- **P1-C/D (Otimização/Risk):** 🔄 A INICIAR
+- **Testes:** 87/87 passando (10 test files + 2 integration files)
+- **Feature set:** 106 features (após redundancy cleanup)
 
 ---
 
@@ -52,7 +62,9 @@ Rolling statistics capture recent team behaviour.
 Both short-term (last 3, 5) and medium-term (last 10) windows are used.
 Recent form features include rolling goal averages and result-based metrics
 (wins, draws, losses, points per game).
-Rolling volatility (corner STD) added in P1 pipeline.
+Rolling volatility (STD for corners, goals, shots) active in pipeline.
+Exponential Moving Average (EMA) for corners, goals, shots active in pipeline.
+Redundancy cleanup removes perfectly correlated features (wins→win_rate, points→points_per_game, EMA_last10→keep EMA_last5).
 
 Training prioritizes recent matches using a time-aware split and recency weighting.
 P0.6 implements strict 3-month temporal holdout for 95%+ reproducibility.
@@ -61,7 +73,7 @@ P0.6 implements strict 3-month temporal holdout for 95%+ reproducibility.
 
 The interaction between the attacking strength of one team and the defensive
 profile of the opponent influences match events.
-P1.5 will add H2H Last 3 confrontation history.
+H2H and cross-features (attack_vs_defense, pressure_index, diffs) implemented via `add_matchup_features()`.
 
 4. Consensus Safety Layer (P0.3 - Implementado)
 
@@ -101,7 +113,7 @@ The MVP execution now supports:
 - support for loading pre-trained ensemble artifacts from `artifacts/models`
 - **full reproducibility tracking with SHA256 dataset/config hashing (P0.8)**
 
-Operational note - P0 Complete State (30-MAR-2026):
+Operational note - Current State (01-APR-2026):
 
 - The production MVP pipeline keeps the configured ensemble strategy from `config.yml`
   (currently 30 members with 70/30 hybrid mix and dynamic consensus sweep).
@@ -116,11 +128,18 @@ Operational note - P0 Complete State (30-MAR-2026):
   - timestamped report generation in `log-test/` with full model audit trail
   - **all hardcodes removed (P0.1), fully respects CLI overrides and config.yml**
   
-Testing & Validation (30-MAR-2026):
-- Tested with 101 matches from full season data
+Testing & Validation (01-APR-2026):
+- Tested with 101 matches from full season data (dynamic, fixed, random lines)
 - Tested with 50 recent matches + 180 days historical context
-- Tested with random lines (5.5 - 11.5), fixed lines, and dynamic (mean_lambda)
+- 87 unit/integration tests passing across 10 test files
+- Consensus script synchronized with pipeline (106 features, STD+EMA+drop_redundant)
 - All tests runnable and producing valid reports in log-test/
+
+Latest test results (31-MAR-2026):
+- Dynamic lines (20 matches): 3 apostas, 33% acurácia (106 features)
+- Fixed line 9.5 (20 matches): 16 apostas, 31% acurácia
+- Random lines 5.5-11.5 (20 matches): 18 apostas, 78% acurácia
+- Random lines 50-match dataset: 10 apostas, 100% acurácia
 
 ---
 
@@ -143,7 +162,7 @@ Future extensions may include:
 ### BASE ATUAL (MVP JA ENTREGUE)
 *Foco: registrar rapidamente o que ja existe para evitar retrabalho.*
 
-- [x] Ensemble deterministico de 30 modelos (10 XGB, 10 LGBM, 10 RF) - **VALIDADO**
+- [x] Ensemble deterministico de 30 modelos (11 XGB, 11 LGBM, 5 Ridge, 4 ElasticNet → 21 boosters + 9 linear) - **VALIDADO**
 - [x] Consenso com threshold configuravel e sweep de thresholds - **VALIDADO**
 - [x] Matching robusto de equipes com fuzzy seguro e descarte de ambiguidades - **VALIDADO**
 - [x] Backtest com metricas de ROI/Yield por threshold - **VALIDADO**

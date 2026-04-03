@@ -27,7 +27,13 @@ from japredictbet.config import (
 from japredictbet.data.ingestion import load_historical_dataset
 from japredictbet.features.elo import EloConfig, add_elo_ratings
 from japredictbet.features.matchup import add_matchup_features
-from japredictbet.features.rolling import add_result_rolling, add_stat_rolling
+from japredictbet.features.rolling import (
+    add_result_rolling,
+    add_rolling_ema,
+    add_rolling_std,
+    add_stat_rolling,
+    drop_redundant_features,
+)
 from japredictbet.features.team_identity import add_team_target_encoding
 from japredictbet.models.predict import predict_expected_corners
 from japredictbet.models.train import _select_feature_columns, train_models
@@ -58,6 +64,48 @@ def _load_config(config_path: Path) -> PipelineConfig:
         odds=OddsConfig(**raw["odds"]),
         value=ValueConfig(**raw["value"]),
     )
+
+
+def _add_rolling_std_features(data: pd.DataFrame, window: int) -> pd.DataFrame:
+    """Add rolling STD features matching the main pipeline."""
+    df = data.copy()
+    stats = [
+        ("corners", "home_corners", "away_corners"),
+        ("goals", "home_goals", "away_goals"),
+        ("shots", "home_shots", "away_shots"),
+    ]
+    for stat_name, home_col, away_col in stats:
+        if home_col in df.columns and away_col in df.columns:
+            df = add_rolling_std(
+                df, team_col="home_team", for_col=home_col, against_col=away_col,
+                window=window, prefix="home", stat_name=stat_name, season_col="season",
+            )
+            df = add_rolling_std(
+                df, team_col="away_team", for_col=away_col, against_col=home_col,
+                window=window, prefix="away", stat_name=stat_name, season_col="season",
+            )
+    return df
+
+
+def _add_rolling_ema_features(data: pd.DataFrame, window: int) -> pd.DataFrame:
+    """Add rolling EMA features matching the main pipeline."""
+    df = data.copy()
+    stats = [
+        ("corners", "home_corners", "away_corners"),
+        ("goals", "home_goals", "away_goals"),
+        ("shots", "home_shots", "away_shots"),
+    ]
+    for stat_name, home_col, away_col in stats:
+        if home_col in df.columns and away_col in df.columns:
+            df = add_rolling_ema(
+                df, team_col="home_team", for_col=home_col, against_col=away_col,
+                window=window, prefix="home", stat_name=stat_name, season_col="season",
+            )
+            df = add_rolling_ema(
+                df, team_col="away_team", for_col=away_col, against_col=home_col,
+                window=window, prefix="away", stat_name=stat_name, season_col="season",
+            )
+    return df
 
 
 def _add_total_corners_features(data: pd.DataFrame, window: int) -> pd.DataFrame:
@@ -435,16 +483,19 @@ def main() -> None:
     data = load_historical_dataset(cfg.data.raw_path, cfg.data.date_column)
     data = _ensure_season_column(data, cfg.data.date_column)
 
-    primary_window = cfg.features.rolling_windows[0]
-    data = _add_rolling_stats(data, primary_window)
-    data = _add_rolling_stats(data, 5)
-    data = add_matchup_features(data, window=primary_window)
-    data = add_matchup_features(data, window=5)
-    data = _add_total_corners_features(data, window=primary_window)
-    data = _add_total_corners_features(data, window=5)
-    data = _add_total_goals_features(data, window=primary_window)
-    data = _add_total_goals_features(data, window=5)
+    rolling_windows = cfg.features.rolling_windows
+    for window in rolling_windows:
+        data = _add_rolling_stats(data, window)
+        if cfg.features.rolling_use_std:
+            data = _add_rolling_std_features(data, window)
+        if cfg.features.rolling_use_ema:
+            data = _add_rolling_ema_features(data, window)
+        data = add_matchup_features(data, window=window)
+        data = _add_total_corners_features(data, window=window)
+        data = _add_total_goals_features(data, window=window)
     data["home_advantage"] = 1.0
+    if cfg.features.drop_redundant:
+        data = drop_redundant_features(data, rolling_windows)
 
     # Imputacao Zero policy: remove rows without enough historical context.
     # Use only essential rolling-corners columns to avoid dropping rows due to

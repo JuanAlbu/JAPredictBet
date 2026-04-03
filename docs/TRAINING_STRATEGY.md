@@ -181,6 +181,9 @@ Full training pipeline:
 5. Randomly select 50% of latest season for test
 6. Assign temporal weights to training matches
 7. Train ensemble models (two-model architecture per ensemble member: home + away)
+   - 70% boosters (XGBoost/LightGBM) + 30% linear (Ridge/ElasticNet)
+   - Feature engineering includes rolling mean + STD + EMA + matchup + result + ELO
+   - `drop_redundant_features()` removes perfectly correlated pairs
 8. Run predictions and evaluate betting decisions with consensus
 
 Pipeline summary:

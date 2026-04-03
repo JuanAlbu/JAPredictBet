@@ -114,18 +114,63 @@ Capture structural team behavior that is not explained by statistics alone.
 
 These features represent recent team performance.
 
-Rolling window: **last N matches (default = 10)**.
+Rolling windows: **last N matches (default = [10, 5])**.
 
-Example features:
+## 5.1 Rolling Mean (base)
 
-| Column | Type | Description |
+| Column Pattern | Type | Description |
 |------|------|-------------|
-| home_corners_for_last10_home | float | Avg home corners in last 10 home games |
-| home_corners_against_last10_home | float | Avg corners conceded at home |
-| away_corners_for_last10_away | float | Avg away corners in last 10 away games |
-| away_corners_against_last10_away | float | Avg corners conceded away |
-| home_shots_last10_home | float | Avg home shots in last 10 home games |
-| away_shots_last10_away | float | Avg away shots in last 10 away games |
+| home_corners_for_last{N}_home | float | Avg home corners in last N home games |
+| home_corners_against_last{N}_home | float | Avg corners conceded at home |
+| away_corners_for_last{N}_away | float | Avg away corners in last N away games |
+| away_corners_against_last{N}_away | float | Avg corners conceded away |
+| home_shots_last{N}_home | float | Avg home shots in last N home games |
+| away_shots_last{N}_away | float | Avg away shots in last N away games |
+
+Statistics covered: corners, goals, shots, fouls, cards (for/against per venue).
+
+## 5.2 Rolling STD (P1.B2 — Volatility)
+
+Standard deviation of rolling statistics per team/season.
+
+| Column Pattern | Type | Description |
+|------|------|-------------|
+| home_corners_for_std_last{N}_home | float | σ of home corners in last N home games |
+| away_goals_for_std_last{N}_away | float | σ of away goals in last N away games |
+
+Enabled by config flag: `features.rolling_use_std: true`
+
+## 5.3 Rolling EMA (P1.B2 — Exponential Moving Average)
+
+Exponential moving average with α = 2/(window+1).
+
+| Column Pattern | Type | Description |
+|------|------|-------------|
+| home_corners_for_ema_last{N}_home | float | EMA of home corners (last N window) |
+| away_shots_ema_last{N}_away | float | EMA of away shots (last N window) |
+
+Enabled by config flag: `features.rolling_use_ema: true`
+
+## 5.4 Result Rolling (P1.B3 — Momentum)
+
+Win/draw/loss counts and derived rates per rolling window.
+
+| Column Pattern | Type | Description |
+|------|------|-------------|
+| home_wins_last{N}_home | float | Wins in last N home games |
+| home_win_rate_last{N}_home | float | Win rate in last N home games |
+| home_points_per_game_last{N}_home | float | Points per game in last N home games |
+
+## 5.5 Redundancy Cleanup
+
+`drop_redundant_features()` removes perfectly correlated pairs:
+- wins → keep win_rate
+- points → keep points_per_game
+- EMA_last10 → keep EMA_last5
+
+Enabled by config flag: `features.drop_redundant: true`
+
+**Total features after cleanup: 106**
 
 ---
 
