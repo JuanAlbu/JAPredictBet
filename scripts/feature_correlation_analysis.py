@@ -13,19 +13,11 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import yaml
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from japredictbet.config import (
-    DataConfig,
-    FeatureConfig,
-    ModelConfig,
-    OddsConfig,
-    PipelineConfig,
-    ValueConfig,
-)
+from japredictbet.config import PipelineConfig
 from japredictbet.data.ingestion import load_historical_dataset
 from japredictbet.features.elo import add_elo_ratings, EloConfig
 from japredictbet.features.matchup import add_matchup_features
@@ -48,19 +40,7 @@ from japredictbet.pipeline.mvp_pipeline import (
 
 
 def _load_config(config_path: str) -> PipelineConfig:
-    with open(config_path, "r", encoding="utf-8") as f:
-        raw = yaml.safe_load(f)
-    return PipelineConfig(
-        data=DataConfig(
-            raw_path=Path(raw["data"]["raw_path"]),
-            processed_path=Path(raw["data"]["processed_path"]),
-            date_column=raw["data"].get("date_column", "date"),
-        ),
-        features=FeatureConfig(**raw["features"]),
-        model=ModelConfig(**raw["model"]),
-        odds=OddsConfig(**raw["odds"]),
-        value=ValueConfig(**raw["value"]),
-    )
+    return PipelineConfig.from_yaml(config_path)
 
 
 def build_feature_dataframe(config) -> pd.DataFrame:

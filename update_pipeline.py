@@ -4,7 +4,6 @@ Orquestrador de MLOps para atualizar dados e retreinar o Ensemble de 30 Modelos.
 """
 import logging
 import shutil
-import yaml
 from pathlib import Path
 import pandas as pd
 
@@ -29,9 +28,7 @@ def main(new_dataset_path: str):
     logger.info("=== INICIANDO PIPELINE DE ATUALIZAÇÃO (CONTINUOUS TRAINING) ===")
     
     # 1. Carregar Configuração
-    with open("config.yml", "r") as f:
-        config_dict = yaml.safe_load(f)
-    config = PipelineConfig(**config_dict)
+    config = PipelineConfig.from_yaml("config.yml")
     
     raw_path = Path(config.data.raw_path)
     models_dir = Path("artifacts/models")

@@ -13,17 +13,9 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import yaml
 from scipy.stats import poisson
 
-from japredictbet.config import (
-    DataConfig,
-    FeatureConfig,
-    ModelConfig,
-    OddsConfig,
-    PipelineConfig,
-    ValueConfig,
-)
+from japredictbet.config import PipelineConfig
 from japredictbet.data.ingestion import load_historical_dataset
 from japredictbet.features.elo import EloConfig, add_elo_ratings
 from japredictbet.features.matchup import add_h2h_features, add_matchup_features
@@ -51,19 +43,7 @@ except ImportError:  # pragma: no cover - optional dependency
 
 
 def _load_config(config_path: Path) -> PipelineConfig:
-    with config_path.open("r", encoding="utf-8") as f:
-        raw = yaml.safe_load(f)
-    return PipelineConfig(
-        data=DataConfig(
-            raw_path=Path(raw["data"]["raw_path"]),
-            processed_path=Path(raw["data"]["processed_path"]),
-            date_column=raw["data"].get("date_column", "date"),
-        ),
-        features=FeatureConfig(**raw["features"]),
-        model=ModelConfig(**raw["model"]),
-        odds=OddsConfig(**raw["odds"]),
-        value=ValueConfig(**raw["value"]),
-    )
+    return PipelineConfig.from_yaml(config_path)
 
 
 def _add_rolling_std_features(data: pd.DataFrame, window: int) -> pd.DataFrame:

@@ -435,16 +435,20 @@ def _normalize_algorithms(algorithms: tuple[str, ...]) -> tuple[str, ...]:
 def _build_ensemble_schedule(size: int, algorithms: tuple[str, ...]) -> list[str]:
     """Build deterministic and balanced algorithm schedule.
     
-    For 30 models with hybrid mode enabled, will build 70% boosting + 30% linear.
+    For 30 models with hybrid mode enabled, will build 70% boosting + 30% linear
+    using only the algorithms specified in the ``algorithms`` parameter.
     Otherwise maintains legacy balanced distribution.
     """
 
     if size <= 0:
         return ["xgboost"]
     
-    # Hybrid mode for ~30 models mixing boosters and linear models
+    # Hybrid mode for ~30 models — only if algorithms include both boosters and linear
     if size >= 25 and size <= 35:
-        return _build_hybrid_ensemble_schedule(size)
+        boosters = [a for a in algorithms if a in ("xgboost", "lightgbm")]
+        linear = [a for a in algorithms if a in ("ridge", "elasticnet")]
+        if boosters and linear:
+            return _build_hybrid_ensemble_schedule(size, boosters, linear)
     
     algo_list = list(algorithms) if algorithms else ["xgboost"]
 
@@ -465,13 +469,22 @@ def _build_ensemble_schedule(size: int, algorithms: tuple[str, ...]) -> list[str
     return schedule
 
 
-def _build_hybrid_ensemble_schedule(size: int) -> list[str]:
+def _build_hybrid_ensemble_schedule(
+    size: int,
+    boosters: list[str] | None = None,
+    linear: list[str] | None = None,
+) -> list[str]:
     """Build 70% boosting + 30% linear hybrid schedule (e.g., 21 boosters + 9 linear for 30 models).
     
     This implements the experimental consensus architecture:
-    - 70% Boosting algorithms (XGBoost and LightGBM alternating)
-    - 30% Linear models (Ridge and ElasticNet alternating)
+    - 70% Boosting algorithms (alternating from ``boosters`` list)
+    - 30% Linear models (alternating from ``linear`` list)
     """
+    if boosters is None:
+        boosters = ["xgboost", "lightgbm"]
+    if linear is None:
+        linear = ["ridge", "elasticnet"]
+
     n_models = max(1, int(size))
     n_boosters = max(1, int(round(n_models * 0.70)))
     n_linear = n_models - n_boosters
@@ -483,19 +496,13 @@ def _build_hybrid_ensemble_schedule(size: int) -> list[str]:
     
     schedule: list[str] = []
     
-    # Boosters: alternate between XGBoost and LightGBM
+    # Boosters: alternate through provided booster algorithms
     for idx in range(n_boosters):
-        if idx % 2 == 0:
-            schedule.append("xgboost")
-        else:
-            schedule.append("lightgbm")
+        schedule.append(boosters[idx % len(boosters)])
     
-    # Linear: alternate between Ridge and ElasticNet
+    # Linear: alternate through provided linear algorithms
     for idx in range(n_linear):
-        if idx % 2 == 0:
-            schedule.append("ridge")
-        else:
-            schedule.append("elasticnet")
+        schedule.append(linear[idx % len(linear)])
     
     return schedule
 

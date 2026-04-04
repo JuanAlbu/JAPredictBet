@@ -1,9 +1,9 @@
-# JA PREDICT BET — ROADMAP P2+ (REVISÃO 03-APR-2026)
+# JA PREDICT BET — ROADMAP P2+ (REVISÃO 04-APR-2026)
 
-**Data da Revisão:** 03 de Abril, 2026
-**Status Geral:** P0 ✅ | P0-FIX ✅ | P1 ✅ | Onda 1 ✅ — 165/165 testes passando (17 arquivos). 106 features. 30 modelos (11 XGB + 10 LGB + 5 Ridge + 4 EN).
+**Data da Revisão:** 04 de Abril, 2026
+**Status Geral:** P0 ✅ | P0-FIX ✅ | P1 ✅ | Onda 1 ✅ | Onda 2 parcial — 166/166 testes passando (17 arquivos). 106 features. 30 modelos (11 XGB + 10 LGB + 5 Ridge + 4 EN).
 **Histórico Completo:** Todos os itens concluídos (P0, P0-FIX, P1, Onda 1) documentados em [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md).
-**Próxima Ação:** Onda 2 — Infraestrutura e Correções de Paridade.
+**Próxima Ação:** Onda 2 — Itens remanescentes (B3, B7, B8, A14).
 
 ---
 
@@ -19,41 +19,51 @@ Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HI
 ## Onda 2 — Infraestrutura & Paridade de Features (Próximo)
 
 **Objetivo:** Unificar config loading, corrigir paridade de features entre scripts, e resolver vulnerabilidade de pickle.
-**Dependências:** B6 desbloqueia B3. Itens A9-A11 corrigem divergências silenciosas de feature set.
+**Dependências:** ~~B6 desbloqueia B3~~ (feito). Itens ~~A9-A11~~ (feitos) corrigem divergências silenciosas de feature set.
 **Impacto esperado:** Implementação 8→9/10, Production-Ready 8→9/10.
 
 ### Bloco 2A — Config & Pipeline
 
-- [ ] **P2.B6 - Centralizar `_load_config()` em `config.py`**
-  - 4 scripts duplicam lógica de config com variações (list→tuple de `algorithms` feita só em `run.py`).
-  - **Fix:** Criar `PipelineConfig.from_yaml(path)` com lógica única. Substituir em todos os scripts.
+- [x] **P2.B6 - Centralizar `_load_config()` em `config.py`** ✅ (03-APR-2026)
+  - `PipelineConfig.from_yaml(path)` criado. 5 scripts atualizados (run.py, consensus, hyperopt, correlation, update_pipeline).
 
 - [ ] **P2.B3 - Reescrever `update_pipeline.py` (Non-Functional)**
-  - **Bug 1:** `PipelineConfig(**config_dict)` — crash. Usar `PipelineConfig.from_yaml()` (P2.B6).
+  - **Bug 1:** ~~`PipelineConfig(**config_dict)` — crash~~ CORRIGIDO via P2.B6.
   - **Bug 2:** Feature engineering ausente — portar pipeline completo (rolling, STD, EMA, ELO, matchup, H2H, drop redundant).
   - **Bug 3:** `algorithms` hardcoded sem Ridge/ElasticNet.
-  - **Dependência:** P2.B6
   - **Referência:** `run.py` (config loading correto) e `mvp_pipeline.py` (feature pipeline completo).
 
 - [ ] **P2.B7 - Verificar integridade de pickle antes de deserializar**
   - `run.py` linha 88: `pickle.load()` sem verificação de hash. O projeto já tem `_compute_artifact_hash`.
   - **Fix:** SHA256 do `.pkl` vs hash no JSON metadata antes de `pickle.load()`.
 
+- [ ] **P2.B8 - Corrigir holdout temporal para ser realmente cronológico**
+  - `_build_temporal_split()` documenta "últimos 3 meses", mas hoje embaralha linhas da temporada mais recente e separa uma fração aleatória.
+  - **Risco:** validação otimista e falsa sensação de rigor temporal.
+  - **Fix:** fazer split por data real (`date`) com corte cronológico explícito e alinhar documentação/nomes do modo strict holdout.
+
 ### Bloco 2B — Paridade de Feature Set
 
-- [ ] **P2.A9 - Sincronizar keywords de feature selection (mvp_pipeline vs train)**
-  - `_is_model_feature_candidate()` usa keywords diferentes de `_is_allowed_feature()`.
-  - **Fix:** Extrair para constante compartilhada ou sincronizar.
+- [x] **P2.A9 - Sincronizar keywords de feature selection (mvp_pipeline vs train)** ✅ (03-APR-2026)
+  - `_is_model_feature_candidate()` agora inclui `_rolling` e `_momentum`, sincronizado com `_is_allowed_feature()`.
 
-- [ ] **P2.A10 - Sincronizar features em `hyperopt_search.py`**
-  - `_prepare_data()` não adiciona ELO nem team target encoding. Hiperparâmetros otimizados num feature set diferente de produção.
+- [x] **P2.A10 - Sincronizar features em `hyperopt_search.py`** ✅ (03-APR-2026)
+  - Adicionado ELO ratings e team target encoding em `_prepare_data()`. Corrigida chamada `_valid_training_mask()` com assinatura errada.
 
-- [ ] **P2.A11 - Sincronizar features em `walk_forward.py`**
-  - `_build_features()` faltam rolling STD, EMA, H2H e `drop_redundant_features()`.
+- [x] **P2.A11 - Sincronizar features em `walk_forward.py`** ✅ (03-APR-2026)
+  - Adicionados rolling STD, EMA, H2H e `drop_redundant_features()` em `_build_features()`. `WalkForwardConfig` expandido.
 
-- [ ] **P2.A12 - `_build_ensemble_schedule` ignora parâmetro `algorithms`**
-  - Para `ensemble_size` 25-35, `_build_hybrid_ensemble_schedule()` ignora config `algorithms`. Config `("xgboost",)` com size=30 receberia silenciosamente 4 algoritmos.
-  - **Fix:** Validar compatibilidade ou fazer o schedule respeitar o parâmetro.
+- [x] **P2.A12 - `_build_ensemble_schedule` respeita parâmetro `algorithms`** ✅ (03-APR-2026)
+  - Hybrid mode agora só ativa quando `algorithms` contém tanto boosters quanto linear. `_build_hybrid_ensemble_schedule` parametrizado.
+
+- [ ] **P2.C7 - Integrar params otimizados do hyperopt no ensemble**
+  - `hyperopt_search.py` é READ-ONLY — os melhores params (ElasticNet=1.4799, XGBoost=1.4880, LightGBM=1.4934) não são aplicados automaticamente.
+  - **Fix:** Atualizar `_build_variation_params()` em `train.py` e/ou `_build_diversified_*_params()` no consensus script para usar os params do `artifacts/hyperopt/*_best_params.json` como base de variação.
+
+- [ ] **P2.A14 - Corrigir drift de nomenclatura de features ELO**
+  - `add_elo_ratings()` gera `home_elo_rating` / `away_elo_rating`, mas partes do pipeline/documentação ainda referenciam `home_elo` / `away_elo`.
+  - **Risco:** validações críticas inertes, leitura ambígua do schema e manutenção confusa.
+  - **Fix:** Padronizar nomes em código, testes e docs; se necessário, manter alias temporário com depreciação explícita.
 
 ---
 
@@ -98,6 +108,10 @@ Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HI
 
 - [ ] **P2.C3 - Padronizar código (linguagem + style)**
   - Mix português/inglês. Imports inline em `mvp_pipeline.py`. Regex `r"[^a-z0-9\\s]"` em raw string. Config RandomForest enganoso no `algorithms`.
+
+- [ ] **P2.C6 - Reconciliar documentação e estado real de validação**
+  - Há drift entre documentos sobre contagem de testes (`158/158` vs `165/165`) e sobre o status do holdout "estrito".
+  - **Fix:** sincronizar `AGENTS.md`, `README.md`, `PROJECT_CONTEXT.md`, `VALIDATION*.md` e docs que ainda descrevem o split antigo.
 
 ---
 
@@ -149,6 +163,9 @@ Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HI
 - [ ] **P2.B2 - Logging Estruturado por Aposta** — Lambdas, votos, edge, threshold, stake, resultado.
 - [ ] **P2.B4 - Migrar `run.py` de `print()` para `logging`** — Usar `utils/logging.py` existente.
 - [ ] **P2.B5 - Completar `pyproject.toml`** — Metadata, entry points, dev dependencies.
+- [ ] **P2.B9 - Blindar coleta de testes no repositório**
+  - `python -m pytest tests -q` passa, mas `python -m pytest -q` falha por coletar `test_output.txt` na raiz.
+  - **Fix:** definir `testpaths`/`python_files` no `pyproject.toml` e impedir artefatos de relatório de entrarem na coleta.
 
 ### Bloco 5B — Produto
 
@@ -175,14 +192,14 @@ Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HI
 
 ---
 
-## Matriz de Maturidade (03-APR-2026)
+## Matriz de Maturidade (04-APR-2026)
 
 | Dimensão | Nota | Comentário |
 |----------|------|------------|
 | Arquitetura | 9/10 | Design modular, bem documentada |
-| Implementação | 8/10 | P0+P1 completos; penalizado por `update_pipeline.py` non-functional e divergências de feature set |
-| Documentação | 8/10 | 60 inconsistências corrigidas (P2.C4). Incrementais futuros apenas |
-| Testes | 7/10 | 165 testes (17 arquivos), ~60% cobertura. `data/ingestion.py` sem testes |
+| Implementação | 8.5/10 | P0+P1 completos; feature parity corrigida (A9-A12). Penalizado por `update_pipeline.py` non-functional e holdout não-cronológico |
+| Documentação | 8/10 | 60 inconsistências corrigidas (P2.C4). Drift documental pendente (P2.C6) |
+| Testes | 7/10 | 166 testes (17 arquivos), ~60% cobertura. `data/ingestion.py` sem testes |
 | Reprodutibilidade | 9/10 | SHA256, seeds, requirements pinados, config-driven, configs sincronizados |
 | Production-Ready | 8/10 | Pipeline completo com calibração, risk e CLV. Penalizado por pickle sem hash e update_pipeline |
 

@@ -984,7 +984,11 @@ def _select_critical_feature_columns(
 
 
 def _is_model_feature_candidate(column: str) -> bool:
-    """Match the same pre-match feature pattern used by the training module."""
+    """Match the same pre-match feature pattern used by the training module.
+
+    Keywords must stay in sync with ``_is_allowed_feature`` in
+    ``japredictbet.models.train``.
+    """
 
     keywords = (
         "_last",
@@ -995,6 +999,8 @@ def _is_model_feature_candidate(column: str) -> bool:
         "_pressure",
         "_total",
         "elo",
+        "_rolling",
+        "_momentum",
     )
     direct_features = {"home_advantage", "is_home"}
     return column in direct_features or any(keyword in column for keyword in keywords)

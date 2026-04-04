@@ -23,20 +23,14 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from sklearn.impute import SimpleImputer
 from sklearn.model_selection import KFold
 
 # Ensure project root is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import optuna
-from japredictbet.config import (
-    DataConfig,
-    FeatureConfig,
-    ModelConfig,
-    OddsConfig,
-    PipelineConfig,
-    ValueConfig,
-)
+from japredictbet.config import PipelineConfig
 from japredictbet.data.ingestion import load_historical_dataset
 from japredictbet.models.train import (
     _build_regressor,
@@ -53,7 +47,9 @@ from japredictbet.pipeline.mvp_pipeline import (
     _ensure_season_column,
 )
 from japredictbet.features.matchup import add_h2h_features, add_matchup_features
+from japredictbet.features.elo import EloConfig, add_elo_ratings
 from japredictbet.features.rolling import drop_redundant_features
+from japredictbet.features.team_identity import add_team_target_encoding
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
@@ -147,6 +143,34 @@ def _prepare_data(config: PipelineConfig) -> tuple[pd.DataFrame, pd.Series]:
         data = drop_redundant_features(data, config.features.rolling_windows)
 
     train_mask, _ = _build_temporal_split(data["season"], config.model.random_state)
+
+    # ELO ratings (P2.A10 — sync with production pipeline)
+    data = add_elo_ratings(
+        data,
+        home_team_col="home_team",
+        away_team_col="away_team",
+        home_score_col="home_goals",
+        away_score_col="away_goals",
+        season_col="season",
+        config=EloConfig(),
+    )
+
+    # Team target encoding (P2.A10 — sync with production pipeline)
+    data = add_team_target_encoding(
+        data,
+        team_col="home_team",
+        target_col="home_corners",
+        train_mask=train_mask,
+        feature_name="home_team_team_enc",
+    )
+    data = add_team_target_encoding(
+        data,
+        team_col="away_team",
+        target_col="away_corners",
+        train_mask=train_mask,
+        feature_name="away_team_team_enc",
+    )
+
     data = data.loc[train_mask].copy()
 
     feature_cols = _select_feature_columns(data, exclude=("home_corners", "away_corners"))
@@ -156,7 +180,7 @@ def _prepare_data(config: PipelineConfig) -> tuple[pd.DataFrame, pd.Series]:
     x = data[feature_cols]
     y_home = data["home_corners"]
     y_away = data["away_corners"]
-    mask = _valid_training_mask(x, y_home, y_away)
+    mask = _valid_training_mask(y_home, y_away)
     data = data.loc[mask]
 
     return data, feature_cols
@@ -188,6 +212,7 @@ def _make_objective(
     y_home = data[home_target].values
     y_away = data[away_target].values
     kf = KFold(n_splits=n_folds, shuffle=True, random_state=random_state)
+    needs_imputation = algorithm in ("ridge", "elasticnet")
 
     def objective(trial: optuna.Trial) -> float:
         params = SUGGEST_FN[algorithm](trial)
@@ -197,6 +222,11 @@ def _make_objective(
             x_train, x_val = x[train_idx], x[val_idx]
             y_h_train, y_h_val = y_home[train_idx], y_home[val_idx]
             y_a_train, y_a_val = y_away[train_idx], y_away[val_idx]
+
+            if needs_imputation:
+                imp = SimpleImputer(strategy="median")
+                x_train = imp.fit_transform(x_train)
+                x_val = imp.transform(x_val)
 
             model_h = _build_regressor(algorithm, random_state, params)
             model_a = _build_regressor(algorithm, random_state, params)
@@ -257,6 +287,9 @@ def run_hyperopt(
         print(f"[HyperOpt] {algo} best Poisson deviance: {best.value:.6f}")
         print(f"[HyperOpt] {algo} best params: {json.dumps(best.params, indent=2)}")
 
+        # Save per-algorithm incrementally to avoid loss on crash
+        _save_results(results, Path("artifacts/hyperopt"))
+
     return results
 
 
@@ -298,21 +331,7 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     args = _parse_args()
 
-    import yaml
-    with open(args.config) as f:
-        raw = yaml.safe_load(f)
-
-    config = PipelineConfig(
-        data=DataConfig(
-            raw_path=Path(raw["data"]["raw_path"]),
-            processed_path=Path(raw["data"]["processed_path"]),
-            date_column=raw["data"].get("date_column", "date"),
-        ),
-        features=FeatureConfig(**raw["features"]),
-        model=ModelConfig(**raw["model"]),
-        odds=OddsConfig(**raw["odds"]),
-        value=ValueConfig(**raw["value"]),
-    )
+    config = PipelineConfig.from_yaml(args.config)
 
     if args.algorithm == "all":
         algorithms = list(ALGORITHMS)

@@ -84,3 +84,39 @@ class PipelineConfig:
     model: ModelConfig
     odds: OddsConfig
     value: ValueConfig
+
+    @classmethod
+    def from_yaml(cls, config_path: str | Path) -> PipelineConfig:
+        """Load and parse a YAML config file into a PipelineConfig.
+
+        Centralised loader — all scripts should use this instead of
+        duplicating YAML-to-dataclass logic.
+        """
+        import yaml
+
+        path = Path(config_path)
+        with path.open("r", encoding="utf-8") as f:
+            raw = yaml.safe_load(f)
+
+        data_cfg = DataConfig(
+            raw_path=Path(raw["data"]["raw_path"]),
+            processed_path=Path(raw["data"]["processed_path"]),
+            date_column=raw["data"].get("date_column", "date"),
+        )
+        features_cfg = FeatureConfig(**raw["features"])
+
+        model_dict = raw["model"].copy()
+        if "algorithms" in model_dict and isinstance(model_dict["algorithms"], list):
+            model_dict["algorithms"] = tuple(model_dict["algorithms"])
+        model_cfg = ModelConfig(**model_dict)
+
+        odds_cfg = OddsConfig(**raw["odds"])
+        value_cfg = ValueConfig(**raw["value"])
+
+        return cls(
+            data=data_cfg,
+            features=features_cfg,
+            model=model_cfg,
+            odds=odds_cfg,
+            value=value_cfg,
+        )

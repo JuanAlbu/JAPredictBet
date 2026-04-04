@@ -2,50 +2,18 @@
 
 import argparse
 import pickle
-import yaml
 from pathlib import Path
 import math
 import pandas as pd
 
-from japredictbet.config import (
-    DataConfig,
-    FeatureConfig,
-    ModelConfig,
-    OddsConfig,
-    PipelineConfig,
-    ValueConfig,
-)
+from japredictbet.config import PipelineConfig
 from japredictbet.models.train import TrainedModels
 from japredictbet.pipeline.mvp_pipeline import run_mvp_pipeline
 
 
 def load_config(config_path: Path) -> PipelineConfig:
     """Load and parse the YAML config file into a PipelineConfig object."""
-    with open(config_path, "r") as f:
-        config_dict = yaml.safe_load(f)
-
-    # Convert path strings to Path objects before creating dataclasses
-    data_conf_dict = config_dict["data"]
-    data_conf_dict["raw_path"] = Path(data_conf_dict["raw_path"])
-    data_conf_dict["processed_path"] = Path(data_conf_dict["processed_path"])
-
-    # Recursively build the nested dataclasses
-    data_cfg = DataConfig(**data_conf_dict)
-    features_cfg = FeatureConfig(**config_dict["features"])
-    model_conf_dict = config_dict["model"].copy()
-    if "algorithms" in model_conf_dict and isinstance(model_conf_dict["algorithms"], list):
-        model_conf_dict["algorithms"] = tuple(model_conf_dict["algorithms"])
-    model_cfg = ModelConfig(**model_conf_dict)
-    odds_cfg = OddsConfig(**config_dict["odds"])
-    value_cfg = ValueConfig(**config_dict["value"])
-
-    return PipelineConfig(
-        data=data_cfg,
-        features=features_cfg,
-        model=model_cfg,
-        odds=odds_cfg,
-        value=value_cfg,
-    )
+    return PipelineConfig.from_yaml(config_path)
 
 
 def parse_args() -> argparse.Namespace:

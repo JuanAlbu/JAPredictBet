@@ -58,9 +58,11 @@ class TestHybridEnsembleSchedule:
                 assert algo == "elasticnet", f"Position {i}: expected elasticnet, got {algo}"
 
     def test_build_ensemble_schedule_triggers_hybrid(self) -> None:
-        """Test that size 25-35 triggers hybrid mode."""
+        """Test that size 25-35 triggers hybrid mode when algorithms include linear."""
         for size in [25, 28, 30, 32, 35]:
-            schedule = _build_ensemble_schedule(size, ("xgboost", "lightgbm", "randomforest"))
+            schedule = _build_ensemble_schedule(
+                size, ("xgboost", "lightgbm", "ridge", "elasticnet")
+            )
             
             has_ridge = "ridge" in schedule
             has_elastic = "elasticnet" in schedule
@@ -68,6 +70,15 @@ class TestHybridEnsembleSchedule:
             assert has_ridge or has_elastic, (
                 f"Size {size} should trigger hybrid (have ridge or elasticnet)"
             )
+
+    def test_build_ensemble_schedule_no_hybrid_without_linear(self) -> None:
+        """Test that size 25-35 does NOT trigger hybrid if no linear algorithms."""
+        schedule = _build_ensemble_schedule(30, ("xgboost", "lightgbm"))
+        
+        assert "ridge" not in schedule
+        assert "elasticnet" not in schedule
+        assert all(a in ("xgboost", "lightgbm") for a in schedule)
+        assert len(schedule) == 30
 
 
 class TestVariationParams:
