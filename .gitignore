@@ -32,6 +32,7 @@ htmlcov/
 *.joblib
 *.model
 *.log
+artifacts/
 
 # IDE / OS
 .vscode/
@@ -42,10 +43,16 @@ Thumbs.db
 # Local configs
 .env
 .env.*
+config_backup.yml
+config_test_*.yml
 
 # Reports
 *.html
 *.pdf
+
+# Execution outputs
+*_output.txt
+*_output.log
 
 # Logs
 log-test/

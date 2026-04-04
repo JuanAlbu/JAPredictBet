@@ -41,6 +41,12 @@
 ### Next Priority
 - P2 items (see docs/next_pass.md)
 
+### P0-FIX Hotfix (03-APR-2026)
+- `FIX.5` (rolling cross-group contamination): code-level fix implemented in `src/japredictbet/features/rolling.py` by migrating rolling mean/sum/std flows to `group.transform(...)`.
+- Regression coverage added in `tests/features/test_rolling_cross_group.py` to guarantee rolling windows do not cross team boundaries on interleaved data.
+- `FIX.6` (default algorithms): `ModelConfig.algorithms` now includes `ridge` and `elasticnet` by default.
+- Remaining operational step for `FIX.5`: retrain model artifacts and rerun full validation scenarios (full dataset, recent subset, random lines).
+
 ---
 
 ## Objective

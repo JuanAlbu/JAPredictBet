@@ -38,10 +38,10 @@ def add_rolling_features(
         group = df.groupby(team_col, sort=False)
 
     df[f"{prefix}_corners_for_last{window}"] = (
-        group[for_col].shift(1).rolling(window).mean()
+        group[for_col].transform(lambda x: x.shift(1).rolling(window).mean())
     )
     df[f"{prefix}_corners_against_last{window}"] = (
-        group[against_col].shift(1).rolling(window).mean()
+        group[against_col].transform(lambda x: x.shift(1).rolling(window).mean())
     )
 
     return df
@@ -66,10 +66,10 @@ def add_stat_rolling(
         group = df.groupby(team_col, sort=False)
 
     df[f"{prefix}_{stat_name}_for_last{window}"] = (
-        group[for_col].shift(1).rolling(window).mean()
+        group[for_col].transform(lambda x: x.shift(1).rolling(window).mean())
     )
     df[f"{prefix}_{stat_name}_against_last{window}"] = (
-        group[against_col].shift(1).rolling(window).mean()
+        group[against_col].transform(lambda x: x.shift(1).rolling(window).mean())
     )
     return df
 
@@ -115,22 +115,22 @@ def add_result_rolling(
     )
 
     data[f"{prefix}_wins_last{window}"] = (
-        group["_tmp_win"].shift(1).rolling(window).sum()
+        group["_tmp_win"].transform(lambda x: x.shift(1).rolling(window).sum())
     )
     data[f"{prefix}_draws_last{window}"] = (
-        group["_tmp_draw"].shift(1).rolling(window).sum()
+        group["_tmp_draw"].transform(lambda x: x.shift(1).rolling(window).sum())
     )
     data[f"{prefix}_losses_last{window}"] = (
-        group["_tmp_loss"].shift(1).rolling(window).sum()
+        group["_tmp_loss"].transform(lambda x: x.shift(1).rolling(window).sum())
     )
     data[f"{prefix}_points_last{window}"] = (
-        group["_tmp_points"].shift(1).rolling(window).sum()
+        group["_tmp_points"].transform(lambda x: x.shift(1).rolling(window).sum())
     )
     data[f"{prefix}_win_rate_last{window}"] = (
-        group["_tmp_win"].shift(1).rolling(window).mean()
+        group["_tmp_win"].transform(lambda x: x.shift(1).rolling(window).mean())
     )
     data[f"{prefix}_points_per_game_last{window}"] = (
-        group["_tmp_points"].shift(1).rolling(window).mean()
+        group["_tmp_points"].transform(lambda x: x.shift(1).rolling(window).mean())
     )
     return data.drop(columns=["_tmp_win", "_tmp_draw", "_tmp_loss", "_tmp_points"])
 
@@ -171,10 +171,10 @@ def add_rolling_std(
         group = df.groupby(team_col, sort=False)
 
     df[f"{prefix}_{stat_name}_for_std_last{window}"] = (
-        group[for_col].shift(1).rolling(window).std()
+        group[for_col].transform(lambda x: x.shift(1).rolling(window).std())
     )
     df[f"{prefix}_{stat_name}_against_std_last{window}"] = (
-        group[against_col].shift(1).rolling(window).std()
+        group[against_col].transform(lambda x: x.shift(1).rolling(window).std())
     )
     return df
 

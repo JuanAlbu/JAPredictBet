@@ -942,11 +942,15 @@ def _drop_matches_with_missing_critical_data(data: pd.DataFrame) -> pd.DataFrame
     """Drop matches with missing labels or model-critical features."""
 
     required = ["season", "home_team", "away_team", "home_corners", "away_corners"]
-    feature_columns = _select_critical_feature_columns(
-        data,
-        exclude=("home_corners", "away_corners"),
-    )
-    subset = [column for column in required + feature_columns if column in data.columns]
+    # Keep this list intentionally small to avoid over-pruning smaller datasets.
+    # Missing engineered features are handled later via per-feature imputation.
+    optional_critical = [
+        "home_team_team_enc",
+        "away_team_team_enc",
+        "home_elo",
+        "away_elo",
+    ]
+    subset = [column for column in required + optional_critical if column in data.columns]
     if not subset:
         return data
 

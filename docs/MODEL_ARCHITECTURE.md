@@ -88,6 +88,46 @@ Example calculation:
 
 ---
 
+## H2H Features (P1.B5)
+
+Head-to-head features from `add_h2h_features()` in `matchup.py`.
+
+Canonical pair matching: (A vs B) == (B vs A).
+
+Features generated (rolling last 3 H2H encounters):
+- total_corners_h2h_last3
+- total_goals_h2h_last3
+- total_shots_h2h_last3
+
+Shift(1) applied to avoid leakage. `min_periods=1` for pairs with < 3 encounters.
+
+Config: `FeatureConfig.h2h_window = 3`.
+
+---
+
+## ELO Ratings
+
+`add_elo_ratings()` computes per-team ELO scores updated match-by-match.
+
+Features:
+- home_elo
+- away_elo
+
+---
+
+# Probability Calibration (P1.B1)
+
+Module: `src/japredictbet/probability/calibration.py`
+
+Functions:
+- `brier_score(y_true, y_prob)` — Brier Score for probability accuracy
+- `expected_calibration_error(y_true, y_prob, n_bins)` — ECE with configurable bins
+- `calibration_report(y_true, y_prob)` — Formatted summary report
+
+Used to evaluate how well the model's predicted probabilities match observed frequencies.
+
+---
+
 # Model Type
 
 Algorithms in production:
@@ -104,8 +144,8 @@ L2/L1+L2 regularized regression (linear models).
 
 Current default consensus composition (30 models, 70/30 hybrid):
 
-- 10 XGBoost models (Poisson objective)
-- 11 LightGBM models (Poisson loss)
+- 11 XGBoost models (Poisson objective)
+- 10 LightGBM models (Poisson loss)
 - 5 Ridge models (L2 regularization, variable alpha)
 - 4 ElasticNet models (L1+L2, variable l1_ratio)
 
@@ -145,8 +185,8 @@ P(total corners > 9.5)
 The consensus mode uses a carefully balanced 30-model ensemble:
 
 ### Booster Models (21 total = 70%)
-- **10 XGBoost:** Poisson objective, varying depth/learning rates
-- **11 LightGBM:** Poisson loss, varying num_leaves/learning rates
+- **11 XGBoost:** Poisson objective, varying depth/learning rates
+- **10 LightGBM:** Poisson loss, varying num_leaves/learning rates
 
 ### Linear Models (9 total = 30%)
 - **5 Ridge:** L2 regularization, alpha varied
@@ -201,3 +241,56 @@ Example reproducibility test:
 | Reproducibility | 95%+ exact match | ✅ High reproducibility |
 
 **Conclusion:** Model architecture validated as production-ready across multiple data scenarios.
+
+---
+
+# SHAP Weighted Consensus (P1.C2)
+
+Module: `src/japredictbet/models/shap_weights.py`
+
+Functions:
+- `compute_shap_importance(model, x_sample)` — Mean |SHAP values| per feature
+- `compute_model_weights(ensemble_models, x_sample, normalize=True)` — Quality-based weights for weighted consensus voting
+- `compute_ensemble_feature_importance(ensemble_models, x_sample)` — Aggregated SHAP DataFrame (feature, mean_shap, std_shap, n_models)
+
+Supports all model types: XGBoost/LightGBM/RF (TreeExplainer), Ridge/ElasticNet (LinearExplainer).
+
+`ConsensusEngine.evaluate_with_consensus()` accepts optional `model_weights` for weighted voting.
+Backward-compatible: without weights, behavior is identical to uniform voting.
+
+---
+
+# Hyperparameter Persistence (P1.C3)
+
+Each trained model saves a JSON metadata file alongside the `.pkl` artifact:
+
+Fields: algorithm, hyperparameters, feature_columns, n_features, training timestamp, random_state.
+
+Enables full auditability and reproducibility of any trained model.
+
+---
+
+# CLV Audit (P1.D2)
+
+Module: `src/japredictbet/betting/engine.py`
+
+Functions:
+- `closing_line_value(entry_odds, closing_odds)` — CLV = implied_prob(closing) - implied_prob(entry)
+- `clv_hit_rate(clv_values)` — Fraction of bets with CLV ≥ 0
+- `clv_summary(clv_values)` — Summary statistics (mean, median, hit_rate)
+
+Measures whether bets are placed at prices better than the closing line.
+
+---
+
+# Risk Management (P1.D3)
+
+Module: `src/japredictbet/betting/risk.py`
+
+Functions:
+- `kelly_fraction(p_model, odds)` — Optimal Kelly fraction
+- `kelly_stake(bankroll, p_model, odds, fraction=0.25)` — Quarter Kelly staking (conservative)
+- `simulate_drawdown(bets, bankroll, n_sims, seed)` — Monte Carlo drawdown simulation (deterministic via seed)
+- `apply_slippage(odds, slippage)` — Parametrizable slippage stress test
+
+Quarter Kelly staking is the default for conservative bankroll management.

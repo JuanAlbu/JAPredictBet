@@ -67,6 +67,7 @@ Includes:
 - H2H (Head-to-Head) statistics
 - team strength (ELO ratings)
 - team identity features
+- group-safe rolling computation (`group.transform(lambda x: x.shift(1).rolling(window)...)`) to avoid cross-team leakage when rows are date-ordered
 
 ---
 

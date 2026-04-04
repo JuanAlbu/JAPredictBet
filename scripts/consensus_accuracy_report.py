@@ -515,7 +515,11 @@ def main() -> None:
     ]
     history_cols = [col for col in history_cols if col in data.columns]
     if history_cols:
-        data = data.dropna(subset=history_cols).reset_index(drop=True)
+        # Keep rows with partial but sufficient historical context.
+        # Requiring all 8 columns can collapse smaller validation subsets.
+        min_history_non_null = max(2, len(history_cols) // 2)
+        history_coverage = data[history_cols].notna().sum(axis=1)
+        data = data.loc[history_coverage >= min_history_non_null].reset_index(drop=True)
 
     train_mask, test_mask = _build_temporal_split(data["season"], cfg.model.random_state)
     weights = _build_recency_weights(data["season"])
@@ -569,9 +573,20 @@ def main() -> None:
             seed=seed,
             dropout_rate=args.feature_dropout_rate,
         )
+        model_features = [
+            col for col in model_features if train_data[col].notna().any()
+        ]
         if len(model_features) < 10:
-            # Safety fallback to preserve trainability.
-            model_features = selected_without_blackout[:10]
+            # Safety fallback for sparse subsets: recover features that have
+            # at least one observed value in the train split.
+            fallback_features = [
+                col for col in selected if train_data[col].notna().any()
+            ]
+            model_features = fallback_features[:10]
+        if not model_features:
+            raise ValueError(
+                "No usable model features in consensus script for current train split."
+            )
 
         train_block = train_data[model_features + ["home_corners", "away_corners"]].copy()
         test_block = test_data[model_features].copy()

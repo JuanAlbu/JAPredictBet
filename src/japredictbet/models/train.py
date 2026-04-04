@@ -27,6 +27,7 @@ class TrainedModels:
     home_model: object
     away_model: object
     feature_columns: tuple[str, ...]
+    feature_fill_values: dict[str, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -67,13 +68,17 @@ def train_models(
     if not feature_cols:
         raise ValueError("No numeric feature columns available for training.")
 
-    x = features[feature_cols]
+    x = features[feature_cols].copy()
     y_home = features[home_target]
     y_away = features[away_target]
     weights = sample_weight if sample_weight is not None else None
 
-    mask = _valid_training_mask(x, y_home, y_away)
-    x = x.loc[mask]
+    x, feature_cols = _drop_unusable_feature_columns(x, feature_cols)
+    if not feature_cols:
+        raise ValueError("No usable feature columns after removing empty features.")
+
+    mask = _valid_training_mask(y_home, y_away)
+    x = x.loc[mask].copy()
     y_home = y_home.loc[mask]
     y_away = y_away.loc[mask]
     if weights is not None:
@@ -93,6 +98,12 @@ def train_models(
         model_params=model_params,
     )
 
+    feature_fill_values = {
+        col: float(x[col].median()) if x[col].notna().any() else 0.0
+        for col in feature_cols
+    }
+    x = x.fillna(feature_fill_values)
+
     if weights is not None:
         home_model.fit(x, y_home, sample_weight=weights)
         away_model.fit(x, y_away, sample_weight=weights)
@@ -104,6 +115,7 @@ def train_models(
         home_model=home_model,
         away_model=away_model,
         feature_columns=tuple(feature_cols),
+        feature_fill_values=feature_fill_values,
     )
 
 
@@ -261,15 +273,26 @@ def _select_feature_columns(
 
 
 def _valid_training_mask(
-    x: pd.DataFrame,
     y_home: pd.Series,
     y_away: pd.Series,
 ) -> pd.Series:
-    """Filter rows with missing values in features or targets."""
+    """Filter rows with valid targets.
 
-    x_valid = x.notna().all(axis=1)
+    Feature NaNs are handled by deterministic median imputation per feature.
+    """
+
     y_valid = y_home.notna() & y_away.notna()
-    return x_valid & y_valid
+    return y_valid
+
+
+def _drop_unusable_feature_columns(
+    x: pd.DataFrame,
+    feature_cols: list[str],
+) -> tuple[pd.DataFrame, list[str]]:
+    """Drop feature columns that are entirely NaN in the training sample."""
+
+    usable = [col for col in feature_cols if x[col].notna().any()]
+    return x[usable].copy(), usable
 
 
 def _is_allowed_feature(column: str, allowed_prefixes: tuple[str, ...] | None = None) -> bool:

@@ -163,7 +163,7 @@ The system is strictly an **analytics tool**.
 5. **Update documentation** when implementing P2 items
 6. **Reference test artifacts** in log-test/ directory for validation
 7. **Feature set:** 106+ features (rolling mean + STD + EMA + matchup + result + ELO + H2H - redundant)
-8. **Ensemble composition:** 10 XGBoost + 11 LightGBM + 5 Ridge + 4 ElasticNet = 30 models
+8. **Ensemble composition:** 11 XGBoost + 10 LightGBM + 5 Ridge + 4 ElasticNet = 30 models
 9. **New modules (P1):**
    - `src/japredictbet/probability/calibration.py` — Brier Score, ECE
    - `src/japredictbet/models/shap_weights.py` — SHAP-based model quality weights

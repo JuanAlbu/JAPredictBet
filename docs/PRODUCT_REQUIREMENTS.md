@@ -33,6 +33,7 @@ The system must:
 
 - ingest historical match data
 - compute rolling statistics
+- enforce rolling-window isolation by group (team/season) to prevent cross-team data leakage
 - generate training features
 - include rolling windows for last 5 and last 10 matches
 - add matchup and total-corners derived features

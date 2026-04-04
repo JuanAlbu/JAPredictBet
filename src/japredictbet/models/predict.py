@@ -26,7 +26,9 @@ def predict_expected_corners(
     if missing:
         raise ValueError(f"Missing feature columns for prediction: {missing}")
 
-    x = features[list(models.feature_columns)]
+    x = features[list(models.feature_columns)].copy()
+    if models.feature_fill_values:
+        x = x.fillna(models.feature_fill_values)
     home_pred = models.home_model.predict(x)
     away_pred = models.away_model.predict(x)
 
