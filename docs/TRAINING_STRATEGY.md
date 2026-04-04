@@ -59,8 +59,8 @@ The test dataset is derived only from the most recent season.
 Procedure:
 
 1. Identify the most recent season
-2. Randomly select 50% of matches from that season using a fixed seed
-3. Assign those matches to the test dataset
+2. Apply a strict temporal holdout: use the last ~25% of the most recent season (approximately 3 months) as the test set
+3. The split is deterministic and preserves chronological order (no random shuffle)
 
 Example:
 
@@ -69,9 +69,11 @@ Total matches: 380
 
 Test set:
 
-190 matches randomly selected
+~95 matches (last 3 months of the season, strict temporal cutoff)
 
 These matches represent the evaluation environment.
+
+Implementation: `_build_temporal_split(use_strict_holdout=True, holdout_months=3)` in `mvp_pipeline.py`.
 
 ---
 
@@ -80,14 +82,14 @@ These matches represent the evaluation environment.
 The training dataset includes:
 
 - 100% of all previous seasons
-- remaining 50% of matches from the most recent season
+- first ~75% of matches from the most recent season (before the temporal cutoff)
 
 Example:
 
 Training data:
 
 2018-2023 -> 100% of matches
-2024 -> remaining 50%
+2024 -> first ~75% (before temporal cutoff)
 
 This ensures the model learns from:
 

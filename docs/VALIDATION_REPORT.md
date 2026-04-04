@@ -1,9 +1,9 @@
-# JAPredictBet - Relatório de Validação do Projeto (01-APR-2026)
+# JAPredictBet - Relatório de Validação do Projeto (03-APR-2026)
 
-**Data:** 01 de Abril, 2026  
-**Revisão Anterior:** 30-MAR-2026  
+**Data:** 03 de Abril, 2026  
+**Revisão Anterior:** 01-APR-2026  
 **Objetivo:** Validar alinhamento do projeto com AGENTS.md, verificar completude do MVP e estado do pipeline  
-**Resultado Geral:** ✅ MVP + P0 + P1-A + P1-B(parcial) — Production-Ready
+**Resultado Geral:** ✅ MVP + P0 + P0-FIX + P1 (100%) — Production-Ready
 
 ---
 
@@ -24,7 +24,7 @@
 |--------|--------|------------|
 | **Linguagem:** Python | ✅ | 100% Python |
 | **Style Guide:** PEP8 | ✅ | Imports, naming convention seguidos |
-| **Bibliotecas Preferidas** | ✅ | pandas, numpy, sklearn, xgboost, lightgbm, scipy |
+| **Bibliotecas Preferidas** | ✅ | pandas, numpy, sklearn, xgboost, lightgbm, scipy, optuna, shap |
 | **Estrutura de Pastas** | ✅ | Preservada (data/, src/, docs/, tests/, scripts/) |
 | **Docstrings** | ⚠️ | Presentes em core, ausentes em alguns helpers |
 | **Funções Modulares** | ✅ | Pipeline refatorado com helpers dedicados |
@@ -65,7 +65,7 @@
 | Componente | Status | Localização |
 |-----------|--------|------------|
 | Ensemble 30 modelos | ✅ | `models/train.py`, `consensus_accuracy_report.py` |
-| Mix híbrido 70/30 | ✅ | 21 boosters + 9 linear (core + experimental) |
+| Mix híbrido 70/30 | ✅ | 11 XGB + 10 LGB + 5 Ridge + 4 ElasticNet (core + experimental) |
 | Consenso parametrizado | ✅ | `betting/engine.py`, `pipeline/mvp_pipeline.py` |
 | Dynamic margin rule | ✅ | `engine.py::_compute_dynamic_threshold()` |
 | Lambda validation | ✅ | `engine.py::_validate_lambda()` — NaN/Inf guard |
@@ -119,25 +119,26 @@
 ### ~~P0.3: Mix Híbrido no Pipeline Principal~~ ✅ RESOLVIDO (P1.A1)
 - **Problema original:** Mix 70/30 apenas no script experimental
 - **Resolução:** `_build_hybrid_ensemble_schedule()` implementada em `train.py`
-- **Composição:** 21 boosters (10 XGB + 11 LGB) + 9 linear (5 Ridge + 4 ElasticNet)
+- **Composição:** 21 boosters (11 XGB + 10 LGB) + 9 linear (5 Ridge + 4 ElasticNet)
 - **Validação:** 13 testes novos + todos os 30 modelos treinando sem erro
 
 ---
 
 ## 4. COBERTURA DE TESTES
 
-### 4.1 Estado Atual: 87 testes passando
+### 4.1 Estado Atual: 158 testes passando
 
 | Módulo | Arquivo(s) | Testes | Status |
 |--------|-----------|--------|--------|
-| `betting/` | `test_engine.py` | ~30+ | ✅ |
+| `betting/` | `test_engine.py`, `test_clv.py`, `test_lambda_validation.py`, `test_p1a2_dynamic_margin.py`, `test_weighted_consensus.py`, `test_risk.py` | ~90+ | ✅ |
 | `odds/` | `test_collector.py` | ~5 | ✅ |
 | `pipeline/` | `test_mvp_pipeline.py` | ~15+ | ✅ |
 | `models/` | `test_train.py` | 13+ | ✅ |
-| `features/` | `test_rolling.py` (P1.B2) | 11 | ✅ |
-| integration | `test_integration.py`, `test_consensus_integration.py` | ~10+ | ✅ |
+| `features/` | `test_rolling_p1b2.py`, `test_drop_redundant.py`, `test_h2h.py`, `test_rolling_cross_group.py` | 25+ | ✅ |
+| `probability/` | `test_calibration.py` | 16 | ✅ |
+| integration | `integration_p1a2.py`, `integration_p1a3.py` | ~10+ | ✅ |
 
-**Total:** 87/87 passando (10 arquivos de teste)
+**Total:** 158/158 passando (17 arquivos de teste)
 
 ### 4.2 Gaps de Cobertura (P2)
 
@@ -199,17 +200,21 @@ Todos os relatórios em `log-test/`:
 
 ---
 
-## 7. ITENS PENDENTES (P1 Restante + P2)
+## 7. ITENS PENDENTES (P2)
 
-### P1 — Próximos
-- [ ] P1.B1 — Calibração de Probabilidades (Brier/ECE)
-- [ ] P1.C1 — Otimização de Hiperparâmetros
-- [ ] P1.C2 — SHAP + Votos Ponderados
-- [ ] P1.C3 — Persistência de Hiperparâmetros
-- [ ] P1.D2 — Auditoria de CLV
-- [ ] P1.D3 — Gestão de Risco (Kelly, Drawdown)
+### P1 — 100% COMPLETO ✅ (03-APR-2026)
+- [x] P1.B1 — Calibração de Probabilidades (Brier/ECE) ✅
+- [x] P1.C1 — Otimização de Hiperparâmetros (Optuna) ✅
+- [x] P1.C2 — SHAP + Votos Ponderados ✅
+- [x] P1.C3 — Persistência de Hiperparâmetros ✅
+- [x] P1.D2 — Auditoria de CLV ✅
+- [x] P1.D3 — Gestão de Risco (Kelly, Drawdown) ✅
 
-### P2 — Quality & Infrastructure
+### P2 — Quality & Infrastructure (Próximo)
+- [ ] P2.C4 — Sincronizar documentação contraditória
+- [ ] P2.B6 — Centralizar config loading
+- [ ] P2.B3 — Reescrever `update_pipeline.py`
+- [ ] P2-SHADOW — Superbet Shadow Mode
 - [ ] Expandir testes para 70% cobertura
 - [ ] CI básico (pytest em push)
 - [ ] Logging estruturado
@@ -227,13 +232,13 @@ Todos os relatórios em `log-test/`:
 | **Bloqueadores Críticos** | ✅ | **Todos 3 resolvidos** (hardcodes, margem, mix) |
 | **Reproducibilidade** | ✅ | Config-driven, seeds, requirements pinados |
 | **Qualidade Código** | ✅ | Boa estrutura, coverage pode melhorar |
-| **Feature Engineering** | ✅ | 106 features (mean + STD + EMA + matchup + result + ELO) |
+| **Feature Engineering** | ✅ | 106 features (mean + STD + EMA + matchup + result + ELO + H2H) |
 | **Pronto para Produção** | ✅ | Sim — como ferramenta analítica |
 
-**RECOMENDAÇÃO:** Avançar para P1.B1 (Calibração) como próxima prioridade.
+**RECOMENDAÇÃO:** Avançar para P2 (documentação, testes, SHADOW mode).
 
 ---
 
-**Relatório Preparado por:** Revisão Automática  
-**Próxima Review:** Após conclusão de P1.B1  
+**Relatório Atualizado:** 03-APR-2026  
+**Próxima Review:** Após conclusão de P2.C4  
 **Arquivo:** `docs/VALIDATION_REPORT.md`

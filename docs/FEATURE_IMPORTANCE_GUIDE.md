@@ -11,9 +11,17 @@ to model predictions.
 
 Recommended methods:
 
-XGBoost feature importance  
+XGBoost feature importance (`models/importance.py`)  
 Permutation importance  
-SHAP values
+SHAP values (`models/shap_weights.py`) — supports XGBoost, LightGBM, RF (TreeExplainer), Ridge/ElasticNet (LinearExplainer)
+
+## SHAP-based Model Weighting (P1.C2)
+
+`compute_model_weights()` assigns quality-based weights to ensemble members.
+`compute_shap_importance()` computes mean |SHAP values| per feature per model.
+`compute_ensemble_feature_importance()` aggregates SHAP across all 30 models.
+
+The `ConsensusEngine` supports weighted voting using these weights.
 
 ---
 
@@ -34,10 +42,18 @@ Matchup Features
 attack_vs_defense  
 rating_difference
 
+H2H Features (P1.B5)
+
+total_corners_h2h_last3  
+total_goals_h2h_last3  
+total_shots_h2h_last3
+
 Additional groups in current pipeline:
 
 - ELO features
 - rolling result-form metrics
+- rolling STD (volatility)
+- rolling EMA (exponential moving average)
 - derived totals (`*_total*`)
 
 ---

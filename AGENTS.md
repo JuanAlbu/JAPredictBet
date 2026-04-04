@@ -51,7 +51,10 @@ pandas
 numpy  
 scikit-learn  
 xgboost  
+lightgbm  
 scipy  
+optuna  
+shap  
 
 ---
 
@@ -74,8 +77,8 @@ Agents must respect module boundaries:
 data → ingestion only  
 features → feature generation  
 models → training and inference  
-probability → statistical calculations  
-betting → odds comparison logic
+probability → calibration metrics (Brier, ECE)  
+betting → odds comparison, Poisson probability, consensus, risk management
 
 ---
 
@@ -99,6 +102,14 @@ Every major change must update:
 PROJECT_CONTEXT.md  
 ARCHITECTURE.md  
 PRODUCT_REQUIREMENTS.md
+
+Completed roadmap items must be moved to:
+
+COMPLETION_HISTORY.md
+
+Active roadmap (open items only):
+
+next_pass.md
 
 ---
 

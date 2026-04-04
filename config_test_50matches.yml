@@ -5,6 +5,10 @@ data:
 
 features:
   rolling_windows: [10, 5]
+  rolling_use_std: true  # P1.B2: Include rolling standard deviation
+  rolling_use_ema: true  # P1.B2: Include EMA for recent form
+  drop_redundant: true  # Drop wins/points (keep win_rate/points_per_game) + EMA window10
+  h2h_window: 3  # P1.B5: Head-to-head last N meetings
 
 model:
   objective: "count:poisson"
@@ -25,3 +29,5 @@ value:
   consensus_start: 0.35
   consensus_end: 1.00
   consensus_step: 0.05
+  tight_margin_threshold: 0.5 # corners - margin considered "tight"
+  tight_margin_consensus: 0.50 # 50% - consensus required when tight

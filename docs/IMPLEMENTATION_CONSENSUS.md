@@ -10,12 +10,17 @@ Implementar o sistema de **Detecção de Value Bets** em escanteios utilizando a
 * [cite_start]**Abstenção:** O sistema deve descartar a aposta (status: "Insegura") caso o consenso não atinja o threshold[cite: 498, 507].
 
 ## 3. Arquitetura do Conselho (30 Modelos)
-Para garantir a diversidade e robustez, o conjunto será formado por 3 algoritmos principais, com 10 variações de hiperparâmetros cada:
+Para garantir a diversidade e robustez, o conjunto utiliza um **mix híbrido 70/30** com 4 algoritmos:
 
-### A. Algoritmos Selecionados
-1.  [cite_start]**XGBoost Regressor:** Benchmark individual do TCC (58% de acurácia base)[cite: 731]. Deve usar objetivo `count:poisson`.
-2.  **LightGBM Regressor:** Alta eficiência e suporte nativo à Distribuição de Poisson.
-3.  [cite_start]**Random Forest:** Captura padrões distintos via aleatorização de recursos e múltiplas árvores [cite: 225-227].
+### A. Composição do Ensemble (70% Boosters + 30% Linear)
+1.  **11 XGBoost Regressors:** Benchmark individual do TCC. Objetivo `count:poisson`. Alternância de hiperparâmetros (depth, learning_rate) via `build_variation_params()`.
+2.  **10 LightGBM Regressors:** Alta eficiência e suporte nativo à Distribuição de Poisson (`poisson` loss). Alternância de num_leaves e learning_rate.
+3.  **5 Ridge Regressors:** Regularização L2, alpha variável para diversidade. Modelo linear para capturar padrões complementares.
+4.  **4 ElasticNet Regressors:** Regularização L1+L2, l1_ratio variável. Complementa Ridge com seleção de features implícita.
+
+**Total:** 21 boosters (XGBoost + LightGBM) + 9 linear (Ridge + ElasticNet) = 30 modelos.
+
+**Schedule:** `_build_hybrid_ensemble_schedule()` em `train.py` alterna XGB/LGB nos boosters e Ridge/ElasticNet nos lineares. Ordem determinística por seed.
 
 ## 4. Pipeline Técnico de Decisão
 O Agente deve implementar o fluxo seguindo esta sequência lógica:
@@ -49,7 +54,7 @@ O Agente deve implementar o fluxo seguindo esta sequência lógica:
 ### Ensemble 30-Model Consensus (Real-World Validation 30-MAR-2026)
 
 **Architecture Implemented:**
-- ✅ 10 XGBoost + 10 LightGBM + 10 RandomForest = 30 total
+- ✅ 11 XGBoost + 10 LightGBM + 5 Ridge + 4 ElasticNet = 30 total
 - ✅ Each model trained independently with deterministic seed
 - ✅ Hybrid 70/30 split: 70% boosting (XGB/LGBM) + 30% linear (Ridge/ElasticNet)
 - ✅ Per-model diversity: 20% feature dropout, 3-column feature blackout

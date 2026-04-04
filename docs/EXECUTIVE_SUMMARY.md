@@ -1,4 +1,4 @@
-# SUMÁRIO EXECUTIVO — ESTADO DO PROJETO (01-APR-2026)
+# SUMÁRIO EXECUTIVO — ESTADO DO PROJETO (03-APR-2026)
 
 ## Visão Geral
 
@@ -8,10 +8,10 @@
 | Conformidade AGENTS.md | 95% | Estrutura, código, constraints OK |
 | Reproducibilidade | 95% | Config-driven, seeds, requirements pinados, SHA256 |
 | Integridade Dados | 100% | Datasets e lineage validados |
-| Testes | 87/87 | 10 arquivos de teste, all passing |
-| Documentação | 90% | Revisada e sincronizada 01-APR-2026 |
+| Testes | 158/158 | 17 arquivos de teste, all passing |
+| Documentação | 90% | Revisada e sincronizada 03-APR-2026 |
 
-**GERAL:** ✅ MVP Production-Ready + P0 100% + P1-A 100% + P1-B parcial
+**GERAL:** ✅ MVP Production-Ready + P0 100% + P1 100% COMPLETO
 
 ---
 
@@ -23,22 +23,35 @@
 - Artifact versioning com SHA256
 - CLI 100% parametrizado (zero hardcodes)
 
-### ✅ P0-FIX — Bugs Críticos (31-MAR-2026)
+### ✅ P0-FIX — Bugs Críticos (31-MAR a 03-APR-2026)
 - FIX.1: Hybrid schedule confirmado em `train.py`
 - FIX.2: `importance.py` multi-model dispatch (XGB/LGB/Ridge/ElasticNet)
 - FIX.3: Config schema padronizado + validação `__post_init__`
 - FIX.4: Requirements pinados + requirements-dev.txt
+- FIX.5: Rolling cross-group contamination corrigido via `.transform()`
+- FIX.6: Default algorithms atualizado (5 algoritmos completos)
 
 ### ✅ P1-A — Integridade do Pipeline (31-MAR-2026)
 - A1: Mix 70/30 portado para core (21 boosters + 9 linear)
 - A2: Dynamic margin rule em `engine.py` (`tight_margin_threshold`, `tight_margin_consensus`)
 - A3: Lambda validation com NaN/Inf guard
 
-### ✅ P1-B (Parcial) — Features (31-MAR-2026)
+### ✅ P1-B — Features (03-APR-2026)
+- B1: Calibração de Probabilidades (Brier/ECE) — `probability/calibration.py`
 - B2: Rolling STD + EMA (106 features total)
 - B3: Momentum (win_rate, points_per_game) — pré-existente
-- B4: H2H & cross-features — pré-existente
-- B1: Calibração (Brier/ECE) — **PENDENTE** (próxima prioridade)
+- B4: Cross-features (attack×defense, diffs, pressure_index) — pré-existente
+- B5: H2H Confronto Direto (last 3) — `matchup.py::add_h2h_features()`
+
+### ✅ P1-C — Otimização e Análise (03-APR-2026)
+- C1: HyperOpt via Optuna — `scripts/hyperopt_search.py`
+- C2: SHAP weighted votes — `models/shap_weights.py` + weighted consensus
+- C3: Hyperparameter persistence — JSON metadata alongside .pkl
+
+### ✅ P1-D — Value e Risco (03-APR-2026)
+- D1: EV formula em engine.py
+- D2: CLV audit — `closing_line_value()`, `clv_hit_rate()`, `clv_summary()`
+- D3: Kelly/Risk — `betting/risk.py` (Quarter Kelly, Monte Carlo, slippage)
 
 ### ✅ Consensus Script Sync (01-APR-2026)
 - `consensus_accuracy_report.py` sincronizado com pipeline principal
@@ -59,12 +72,12 @@
 
 ## Próximos Passos (Ordem Recomendada)
 
-1. **P1.B1** — Calibração de Probabilidades (Brier Score, ECE)
-2. **P1.C1** — Otimização de Hiperparâmetros
-3. **P1.C2** — SHAP + Votos Ponderados
-4. **P1.D2** — Auditoria de CLV
-5. **P1.D3** — Gestão de Risco (Kelly, Drawdown)
-6. **P2** — Expandir testes para 70% cobertura, CI, logging
+1. **P2.C4** — Sincronizar documentação contraditória (60 inconsistências)
+2. **P2.C5** — Sync configs de teste com P1 feature flags
+3. **P2.B6** — Centralizar config loading (`PipelineConfig.from_yaml()`)
+4. **P2.B3** — Reescrever `update_pipeline.py`
+5. **P2-SHADOW** — Superbet Shadow Mode (SH1-SH7)
+6. **P2.A1-A13** — Expandir testes para 70% cobertura
 
 ---
 

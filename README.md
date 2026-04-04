@@ -2,7 +2,7 @@
 
 A system to identify potential value betting opportunities in football corner markets, using statistical analysis and machine learning models.
 
-**Status:** ✅ MVP Entregue + P0 100% Completo (30-MAR-2026)
+**Status:** ✅ MVP Entregue + P0 100% + P1 100% Completo (03-APR-2026)
 
 ## 🎯 Goal
 
@@ -101,14 +101,19 @@ Reports are saved to `log-test/` with timestamp.
 - `numpy`
 - `scikit-learn`
 - `xgboost`
+- `lightgbm`
 - `scipy`
 - `requests`
+- `optuna`
+- `shap`
 - `pytest`
 - `PyYAML`
 
-## ✅ P0 Completion Status
+## ✅ P0 + P1 Completion Status
 
-**P0 - 100% COMPLETE** (30-MAR-2026)
+**P0 - 100% COMPLETE** (30-MAR-2026)  
+**P0-FIX - 100% COMPLETE** (03-APR-2026) — 6 bugs críticos corrigidos  
+**P1 - 100% COMPLETE** (03-APR-2026) — 158/158 testes passando (17 arquivos)
 
 All 9 P0 items successfully implemented and validated with real data:
 
@@ -147,3 +152,4 @@ All 9 P0 items successfully implemented and validated with real data:
 - Deterministic and reproducible pipelines.
 - Modular architecture with a clear separation of concerns.
 - A core engine for single-event evaluation, wrapped by other components for batch processing.
+- Strictly an **analytics tool** — no real betting or bookmaker connections.

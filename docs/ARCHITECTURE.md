@@ -85,8 +85,8 @@ For consensus mode, training supports automated artifact generation with
 standardized names.
 
 **Booster Models (21 models = 70%):**
-- `xgb_model_1.pkl` to `xgb_model_10.pkl`
-- `lgbm_model_1.pkl` to `lgbm_model_11.pkl`
+- `xgb_model_1.pkl` to `xgb_model_11.pkl`
+- `lgbm_model_1.pkl` to `lgbm_model_10.pkl`
 
 **Linear Models (9 models = 30%):**
 - `ridge_model_1.pkl` to `ridge_model_5.pkl` 

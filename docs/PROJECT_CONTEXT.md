@@ -45,7 +45,7 @@
 - `FIX.5` (rolling cross-group contamination): code-level fix implemented in `src/japredictbet/features/rolling.py` by migrating rolling mean/sum/std flows to `group.transform(...)`.
 - Regression coverage added in `tests/features/test_rolling_cross_group.py` to guarantee rolling windows do not cross team boundaries on interleaved data.
 - `FIX.6` (default algorithms): `ModelConfig.algorithms` now includes `ridge` and `elasticnet` by default.
-- Remaining operational step for `FIX.5`: retrain model artifacts and rerun full validation scenarios (full dataset, recent subset, random lines).
+- Remaining operational step for `FIX.5`: ~~retrain model artifacts and rerun full validation scenarios~~ ✅ DONE (03-APR-2026) — retreino completo + validação full/random-lines/recent executada.
 
 ---
 
@@ -160,11 +160,11 @@ Operational note - Current State (01-APR-2026):
   - timestamped report generation in `log-test/` with full model audit trail
   - **all hardcodes removed (P0.1), fully respects CLI overrides and config.yml**
   
-Testing & Validation (01-APR-2026):
+Testing & Validation (03-APR-2026):
 - Tested with 101 matches from full season data (dynamic, fixed, random lines)
 - Tested with 50 recent matches + 180 days historical context
-- 87 unit/integration tests passing across 10 test files
-- Consensus script synchronized with pipeline (106 features, STD+EMA+drop_redundant)
+- 158 unit/integration tests passing across 17 test files
+- Consensus script synchronized with pipeline (106 features, STD+EMA+drop_redundant+H2H)
 - All tests runnable and producing valid reports in log-test/
 
 Latest test results (31-MAR-2026):
@@ -194,7 +194,7 @@ Future extensions may include:
 ### BASE ATUAL (MVP JA ENTREGUE)
 *Foco: registrar rapidamente o que ja existe para evitar retrabalho.*
 
-- [x] Ensemble deterministico de 30 modelos (11 XGB, 11 LGBM, 5 Ridge, 4 ElasticNet → 21 boosters + 9 linear) - **VALIDADO**
+- [x] Ensemble deterministico de 30 modelos (11 XGB, 10 LGBM, 5 Ridge, 4 ElasticNet → 21 boosters + 9 linear) - **VALIDADO**
 - [x] Consenso com threshold configuravel e sweep de thresholds - **VALIDADO**
 - [x] Matching robusto de equipes com fuzzy seguro e descarte de ambiguidades - **VALIDADO**
 - [x] Backtest com metricas de ROI/Yield por threshold - **VALIDADO**

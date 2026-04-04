@@ -109,6 +109,8 @@
 ✅ No new warnings/errors in output
 ```
 
+**Nota:** `config_test_50matches.yml` deve incluir todos os P1 feature flags (`rolling_use_std`, `rolling_use_ema`, `drop_redundant`, `h2h_window`, `tight_margin_threshold`, `tight_margin_consensus`) para reproduzir fielmente o pipeline de produção.
+
 ### Report Format
 
 ```

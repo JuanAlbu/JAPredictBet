@@ -194,29 +194,37 @@ away_corners_against_last10_away) / 2
 
 ---
 
-# 7. Optional Team Strength Features
+# 7. ELO Rating Features
 
-Team strength indicators may be added.
-
-Examples:
+Team strength indicators based on ELO-style rating system.
 
 | Column | Type | Description |
 |------|------|-------------|
-| home_team_rating | float | Team strength rating |
-| away_team_rating | float | Team strength rating |
-| rating_difference | float | Difference between ratings |
+| home_elo | float | Home team ELO rating |
+| away_elo | float | Away team ELO rating |
 
-Possible rating systems:
-
-- ELO rating
-- power ratings
-- model-learned parameters
-
-Current implementation includes ELO-style features in the training pipeline.
+Implementation: `add_elo_ratings()` in `features/elo.py`. Ratings updated match-by-match.
 
 ---
 
-# 8. Betting Odds Data (Optional)
+# 8. H2H (Head-to-Head) Features (P1.B5)
+
+Direct confrontation history between the two teams.
+
+| Column | Type | Description |
+|------|------|-------------|
+| total_corners_h2h_last3 | float | Avg total corners in last 3 H2H meetings |
+| total_goals_h2h_last3 | float | Avg total goals in last 3 H2H meetings |
+| total_shots_h2h_last3 | float | Avg total shots in last 3 H2H meetings |
+
+Implementation: `add_h2h_features()` in `features/matchup.py`.
+Canonical pair matching: (A vs B) == (B vs A).
+Shift(1) applied to avoid leakage. `min_periods=1` for pairs with < 3 encounters.
+Config: `FeatureConfig.h2h_window = 3`.
+
+---
+
+# 9. Betting Odds Data (Optional)
 
 Odds data can be included for backtesting.
 

@@ -1,18 +1,18 @@
-## CHECKLIST DE VALIDACAO FINAL (01-APR-2026)
+## CHECKLIST DE VALIDACAO FINAL (03-APR-2026)
 
 ### Validacoes Tecnicas
 
 **Estrutura de Codigo:**
-- [x] Modulos separados por responsabilidade (data, features, models, betting, etc)
+- [x] Modulos separados por responsabilidade (data, features, models, betting, probability, etc)
 - [x] Configuracao centralizada em `config.yml` com parametros documentados
-- [x] Ensemble de 30 modelos implementado e testado (21 boosters + 9 linear)
+- [x] Ensemble de 30 modelos implementado e testado (11 XGB + 10 LGB + 5 Ridge + 4 ElasticNet)
 - [x] Consenso com threshold parametrizado funcionando
 - [x] Dynamic margin rule implementada em `engine.py`
 - [x] Lambda validation (NaN/Inf guard) implementada
 - [x] Loggers por execucao em `log-test/` ativos
 - [x] PEP8 compliance verificado em modulos principais
 - [x] Docstrings nas funcoes core (train.py, engine.py, pipeline.py)
-- [x] 87/87 testes passando (10 arquivos de teste)
+- [x] 158/158 testes passando (17 arquivos de teste)
 
 **Integridade de Dados:**
 - [x] Dataset raw em `data/raw/dataset.csv` validado
@@ -25,15 +25,15 @@
 - [x] Objetivo Poisson conforme `config.yml` - VALIDADO
 - [x] Mix 70% boosting / 30% linear no core E experimental - IMPLEMENTADO
 - [x] Feature set: 106 features (mean + STD + EMA + matchup + result + ELO - redundant)
-- [x] Consensus script sincronizado com pipeline principal (01-APR-2026)
-- [ ] CLV >= 55% de acerto em janela representativa - **PENDENTE (P1.D2)**
-- [ ] Brier Score <= 0.20 consistente - **PENDENTE (P1.B1)**
-- [ ] ROI temporal positivo apos 500 Monte Carlo - **PENDENTE (P1.D3)**
+- [x] Consensus script sincronizado com pipeline principal (03-APR-2026)
+- [x] CLV implementado em `engine.py` via `closing_line_value()`, `clv_hit_rate()`, `clv_summary()` — **validação formal de threshold (CLV >= 55%) pendente com dados de closing odds reais (P2-SHADOW)**
+- [x] Brier Score implementado em `probability/calibration.py` via `brier_score()` + `expected_calibration_error()` — **validação formal de threshold (Brier <= 0.20) pendente com dataset grande**
+- [x] Monte Carlo drawdown implementado em `betting/risk.py` via `simulate_drawdown()` — **validação formal de ROI positivo pendente com dados operacionais**
 
 **Alignment com Constraints (AGENTS.md):**
 - [x] Linguagem Python - OK
 - [x] PEP8 style guide - OK
-- [x] Bibliotecas preferidas (pandas, numpy, sklearn, xgboost, lightgbm, scipy) - OK
+- [x] Bibliotecas preferidas (pandas, numpy, sklearn, xgboost, lightgbm, scipy, optuna, shap) - OK
 - [x] Folder structure preservada - OK
 - [x] Docstrings presentes em modulos main - OK
 - [x] Funcoes pequenas e modulares - PARCIALMENTE (algumas podem ser refatoradas)

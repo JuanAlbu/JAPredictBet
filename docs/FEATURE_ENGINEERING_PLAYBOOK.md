@@ -68,9 +68,26 @@ rating_difference
 
 Current pipeline also adds:
 
-- ELO-based team strength features
+- ELO-based team strength features (`add_elo_ratings()` in `elo.py`)
 - total corners/goals derived features (`*_total*`)
 - result-form rolling metrics (wins/draws/losses/win_rate/points_per_game)
+
+---
+
+# H2H Features (P1.B5)
+
+Head-to-head features from `add_h2h_features()` in `matchup.py`.
+
+Canonical pair matching: (A vs B) == (B vs A).
+
+Generated features:
+
+total_corners_h2h_last3  
+total_goals_h2h_last3  
+total_shots_h2h_last3
+
+Shift(1) applied to avoid leakage. `min_periods=1` for pairs with < 3 encounters.
+Config: `FeatureConfig.h2h_window = 3`.
 
 ---
 
