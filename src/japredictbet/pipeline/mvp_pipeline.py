@@ -947,8 +947,8 @@ def _drop_matches_with_missing_critical_data(data: pd.DataFrame) -> pd.DataFrame
     optional_critical = [
         "home_team_team_enc",
         "away_team_team_enc",
-        "home_elo",
-        "away_elo",
+        "home_elo_rating",
+        "away_elo_rating",
     ]
     subset = [column for column in required + optional_critical if column in data.columns]
     if not subset:

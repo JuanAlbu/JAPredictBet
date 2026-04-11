@@ -17,7 +17,7 @@
 
 ### P1 Completion ✅ (03-APR-2026)
 - **Status:** 100% COMPLETE
-- **Tests:** 158/158 passing (15+ test files)
+- **Tests:** 166/166 passing (20 test files)
 - **P1-A (Pipeline):** ✅ COMPLETE
   - A1: Hybrid 70/30 ensemble (21 boosters + 9 linear)
   - A2: Dynamic margin rule in engine.py
@@ -163,7 +163,7 @@ Operational note - Current State (01-APR-2026):
 Testing & Validation (03-APR-2026):
 - Tested with 101 matches from full season data (dynamic, fixed, random lines)
 - Tested with 50 recent matches + 180 days historical context
-- 158 unit/integration tests passing across 17 test files
+- 166 unit/integration tests passing across 20 test files
 - Consensus script synchronized with pipeline (106 features, STD+EMA+drop_redundant+H2H)
 - All tests runnable and producing valid reports in log-test/
 

@@ -103,7 +103,7 @@
 
 ## 3. BLOQUEADORES ANTERIORES — TODOS RESOLVIDOS ✅
 
-> Três bloqueadores foram identificados na revisão de 30-MAR-2026. **Todos foram resolvidos entre 30-MAR e 31-MAR-2026.**
+> Seis bloqueadores foram identificados nas revisões de 30-MAR e 31-MAR-2026. **Todos foram resolvidos entre 30-MAR e 03-APR-2026.** Detalhes completos em [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md).
 
 ### ~~P0.1: Hardcodes em Script Experimental~~ ✅ RESOLVIDO (P0)
 - **Problema original:** `consensus_accuracy_report.py` sobrescrevia argumentos CLI
@@ -122,23 +122,33 @@
 - **Composição:** 21 boosters (11 XGB + 10 LGB) + 9 linear (5 Ridge + 4 ElasticNet)
 - **Validação:** 13 testes novos + todos os 30 modelos treinando sem erro
 
+### ~~FIX.4: Pinnar versões em requirements.txt~~ ✅ RESOLVIDO (03-APR-2026)
+- **Resolução:** Versões exatas pinadas + `requirements-dev.txt` criado
+
+### ~~FIX.5: Cross-group contamination em rolling~~ ✅ RESOLVIDO (03-APR-2026)
+- **Resolução:** Migrado para `group.transform()` em todas as funções rolling
+
+### ~~FIX.6: Default algorithms sem Ridge/ElasticNet~~ ✅ RESOLVIDO (03-APR-2026)
+- **Resolução:** Default em `config.py` atualizado para incluir 5 algoritmos
+
 ---
 
 ## 4. COBERTURA DE TESTES
 
-### 4.1 Estado Atual: 158 testes passando
+### 4.1 Estado Atual: 166 testes passando
 
 | Módulo | Arquivo(s) | Testes | Status |
 |--------|-----------|--------|--------|
 | `betting/` | `test_engine.py`, `test_clv.py`, `test_lambda_validation.py`, `test_p1a2_dynamic_margin.py`, `test_weighted_consensus.py`, `test_risk.py` | ~90+ | ✅ |
 | `odds/` | `test_collector.py` | ~5 | ✅ |
 | `pipeline/` | `test_mvp_pipeline.py` | ~15+ | ✅ |
-| `models/` | `test_train.py` | 13+ | ✅ |
+| `models/` | `test_train.py`, `test_missing_feature_imputation.py` | 15+ | ✅ |
 | `features/` | `test_rolling_p1b2.py`, `test_drop_redundant.py`, `test_h2h.py`, `test_rolling_cross_group.py` | 25+ | ✅ |
 | `probability/` | `test_calibration.py` | 16 | ✅ |
+| `config` | `test_config_defaults.py` | 5+ | ✅ |
 | integration | `integration_p1a2.py`, `integration_p1a3.py` | ~10+ | ✅ |
 
-**Total:** 158/158 passando (17 arquivos de teste)
+**Total:** 166/166 passando (20 arquivos de teste)
 
 ### 4.2 Gaps de Cobertura (P2)
 

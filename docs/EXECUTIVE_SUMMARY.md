@@ -8,7 +8,7 @@
 | Conformidade AGENTS.md | 95% | Estrutura, código, constraints OK |
 | Reproducibilidade | 95% | Config-driven, seeds, requirements pinados, SHA256 |
 | Integridade Dados | 100% | Datasets e lineage validados |
-| Testes | 158/158 | 17 arquivos de teste, all passing |
+| Testes | 166/166 | 20 arquivos de teste, all passing |
 | Documentação | 90% | Revisada e sincronizada 03-APR-2026 |
 
 **GERAL:** ✅ MVP Production-Ready + P0 100% + P1 100% COMPLETO

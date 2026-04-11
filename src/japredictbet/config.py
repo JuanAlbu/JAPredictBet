@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List
@@ -75,6 +76,63 @@ class ValueConfig:
     tight_margin_consensus: float = 0.50  # Consensus required when margin is tight (e.g., 50%)
 
 
+# ── Gatekeeper Live Pipeline configs ─────────────────────────────────
+
+
+@dataclass(frozen=True)
+class GatekeeperConfig:
+    """Gatekeeper agent operational parameters."""
+
+    cron_trigger_minutes_before: int = 60
+    min_odd: float = 1.60
+    max_entries_per_day: int = 5
+    shadow_log_path: str = "logs/shadow_bets.log"
+
+
+@dataclass(frozen=True)
+class ApiKeysConfig:
+    """External API keys — resolved from environment variables at runtime."""
+
+    api_football_key: str = ""
+    llm_api_key: str = ""
+
+    def resolve(self) -> ApiKeysConfig:
+        """Return a new instance with env-var placeholders expanded."""
+        return ApiKeysConfig(
+            api_football_key=_resolve_env(self.api_football_key),
+            llm_api_key=_resolve_env(self.llm_api_key),
+        )
+
+
+@dataclass(frozen=True)
+class SuperbetShadowConfig:
+    """Superbet SSE feed configuration."""
+
+    sse_endpoint: str = (
+        "https://production-superbet-offer-br.freetls.fastly.net"
+        "/subscription/v2/pt-BR/events/all"
+    )
+    sport_id: int = 5
+    corner_market_name: str = "Total de Escanteios"
+    team_mapping_path: str = "data/mapping/superbet_teams.json"
+    connect_timeout_s: float = 10.0
+    read_timeout_s: float = 30.0
+    max_retries: int = 3
+    backoff_base_s: float = 2.0
+
+
+@dataclass(frozen=True)
+class ApiFootballConfig:
+    """API-Football (api-sports.io) settings."""
+
+    base_url: str = "https://v3.football.api-sports.io"
+    connect_timeout_s: float = 10.0
+    read_timeout_s: float = 15.0
+
+
+# ── Top-level container ──────────────────────────────────────────────
+
+
 @dataclass(frozen=True)
 class PipelineConfig:
     """Top-level pipeline configuration."""
@@ -84,6 +142,10 @@ class PipelineConfig:
     model: ModelConfig
     odds: OddsConfig
     value: ValueConfig
+    gatekeeper: GatekeeperConfig = field(default_factory=GatekeeperConfig)
+    api_keys: ApiKeysConfig = field(default_factory=ApiKeysConfig)
+    superbet_shadow: SuperbetShadowConfig = field(default_factory=SuperbetShadowConfig)
+    api_football: ApiFootballConfig = field(default_factory=ApiFootballConfig)
 
     @classmethod
     def from_yaml(cls, config_path: str | Path) -> PipelineConfig:
@@ -113,10 +175,42 @@ class PipelineConfig:
         odds_cfg = OddsConfig(**raw["odds"])
         value_cfg = ValueConfig(**raw["value"])
 
+        gatekeeper_cfg = (
+            GatekeeperConfig(**raw["gatekeeper"]) if "gatekeeper" in raw else GatekeeperConfig()
+        )
+        api_keys_cfg = (
+            ApiKeysConfig(**raw["api_keys"]) if "api_keys" in raw else ApiKeysConfig()
+        )
+        superbet_cfg = (
+            SuperbetShadowConfig(**raw["superbet_shadow"])
+            if "superbet_shadow" in raw
+            else SuperbetShadowConfig()
+        )
+        api_football_cfg = (
+            ApiFootballConfig(**raw["api_football"])
+            if "api_football" in raw
+            else ApiFootballConfig()
+        )
+
         return cls(
             data=data_cfg,
             features=features_cfg,
             model=model_cfg,
             odds=odds_cfg,
             value=value_cfg,
+            gatekeeper=gatekeeper_cfg,
+            api_keys=api_keys_cfg,
+            superbet_shadow=superbet_cfg,
+            api_football=api_football_cfg,
         )
+
+
+# ── helpers ──────────────────────────────────────────────────────────
+
+
+def _resolve_env(value: str) -> str:
+    """Expand ``${VAR}`` references from environment variables."""
+    if value.startswith("${") and value.endswith("}"):
+        env_name = value[2:-1]
+        return os.environ.get(env_name, "")
+    return value

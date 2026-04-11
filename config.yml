@@ -33,3 +33,29 @@ value:
   # require tight_margin_consensus threshold for additional safety
   tight_margin_threshold: 0.5 # corners - margin considered "tight"
   tight_margin_consensus: 0.50 # 50% - consensus required when tight
+
+# ── Gatekeeper Live Pipeline ──────────────────────────────────────────
+gatekeeper:
+  cron_trigger_minutes_before: 60  # T-60: coleta de contexto antes do jogo
+  min_odd: 1.60                    # Odd mínima operacional (filtro Python hardcoded)
+  max_entries_per_day: 5           # Máximo de entradas diárias
+  shadow_log_path: "logs/shadow_bets.log"
+
+api_keys:
+  api_football_key: "${API_FOOTBALL_KEY}"  # Env var — NUNCA commitar chave real
+  llm_api_key: "${LLM_API_KEY}"            # Env var — NUNCA commitar chave real
+
+superbet_shadow:
+  sse_endpoint: "https://production-superbet-offer-br.freetls.fastly.net/subscription/v2/pt-BR/events/all"
+  sport_id: 5                               # Futebol
+  corner_market_name: "Total de Escanteios"
+  team_mapping_path: "data/mapping/superbet_teams.json"
+  connect_timeout_s: 10.0
+  read_timeout_s: 30.0
+  max_retries: 3
+  backoff_base_s: 2.0                       # Exponential backoff: 2, 4, 8 …
+
+api_football:
+  base_url: "https://v3.football.api-sports.io"
+  connect_timeout_s: 10.0
+  read_timeout_s: 15.0

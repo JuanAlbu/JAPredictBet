@@ -55,6 +55,7 @@ lightgbm
 scipy  
 optuna  
 shap  
+httpx  
 
 ---
 
@@ -74,11 +75,14 @@ Agents should:
 
 Agents must respect module boundaries:
 
-data → ingestion only  
+data → ingestion + live context collection (T-60)  
 features → feature generation  
 models → training and inference  
 probability → calibration metrics (Brier, ECE)  
-betting → odds comparison, Poisson probability, consensus, risk management
+betting → odds comparison, Poisson probability, consensus, risk management  
+odds → Superbet SSE feed collection, market extraction  
+agents → LLM-based decision agents (Gatekeeper), base framework  
+pipeline → orchestration (MVP pipeline + Gatekeeper Live Pipeline)
 
 ---
 
@@ -142,7 +146,7 @@ The system is strictly an **analytics tool**.
 
 ### P1 Completion ✅ (03-APR-2026)
 - **Status:** 100% COMPLETE
-- **Tests:** 158/158 passing (15+ test files)
+- **Tests:** 166/166 passing (20 test files)
 - **P1-A (Pipeline):** ✅ COMPLETE
   - A1: Hybrid 70/30 ensemble (21 boosters + 9 linear)
   - A2: Dynamic margin rule in engine.py
@@ -164,7 +168,8 @@ The system is strictly an **analytics tool**.
 - **Consensus script:** Synced with all P1 features (H2H + 106 rolling features)
 
 ### Next Priority
-- P2 items (see docs/next_pass.md)
+- Onda 4: Gatekeeper Live Pipeline (SH4-SH9) — see docs/next_pass.md
+- Onda 2 residual: B3, B7, B8, C7
 
 ### Important Notes for Agents
 1. **Do NOT modify model assumptions** (Poisson objective, two-model architecture) without documentation updates
@@ -180,7 +185,15 @@ The system is strictly an **analytics tool**.
    - `src/japredictbet/models/shap_weights.py` — SHAP-based model quality weights
    - `src/japredictbet/betting/risk.py` — Kelly, drawdown, slippage
    - `scripts/hyperopt_search.py` — Optuna hyperparameter optimization
-10. **CLI commands validated:**
+10. **New modules (P2 — Gatekeeper Live Pipeline):**
+    - `src/japredictbet/odds/superbet_client.py` — Superbet SSE collector (httpx, backoff, market extraction)
+    - `src/japredictbet/data/context_collector.py` — T-60 context aggregation (API-Football lineups, injuries, standings + Superbet odds)
+    - `src/japredictbet/agents/base.py` — BaseAgent framework
+    - `src/japredictbet/agents/registry.py` — Agent registry
+    - Config blocks: `gatekeeper`, `api_keys`, `superbet_shadow`, `api_football` em `config.yml`
+    - API keys via env vars: `${API_FOOTBALL_KEY}`, `${LLM_API_KEY}` — **NUNCA commitados**
+11. **Agent Safety (reforço):** O sistema é estritamente analytics. Nenhum módulo executa aposta real. Shadow mode é observacional.
+12. **CLI commands validated:**
     - Dynamic lines: `python scripts/consensus_accuracy_report.py --config config.yml`
     - Fixed lines: `python scripts/consensus_accuracy_report.py --fixed-line 9.5`
     - Random lines: `python scripts/consensus_accuracy_report.py --random-lines --line-min 5.5 --line-max 11.5`

@@ -209,6 +209,84 @@ P1 introduced several new components to improve model performance, auditability,
 
 ---
 
+# P2 Architectural Extensions — Gatekeeper Live Pipeline
+
+P2 introduces the **Gatekeeper Live Pipeline**, an observational (Shadow Mode) system that collects real-time odds and match context, runs the existing ensemble, and evaluates entries via an LLM-based decision agent — without placing real bets.
+
+## Pipeline Flow
+
+```
+Superbet SSE Feed
+       │
+       ▼
+SuperbetCollector          (odds/superbet_client.py)
+  ├─ _iter_sse_events()    SSE line parser
+  ├─ _parse_team_names()   middle-dot split
+  └─ _fetch_sse_with_retry()  exponential backoff
+       │
+       ▼
+ContextCollector           (data/context_collector.py)
+  ├─ Superbet odds snapshot
+  ├─ API-Football lineups / injuries / standings
+  └─ collect_upcoming()  →  List[MatchContext]
+       │
+       ▼
+Pre-filter (min_odd ≥ 1.60)
+       │
+       ▼
+Ensemble Prediction        (existing 30-model consensus)
+       │
+       ▼
+GatekeeperAgent            (agents/gatekeeper.py — planned)
+  ├─ Receives MatchContext + ensemble output
+  ├─ Applies Prompt Mestre V25 decision framework
+  └─ Returns GO / NO-GO with structured reasoning
+       │
+       ▼
+Shadow Log                 (observational only)
+```
+
+## Key Modules
+
+### Superbet SSE Collector (`odds/superbet_client.py`)
+
+- **Purpose:** Collect live odds from Superbet's SSE endpoint for Brazilian football.
+- **Protocol:** Server-Sent Events over HTTPS. Lines prefixed with `data:` carry JSON payloads.
+- **Team Parsing:** Home `·` Away separator (U+00B7 middle dot).
+- **Markets Extracted:** Match Odds (1X2), Both Teams To Score (BTTS), Corners.
+- **Resilience:** Exponential backoff retry (2→4→8s) via `_fetch_sse_with_retry()`.
+- **Output:** `SuperbetSnapshot` with list of `SuperbetOdds` per match.
+
+### T-60 Context Collector (`data/context_collector.py`)
+
+- **Purpose:** Aggregate all pre-match context within a configurable time window (default 60 min before kickoff).
+- **Data Sources:**
+  - Superbet odds (via `SuperbetCollector`)
+  - API-Football v3: lineups, injuries, standings
+- **Data Models:** `MatchContext`, `TeamLineup`, `PlayerInfo`, `RefereeInfo`, `StandingsEntry`, `OddsContext`.
+- **Safety:** Each API call wrapped in `_safe_call()` to isolate failures. Fuzzy team-name matching via `_match_superbet_odds()`.
+
+### Agent Framework (`agents/base.py`, `agents/registry.py`)
+
+- **BaseAgent:** Abstract base with `run(context) → AgentResult` contract.
+- **AgentRegistry:** Name-based registration and lookup of agent implementations.
+- **Planned:** `GatekeeperAgent` (SH8) implementing the LLM decision logic.
+
+### Configuration (`config.yml`)
+
+Four new config blocks support the live pipeline:
+
+| Block | Key Settings |
+|-------|-------------|
+| `gatekeeper` | `min_odd`, `cron_trigger_minutes_before`, `max_entries_per_day` |
+| `api_keys` | `${API_FOOTBALL_KEY}`, `${LLM_API_KEY}` (env var expansion) |
+| `superbet_shadow` | SSE endpoint, timeouts, retry count, backoff multiplier |
+| `api_football` | Base URL, request timeout |
+
+API keys are resolved at runtime via `_resolve_env()` — **never committed to the repository**.
+
+---
+
 ## Backtest Threshold Sweep
 
 The MVP backtest now supports threshold sweeping for consensus validation.

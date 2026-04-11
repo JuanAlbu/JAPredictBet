@@ -200,8 +200,8 @@ Team strength indicators based on ELO-style rating system.
 
 | Column | Type | Description |
 |------|------|-------------|
-| home_elo | float | Home team ELO rating |
-| away_elo | float | Away team ELO rating |
+| home_elo_rating | float | Home team ELO rating |
+| away_elo_rating | float | Away team ELO rating |
 
 Implementation: `add_elo_ratings()` in `features/elo.py`. Ratings updated match-by-match.
 

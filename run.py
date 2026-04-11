@@ -110,7 +110,7 @@ if __name__ == "__main__":
             if ensemble_config:
                 print(f"Ensemble composition: {len(ensemble_config)} algorithm types")
                 if len(ensemble_models) == 30 and "ridge" in [a.lower() for a in ensemble_config]:
-                    print("  - 21 boosters: XGBoost (10) + LightGBM (11)")
+                    print("  - 21 boosters: XGBoost (11) + LightGBM (10)")
                     print("  - 9 linear: Ridge (5) + ElasticNet (4)")
                 else:
                     pass

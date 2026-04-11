@@ -246,7 +246,7 @@ Closing Line Value (CLV)
 
 ### Validation
 
-- **Tests:** 158/158 passing across more than 15 test files.
+- **Tests:** 166/166 passing across 20 test files.
 - **Reproducibility:** All components, including hyperparameter search and risk simulations, are deterministic.
 - **Auditability:** Model parameters, SHAP values, calibration reports, and CLV metrics provide deep insight into system behavior.
 

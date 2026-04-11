@@ -59,8 +59,8 @@ The test dataset is derived only from the most recent season.
 Procedure:
 
 1. Identify the most recent season
-2. Apply a strict temporal holdout: use the last ~25% of the most recent season (approximately 3 months) as the test set
-3. The split is deterministic and preserves chronological order (no random shuffle)
+2. Apply a holdout split: shuffle matches within the most recent season and reserve ~25% (approximately 3 months' worth) as the test set
+3. The split is seeded for reproducibility but **shuffled within the season** (not a strict chronological cutoff — see P2.B8 for planned improvement)
 
 Example:
 
@@ -69,11 +69,13 @@ Total matches: 380
 
 Test set:
 
-~95 matches (last 3 months of the season, strict temporal cutoff)
+~95 matches (shuffled sample from most recent season, ~25%)
 
 These matches represent the evaluation environment.
 
 Implementation: `_build_temporal_split(use_strict_holdout=True, holdout_months=3)` in `mvp_pipeline.py`.
+
+> **Nota:** O split atual embaralha dentro da temporada mais recente. A correção para split cronológico real está mapeada em P2.B8.
 
 ---
 
@@ -180,7 +182,7 @@ Full training pipeline:
 2. Sort matches chronologically
 3. Generate rolling statistics features
 4. Identify most recent season
-5. Randomly select 50% of latest season for test
+5. Shuffle within latest season and holdout ~25% as test set
 6. Assign temporal weights to training matches
 7. Train ensemble models (two-model architecture per ensemble member: home + away)
    - 70% boosters (XGBoost/LightGBM) + 30% linear (Ridge/ElasticNet)

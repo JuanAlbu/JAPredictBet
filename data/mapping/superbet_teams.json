@@ -1,0 +1,25 @@
+{
+  "_comment": "Superbet team name -> canonical name mapping. Fill per league as needed.",
+  "brasileirao": {
+    "Flamengo": "Flamengo",
+    "Palmeiras": "Palmeiras",
+    "Atlético Mineiro": "Atletico Mineiro",
+    "São Paulo": "Sao Paulo",
+    "Corinthians": "Corinthians",
+    "Internacional": "Internacional",
+    "Fluminense": "Fluminense",
+    "Grêmio": "Gremio",
+    "Botafogo": "Botafogo",
+    "Fortaleza": "Fortaleza",
+    "Athletico Paranaense": "Athletico Paranaense",
+    "Bahia": "Bahia",
+    "Cruzeiro": "Cruzeiro",
+    "Vasco da Gama": "Vasco da Gama",
+    "Vitória": "Vitoria",
+    "Juventude": "Juventude",
+    "Cuiabá": "Cuiaba",
+    "Bragantino": "Red Bull Bragantino",
+    "Atlético Goianiense": "Atletico Goianiense",
+    "Criciúma": "Criciuma"
+  }
+}

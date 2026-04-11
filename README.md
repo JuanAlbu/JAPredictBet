@@ -113,7 +113,7 @@ Reports are saved to `log-test/` with timestamp.
 
 **P0 - 100% COMPLETE** (30-MAR-2026)  
 **P0-FIX - 100% COMPLETE** (03-APR-2026) — 6 bugs críticos corrigidos  
-**P1 - 100% COMPLETE** (03-APR-2026) — 158/158 testes passando (17 arquivos)
+**P1 - 100% COMPLETE** (03-APR-2026) — 166/166 testes passando (20 arquivos)
 
 All 9 P0 items successfully implemented and validated with real data:
 

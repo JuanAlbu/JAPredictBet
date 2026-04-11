@@ -18,8 +18,8 @@ def _build_training_df(n_rows: int = 24) -> pd.DataFrame:
                 "home_advantage": 1.0,
                 "home_corners_for_last10": float(4 + (i % 5)) if i % 6 else None,
                 "away_corners_for_last10": float(3 + (i % 4)),
-                "home_elo": 1500.0 + i,
-                "away_elo": 1490.0 + i,
+                "home_elo_rating": 1500.0 + i,
+                "away_elo_rating": 1490.0 + i,
                 # Fully empty column should be dropped automatically.
                 "home_shots_last10": None,
             }

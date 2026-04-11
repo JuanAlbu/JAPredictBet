@@ -1,9 +1,9 @@
-# JA PREDICT BET — ROADMAP P2+ (REVISÃO 04-APR-2026)
+# JA PREDICT BET — ROADMAP P2+ (REVISÃO 11-APR-2026)
 
-**Data da Revisão:** 04 de Abril, 2026
-**Status Geral:** P0 ✅ | P0-FIX ✅ | P1 ✅ | Onda 1 ✅ | Onda 2 parcial — 166/166 testes passando (17 arquivos). 106 features. 30 modelos (11 XGB + 10 LGB + 5 Ridge + 4 EN).
+**Data da Revisão:** 11 de Abril, 2026
+**Status Geral:** P0 ✅ | P0-FIX ✅ | P1 ✅ | Onda 1 ✅ | Onda 2 parcial — 166/166 testes passando (20 arquivos). 106 features. 30 modelos (11 XGB + 10 LGB + 5 Ridge + 4 EN).
 **Histórico Completo:** Todos os itens concluídos (P0, P0-FIX, P1, Onda 1) documentados em [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md).
-**Próxima Ação:** Onda 2 — Itens remanescentes (B3, B7, B8, A14).
+**Próxima Ação:** Onda 4 — Gatekeeper Live Pipeline (SH4-SH9). Onda 2 residual (B3, B7, B8, C7).
 
 ---
 
@@ -12,7 +12,7 @@
 Este documento contém **apenas itens em aberto**, organizados em ondas de execução por prioridade.
 Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md) ao serem fechados.
 
-**Itens em aberto:** 31 (P2) + 2 (P3) + 5 (R&D) = 38 total
+**Itens em aberto:** 21 (P2) + 2 (P3) + 5 (R&D) = 28 total
 
 ---
 
@@ -60,10 +60,8 @@ Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HI
   - `hyperopt_search.py` é READ-ONLY — os melhores params (ElasticNet=1.4799, XGBoost=1.4880, LightGBM=1.4934) não são aplicados automaticamente.
   - **Fix:** Atualizar `_build_variation_params()` em `train.py` e/ou `_build_diversified_*_params()` no consensus script para usar os params do `artifacts/hyperopt/*_best_params.json` como base de variação.
 
-- [ ] **P2.A14 - Corrigir drift de nomenclatura de features ELO**
-  - `add_elo_ratings()` gera `home_elo_rating` / `away_elo_rating`, mas partes do pipeline/documentação ainda referenciam `home_elo` / `away_elo`.
-  - **Risco:** validações críticas inertes, leitura ambígua do schema e manutenção confusa.
-  - **Fix:** Padronizar nomes em código, testes e docs; se necessário, manter alias temporário com depreciação explícita.
+- [x] **P2.A14 - Corrigir drift de nomenclatura de features ELO** ✅ (11-APR-2026)
+  - `mvp_pipeline.py` e `test_missing_feature_imputation.py` atualizados para `home_elo_rating` / `away_elo_rating`. `DATA_SCHEMA.md` sincronizado.
 
 ---
 
@@ -100,8 +98,8 @@ Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HI
 - [ ] **P2.C1 - Remover código morto**
   - `value/value_engine.py` (217 linhas) — duplicada, com bugs próprios.
   - `config_backup.yml` — usar git history.
-  - `src/japredictbet/agents/` — scaffolding vazio.
-  - `rolling.py::add_rolling_features()` — dead code, nunca chamada.
+  - ~~`src/japredictbet/agents/`~~ — agora contém código real (`BaseAgent`, `AgentRegistry`). Removido da lista.
+  - ~~`rolling.py::add_rolling_features()`~~ — usada em testes (`test_rolling_cross_group.py`). Verificar se pipeline principal a chama.
 
 - [ ] **P2.C2 - Resolver boundary `probability/` vs `betting/engine.py`**
   - Poisson vive em `betting/engine.py`, violando boundary. Opções: (a) mover para `probability/poisson.py`, ou (b) atualizar AGENTS.md e ARCHITECTURE.md.
@@ -109,47 +107,85 @@ Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HI
 - [ ] **P2.C3 - Padronizar código (linguagem + style)**
   - Mix português/inglês. Imports inline em `mvp_pipeline.py`. Regex `r"[^a-z0-9\\s]"` em raw string. Config RandomForest enganoso no `algorithms`.
 
-- [ ] **P2.C6 - Reconciliar documentação e estado real de validação**
-  - Há drift entre documentos sobre contagem de testes (`158/158` vs `165/165`) e sobre o status do holdout "estrito".
-  - **Fix:** sincronizar `AGENTS.md`, `README.md`, `PROJECT_CONTEXT.md`, `VALIDATION*.md` e docs que ainda descrevem o split antigo.
+- [x] **P2.C6 - Reconciliar documentação e estado real de validação** ✅ (11-APR-2026)
+  - Test count atualizado para 166/166 (20 arquivos) em: `AGENTS.md`, `README.md`, `PROJECT_CONTEXT.md`, `PRODUCT_REQUIREMENTS.md`, `EXECUTIVE_SUMMARY.md`, `VALIDATION_REPORT.md`.
+  - `TRAINING_STRATEGY.md` corrigido: holdout descrito como shuffle dentro da temporada (não cronológico estrito), 50%→25%.
+  - `VALIDATION_REPORT.md` seção P0-FIX expandida de 3→6 items.
+  - `DATA_SCHEMA.md` ELO columns corrigidas.
 
 ---
 
-## Onda 4 — SHADOW Mode (Superbet Observacional)
+## Onda 4 — Gatekeeper Live Pipeline + SHADOW Mode (REVISÃO 11-APR-2026)
 
-**Objetivo:** Conectar coleta de odds reais ao `ConsensusEngine` em modo estritamente observacional, sem execução financeira.
+**Objetivo:** Pipeline paralelo de gestão de risco via LLM (Prompt Mestre V25) + coleta de odds Superbet em modo estritamente observacional. Nenhum módulo executa aposta real.
 **Dependências:** P2.D4 (Telegram bot) depende desta trilha.
-**Novas dependências pip:** `httpx>=0.27.0`, `httpx-sse>=0.4.0`
-**Novos arquivos:** `src/japredictbet/odds/superbet.py`, `data/mapping/superbet_teams.json`, `scripts/shadow_observe.py`, `tests/odds/test_superbet.py`
+**Novas dependências pip:** `httpx>=0.28.0`
+**Arquivos criados:**
+- `src/japredictbet/odds/superbet_client.py` ✅
+- `src/japredictbet/data/context_collector.py` ✅
+- `src/japredictbet/agents/base.py` ✅
+- `src/japredictbet/agents/registry.py` ✅
+**Arquivos pendentes:**
+- `src/japredictbet/agents/gatekeeper.py` — SH8
+- `src/japredictbet/pipeline/gatekeeper_live_pipeline.py` — SH9
+- `scripts/shadow_observe.py` — SH6
+- `tests/odds/test_superbet.py` — SH7
+- `data/mapping/superbet_teams.json` — SH4
+**Config adicionada:** Blocos `gatekeeper`, `api_keys`, `superbet_shadow`, `api_football` em `config.yml` + dataclasses correspondentes em `config.py`.
 **Nota técnica:** Endpoint Superbet é SSE, não REST JSON. Campo `matchName` usa `·` (middle dot U+00B7) como separador.
 
-- [ ] **P2.SH1 - Substituir `requests` por `httpx` no coletor**
-  - Timeout configurável, `User-Agent` de navegador, tratamento HTTP 403/429/500.
+### Bloco 4A — Infra de Coleta (parcialmente implementado)
 
-- [ ] **P2.SH2 - Parsing SSE do feed Superbet**
-  - Endpoint: `https://production-superbet-offer-br.freetls.fastly.net/subscription/v2/pt-BR/events/all`
-  - Stream linha-a-linha (`data:{json}\nretry:N\n`), cada evento <10KB.
-  - Tolerante a eventos malformados (try/except por evento) e reconexão com backoff.
-  - **Campos chave:** `eventId`, `matchName`, `sportId`, `categoryId`, `tournamentId`, `odds[].marketId`, `odds[].marketName`, `odds[].price`, `odds[].code`
+- [x] **P2.SH1 - Substituir `requests` por `httpx` no coletor** ✅ (11-APR-2026)
+  - `superbet_client.py`: `httpx.Client` com timeout configurável, `User-Agent` de navegador, retry com exponential backoff (2→4→8s), tratamento HTTP 403/429/500.
 
-- [ ] **P2.SH3 - Filtro de eventos e mercados de escanteios**
-  - `sportId=5` (futebol), mercado `Total de Escanteios` (Over/Under).
-  - Extração: `event_id`, `home_team`, `away_team`, `market_line`, `over_odds`, `under_odds`.
-  - Split `matchName` por `·` (middle dot). Feed mistura esportes reais, virtuais e eSports.
+- [x] **P2.SH2 - Parsing SSE do feed Superbet** ✅ (11-APR-2026)
+  - `_iter_sse_events()` faz parsing linha-a-linha (`data:{json}`), tolerante a eventos malformados (try/except por evento, logging).
+
+- [x] **P2.SH3 - Filtro de eventos e mercados** ✅ (11-APR-2026)
+  - `sportId=5` (futebol), split `matchName` por `·`, detecção de mercados: `Total de Escanteios` (corners), `Resultado Final` / `1x2` (match odds), `Ambas Marcam` / `BTTS`.
+  - Extração: `event_id`, `home_team`, `away_team`, `market_line`, `over_odds`, `under_odds`, `home/draw/away_odds`, `yes/no_odds`.
 
 - [ ] **P2.SH4 - Mapeamento Superbet → IDs internos**
-  - Arquivo: `data/mapping/superbet_teams.json`. Equipes sem mapeamento geram WARNING e skip.
+  - Arquivo: `data/mapping/superbet_teams.json` (template criado, preenchimento manual por liga).
+  - `superbet_client.py` já aceita `team_mapping` param — equipes sem mapeamento geram WARNING e skip.
+  - `context_collector.py` carrega mapping via `_load_team_mapping()` (None se arquivo ausente → sem filtro).
 
-- [ ] **P2.SH5 - Integração com `ConsensusEngine` em Shadow Mode**
+### Bloco 4B — Contexto T-60 (implementado)
+
+- [x] **P2.SH5a - Context Collector (API-Football + Superbet)** ✅ (11-APR-2026)
+  - `src/japredictbet/data/context_collector.py`:
+    - `ApiFootballClient` — fixtures do dia, lineups confirmadas, injuries/suspensions, standings.
+    - `ContextCollector` — orquestra Superbet + API-Football, filtra janela T-60, fuzzy match de equipes.
+    - `MatchContext` dataclass com serialização JSON para injeção no LLM.
+  - API keys resolvidas de env vars (`${API_FOOTBALL_KEY}`) — nunca commitadas.
+  - Cada chamada à API isolada via `_safe_call()` — falha parcial não derruba pipeline.
+
+### Bloco 4C — Gatekeeper Agent + Pipeline (pendente)
+
+- [ ] **P2.SH5b - Integração com `ConsensusEngine` em Shadow Mode**
   - Para cada jogo válido, chamar `evaluate_with_consensus()` e registrar auditoria.
   - Shadow log: `logs/shadow_bets.log` com timestamp, match_id, odds, p_model_mean, edge, votos, status.
   - **Regra de segurança:** nenhum módulo deve executar aposta real.
 
 - [ ] **P2.SH6 - Script executável de observação**
-  - `SuperbetCollector` com CLI. Falhas de rede não derrubam execução. Resumo final em console.
+  - `scripts/shadow_observe.py` com CLI. Falhas de rede não derrubam execução. Resumo final em console.
 
 - [ ] **P2.SH7 - Testes dedicados da trilha Shadow**
-  - SSE multi-eventos, JSON malformado, HTTP 403/429/500, timeout, reconexão, time sem mapeamento, mercado inválido, esporte não-futebol, chamada ao ConsensusEngine, shadow log completo.
+  - `tests/odds/test_superbet.py`: SSE multi-eventos, JSON malformado, HTTP 403/429/500, timeout, reconexão, time sem mapeamento, mercado inválido, esporte não-futebol.
+  - `tests/data/test_context_collector.py`: fixtures, lineups, injuries, standings, fuzzy match, MatchContext serialização.
+
+- [ ] **P2.SH8 - Agente Gatekeeper (LLM + decisão)**
+  - `src/japredictbet/agents/gatekeeper.py` herdando de `BaseAgent`.
+  - Encapsula `PROMPT_MESTRE V25 FINAL` como system prompt.
+  - `evaluate_match(match_context_json)` → JSON com `status` (APPROVED / NO BET), `stake`, `odd_superbet`, `justificativa`.
+  - Pré-filtro Python hardcoded: bloqueia se odd Superbet < `min_odd` (1.60) antes de enviar ao LLM.
+  - **Dependência:** `llm_api_key` configurada em env var `${LLM_API_KEY}`.
+
+- [ ] **P2.SH9 - Pipeline Gatekeeper Live (orquestração T-60)**
+  - `src/japredictbet/pipeline/gatekeeper_live_pipeline.py`.
+  - Fluxo: Busca jogos Superbet → Agenda T-60 → Coleta escalação (API-Football) → Pré-filtro Python (min_odd) → `GatekeeperAgent.evaluate_match()` → Salva Lista do Dia no shadow log.
+  - Max 5 entradas/dia (`gatekeeper.max_entries_per_day`).
 
 ---
 
@@ -192,16 +228,16 @@ Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HI
 
 ---
 
-## Matriz de Maturidade (04-APR-2026)
+## Matriz de Maturidade (11-APR-2026)
 
 | Dimensão | Nota | Comentário |
 |----------|------|------------|
-| Arquitetura | 9/10 | Design modular, bem documentada |
-| Implementação | 8.5/10 | P0+P1 completos; feature parity corrigida (A9-A12). Penalizado por `update_pipeline.py` non-functional e holdout não-cronológico |
-| Documentação | 8/10 | 60 inconsistências corrigidas (P2.C4). Drift documental pendente (P2.C6) |
-| Testes | 7/10 | 166 testes (17 arquivos), ~60% cobertura. `data/ingestion.py` sem testes |
+| Arquitetura | 9/10 | Design modular, bem documentada. Agent framework + Gatekeeper Live Pipeline adicionados |
+| Implementação | 8.5/10 | P0+P1 completos; feature parity corrigida (A9-A12), ELO naming fix (A14). Penalizado por `update_pipeline.py` non-functional, holdout não-cronológico e hyperopt params não integrados |
+| Documentação | 8.5/10 | 60 inconsistências corrigidas (P2.C4). Drift documental corrigido (C6): AGENTS.md, ARCHITECTURE.md, PROJECT_CONTEXT.md sincronizados |
+| Testes | 7/10 | 166 testes (20 arquivos), ~60% cobertura. `data/ingestion.py` e `features/` com cobertura parcial |
 | Reprodutibilidade | 9/10 | SHA256, seeds, requirements pinados, config-driven, configs sincronizados |
-| Production-Ready | 8/10 | Pipeline completo com calibração, risk e CLV. Penalizado por pickle sem hash e update_pipeline |
+| Production-Ready | 7.5/10 | Pipeline completo com calibração, risk e CLV. Penalizado por pickle sem hash, update_pipeline non-functional, e hyperopt params não integrados |
 
 ---
 
