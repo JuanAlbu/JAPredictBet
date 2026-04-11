@@ -1,17 +1,18 @@
-# SUMÁRIO EXECUTIVO — ESTADO DO PROJETO (03-APR-2026)
+# SUMÁRIO EXECUTIVO — ESTADO DO PROJETO (11-APR-2026)
 
 ## Visão Geral
 
 | Categoria | Score | Notas |
 |-----------|-------|-------|
 | Funcionalidade MVP | 100% | Ensemble 30 modelos, consenso, backtest, CLI — tudo funcional |
+| Shadow Pipeline | 90% | Dual-agent (Gatekeeper + Analyst), Feature Store, Pre-match + Live modes |
 | Conformidade AGENTS.md | 95% | Estrutura, código, constraints OK |
 | Reproducibilidade | 95% | Config-driven, seeds, requirements pinados, SHA256 |
 | Integridade Dados | 100% | Datasets e lineage validados |
-| Testes | 166/166 | 20 arquivos de teste, all passing |
-| Documentação | 90% | Revisada e sincronizada 03-APR-2026 |
+| Testes | 218/218 | 21 arquivos de teste, all passing |
+| Documentação | 90% | Revisada e sincronizada 11-APR-2026 |
 
-**GERAL:** ✅ MVP Production-Ready + P0 100% + P1 100% COMPLETO
+**GERAL:** ✅ MVP Production-Ready + P0 100% + P1 100% + Shadow Pipeline Operational
 
 ---
 
@@ -58,6 +59,16 @@
 - Agora usa 106 features (STD + EMA + drop_redundant)
 - Documentação completa revisada e atualizada
 
+### ✅ Onda 4 — Shadow Pipeline (11-APR-2026)
+- SH1-SH3: Superbet SSE client (httpx, SSE parsing, market detection)
+- SH5a-SH5b: Context Collector + ConsensusEngine integration
+- SH6-SH9: Shadow Observe CLI, Gatekeeper Agent, Live Pipeline
+- SH10: Superbet Scraper CLI (SSE discovery + REST enrichment, ~800 lines)
+- SH20: Feature Store (Option C — daily pre-computed rolling features)
+- SH21: Dynamic Tournament Whitelist (auto-derive from league folders)
+- SH22: Analyst Agent (multi-market LLM — 1x2, BTTS, Over/Under)
+- SH23: Pre-match Architecture Split (scraper JSON → pipeline)
+
 ---
 
 ## Bloqueadores Anteriores — TODOS FECHADOS ✅
@@ -72,12 +83,14 @@
 
 ## Próximos Passos (Ordem Recomendada)
 
-1. **P2.C4** — Sincronizar documentação contraditória (60 inconsistências)
-2. **P2.C5** — Sync configs de teste com P1 feature flags
-3. **P2.B6** — Centralizar config loading (`PipelineConfig.from_yaml()`)
-4. **P2.B3** — Reescrever `update_pipeline.py`
-5. **P2-SHADOW** — Superbet Shadow Mode (SH1-SH7)
-6. **P2.A1-A13** — Expandir testes para 70% cobertura
+1. **Treinar ensemble** — `artifacts/models/` está vazio, executar `python run.py --config config.yml`
+2. **Confirmar tournament IDs** — Bundesliga + Premier League no SSE Superbet
+3. **P2.B3** — Reescrever `update_pipeline.py` (feature engineering ausente)
+4. **P2.B7** — Verificar integridade de pickle (SHA256)
+5. **P2.B8** — Corrigir holdout temporal cronológico
+6. **P2.C7** — Integrar params do hyperopt no ensemble
+7. **P2.SH15-SH19** — Itens residuais da trilha Shadow
+8. **P2.A1-A13** — Expandir testes para 70% cobertura
 
 ---
 

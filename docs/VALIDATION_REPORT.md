@@ -1,9 +1,9 @@
-# JAPredictBet - Relatório de Validação do Projeto (03-APR-2026)
+# JAPredictBet - Relatório de Validação do Projeto (11-APR-2026)
 
-**Data:** 03 de Abril, 2026  
-**Revisão Anterior:** 01-APR-2026  
+**Data:** 11 de Abril, 2026  
+**Revisão Anterior:** 03-APR-2026  
 **Objetivo:** Validar alinhamento do projeto com AGENTS.md, verificar completude do MVP e estado do pipeline  
-**Resultado Geral:** ✅ MVP + P0 + P0-FIX + P1 (100%) — Production-Ready
+**Resultado Geral:** ✅ MVP + P0 + P0-FIX + P1 (100%) + Shadow Pipeline (Onda 4) — Operational
 
 ---
 
@@ -135,20 +135,21 @@
 
 ## 4. COBERTURA DE TESTES
 
-### 4.1 Estado Atual: 166 testes passando
+### 4.1 Estado Atual: 218 testes passando
 
 | Módulo | Arquivo(s) | Testes | Status |
 |--------|-----------|--------|--------|
 | `betting/` | `test_engine.py`, `test_clv.py`, `test_lambda_validation.py`, `test_p1a2_dynamic_margin.py`, `test_weighted_consensus.py`, `test_risk.py` | ~90+ | ✅ |
-| `odds/` | `test_collector.py` | ~5 | ✅ |
+| `odds/` | `test_collector.py`, `test_superbet.py` | ~25 | ✅ |
 | `pipeline/` | `test_mvp_pipeline.py` | ~15+ | ✅ |
 | `models/` | `test_train.py`, `test_missing_feature_imputation.py` | 15+ | ✅ |
 | `features/` | `test_rolling_p1b2.py`, `test_drop_redundant.py`, `test_h2h.py`, `test_rolling_cross_group.py` | 25+ | ✅ |
 | `probability/` | `test_calibration.py` | 16 | ✅ |
+| `agents/` | `test_gatekeeper.py`, `test_analyst.py` | 31 | ✅ |
 | `config` | `test_config_defaults.py` | 5+ | ✅ |
 | integration | `integration_p1a2.py`, `integration_p1a3.py` | ~10+ | ✅ |
 
-**Total:** 166/166 passando (20 arquivos de teste)
+**Total:** 218/218 passando (21 arquivos de teste)
 
 ### 4.2 Gaps de Cobertura (P2)
 
@@ -193,11 +194,11 @@ Todos os relatórios em `log-test/`:
 
 | Métrica | Valor |
 |---------|-------|
-| Python Files (Core) | ~20 |
-| Lines of Code (Core) | ~4000+ |
+| Python Files (Core) | ~26 |
+| Lines of Code (Core) | ~6000+ |
 | Configuration Files | 3 (config.yml, pyproject.toml, requirements.txt) |
 | Documentation Files | 17+ |
-| Test Files | 10 |
+| Test Files | 21 |
 | Log Files | 18+ |
 
 ### 6.2 Complexidade

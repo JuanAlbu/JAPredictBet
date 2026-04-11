@@ -246,9 +246,45 @@ Closing Line Value (CLV)
 
 ### Validation
 
-- **Tests:** 166/166 passing across 20 test files.
+- **Tests:** 218/218 passing across 21 test files.
 - **Reproducibility:** All components, including hyperparameter search and risk simulations, are deterministic.
 - **Auditability:** Model parameters, SHAP values, calibration reports, and CLV metrics provide deep insight into system behavior.
+
+---
+
+## P2 Shadow Pipeline Requirements (11-APR-2026)
+
+### Feature 11 — Pre-match Odds Collection
+
+The system must:
+
+- collect odds from Superbet via SSE feed (pre-match discovery)
+- enrich events via REST API with full market data (700+ markets per event)
+- auto-save daily snapshots as JSON to `data/odds/pre_match/`
+- load snapshots into `MatchContext` objects for pipeline consumption
+- support multiple market types: corners, match result (1x2), BTTS, over/under goals
+- filter by leagues with historical CSV data (dynamic tournament whitelist)
+
+### Feature 12 — LLM-based Decision Agents
+
+The system must:
+
+- evaluate corner markets via a Gatekeeper Agent (ensemble consensus + LLM analysis)
+- evaluate non-corner markets (1x2, BTTS, Over/Under) via an Analyst Agent (LLM-only)
+- apply hard Python pre-filters before LLM calls (min_odd threshold)
+- produce structured JSON output with status, stake, edge, and red flags
+- cap daily entries at a configurable maximum
+- log all evaluations to shadow log (JSONL format, observational only)
+- never place real bets or connect to bookmaker accounts
+
+### Feature 13 — Feature Store for Live Inference
+
+The system must:
+
+- pre-compute rolling features daily from historical CSVs
+- store features in Parquet format for fast lookup
+- support fuzzy team name matching for variations
+- provide single-row feature DataFrames for per-match inference at T-60
 
 ---
 

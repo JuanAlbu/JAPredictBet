@@ -1,4 +1,4 @@
-# Project Context (Atualizado 03-APR-2026)
+# Project Context (Atualizado 11-APR-2026)
 
 ## Status Atual
 
@@ -17,7 +17,7 @@
 
 ### P1 Completion ✅ (03-APR-2026)
 - **Status:** 100% COMPLETE
-- **Tests:** 166/166 passing (20 test files)
+- **Tests:** 218/218 passing (21 test files)
 - **P1-A (Pipeline):** ✅ COMPLETE
   - A1: Hybrid 70/30 ensemble (21 boosters + 9 linear)
   - A2: Dynamic margin rule in engine.py
@@ -38,8 +38,19 @@
   - D3: Kelly/Risk — `betting/risk.py` (Quarter Kelly, Monte Carlo, slippage)
 - **Consensus script:** Synced with all P1 features (H2H + 106 rolling features)
 
+### P2 Shadow Pipeline (Onda 4 — 11-APR-2026)
+- **Status:** PARCIAL — Core operational, pending: SH4, SH11-SH19
+- **Gatekeeper Agent:** LLM-based corners evaluation (PROMPT_MESTRE V25)
+- **Analyst Agent:** LLM-based multi-market evaluation (1x2, BTTS, Over/Under)
+- **Feature Store:** Pre-computed rolling features via `feature_store.py` (Option C)
+- **Pre-match Mode:** Scraper JSON → `pre_match_odds.py` → pipeline
+- **Live Mode:** SSE + API-Football → `context_collector.py` → pipeline
+- **Shadow Log:** JSONL (observational only — no real bets)
+
 ### Next Priority
-- P2 items (see docs/next_pass.md)
+- Train ensemble models (`artifacts/models/` is empty)
+- Confirm Bundesliga + Premier League tournament IDs
+- P2 residual: B3 (update_pipeline), B7 (pickle hash), B8 (temporal holdout), C7 (hyperopt params)
 
 ### P0-FIX Hotfix (03-APR-2026)
 - `FIX.5` (rolling cross-group contamination): code-level fix implemented in `src/japredictbet/features/rolling.py` by migrating rolling mean/sum/std flows to `group.transform(...)`.
@@ -160,12 +171,15 @@ Operational note - Current State (01-APR-2026):
   - timestamped report generation in `log-test/` with full model audit trail
   - **all hardcodes removed (P0.1), fully respects CLI overrides and config.yml**
   
-Testing & Validation (03-APR-2026):
+Testing & Validation (11-APR-2026):
 - Tested with 101 matches from full season data (dynamic, fixed, random lines)
 - Tested with 50 recent matches + 180 days historical context
-- 166 unit/integration tests passing across 20 test files
+- 218 unit/integration tests passing across 21 test files
 - Consensus script synchronized with pipeline (106 features, STD+EMA+drop_redundant+H2H)
 - All tests runnable and producing valid reports in log-test/
+- Gatekeeper + Analyst agents with 51 combined tests
+- Feature Store with daily pre-computation (Parquet)
+- Pre-match pipeline with scraper JSON loader
 
 Latest test results (31-MAR-2026):
 - Dynamic lines (20 matches): 3 apostas, 33% acurácia (106 features)

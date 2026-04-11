@@ -81,8 +81,8 @@ models → training and inference
 probability → calibration metrics (Brier, ECE)  
 betting → odds comparison, Poisson probability, consensus, risk management  
 odds → Superbet SSE feed collection, market extraction  
-agents → LLM-based decision agents (Gatekeeper), base framework  
-pipeline → orchestration (MVP pipeline + Gatekeeper Live Pipeline)
+agents → LLM-based decision agents (Gatekeeper for corners, Analyst for 1x2/BTTS/others), base framework  
+pipeline → orchestration (MVP pipeline + Gatekeeper Live Pipeline + pre-match mode)
 
 ---
 
@@ -129,7 +129,7 @@ The system is strictly an **analytics tool**.
 
 ---
 
-## Current Project Status (Updated 03-APR-2026)
+## Current Project Status (Updated 11-APR-2026)
 
 ### P0 Completion ✅
 - **Status:** 100% COMPLETE
@@ -146,7 +146,7 @@ The system is strictly an **analytics tool**.
 
 ### P1 Completion ✅ (03-APR-2026)
 - **Status:** 100% COMPLETE
-- **Tests:** 201/201 passing (23 test files)
+- **Tests:** 218/218 passing (21 test files)
 - **P1-A (Pipeline):** ✅ COMPLETE
   - A1: Hybrid 70/30 ensemble (21 boosters + 9 linear)
   - A2: Dynamic margin rule in engine.py
@@ -168,8 +168,10 @@ The system is strictly an **analytics tool**.
 - **Consensus script:** Synced with all P1 features (H2H + 106 rolling features)
 
 ### Next Priority
-- Onda 4 residual: SH4 (team mapping preenchimento manual)
-- Onda 2 residual: B3, B7, B8, C7
+- Train ensemble models (`artifacts/models/` is empty — run `python run.py --config config.yml`)
+- Confirm Bundesliga + Premier League tournament IDs in SSE feed
+- Onda 4 residual: SH4 (team mapping), SH11-SH19
+- Onda 2 residual: B3 (update_pipeline), B7 (pickle hash), B8 (temporal holdout), C7 (hyperopt params)
 
 ### Important Notes for Agents
 1. **Do NOT modify model assumptions** (Poisson objective, two-model architecture) without documentation updates
@@ -192,7 +194,7 @@ The system is strictly an **analytics tool**.
     - `src/japredictbet/agents/registry.py` — Agent registry
     - `src/japredictbet/agents/gatekeeper.py` — LLM Gatekeeper agent (OpenAI, Prompt Mestre V25, pre-filter min_odd)
     - `src/japredictbet/pipeline/gatekeeper_live_pipeline.py` — T-60 orchestration (collect → consensus → LLM → shadow log)
-    - `scripts/shadow_observe.py` — CLI entry point for shadow-mode observation
+    - `scripts/shadow_observe.py` — CLI entry point for shadow-mode observation (`--pre-match`, `--dry-run`)
     - `.env.example` — Credential template (OPENAI_API_KEY, API_FOOTBALL_KEY, SUPERBET_*)
     - Config blocks: `gatekeeper`, `api_keys`, `superbet_shadow`, `api_football` em `config.yml`
     - Deps: `openai>=1.14.0`, `python-dotenv>=1.0.1`, `httpx>=0.28.0`
@@ -205,7 +207,16 @@ The system is strictly an **analytics tool**.
     - Preços centesimais (>=100 → /100). Middle-dot `·` (U+00B7) como separator em matchName
     - Auto-save: `data/odds/pre_match/{date}.json`
     - **Pendências:** SH11 (Bundesliga+PL IDs), SH12 (filtro mercados), SH13 (integrar no pipeline), SH14 (cleanup temp files)
-13. **CLI commands validated:**
+13. **New modules (Feature Store + Analyst + Pre-match — 11-APR-2026):**
+    - `src/japredictbet/data/feature_store.py` — Pre-computed rolling features (Parquet), fuzzy team matching, `get_active_tournament_ids()`
+    - `scripts/refresh_features.py` — Daily rebuild CLI (`--leagues-dir`, `--output`, `--config`)
+    - `src/japredictbet/agents/analyst.py` — AnalystAgent for 1x2/BTTS/Over-Under (PROMPT_ANALYST.md, OpenAI)
+    - `docs/PROMPT_ANALYST.md` — System prompt for Analyst LLM
+    - `src/japredictbet/odds/pre_match_odds.py` — Loads scraper JSON → List[MatchContext]
+    - `tests/agents/test_analyst.py` — 17 tests for AnalystAgent
+    - `ShadowEntry` expanded with `analyst_status`, `analyst_best_pick`, `analyst_markets` fields
+    - **Dois modos operacionais:** Pre-match (scraper JSON) e Live (SSE + API-Football)
+14. **CLI commands validated:**
     - Dynamic lines: `python scripts/consensus_accuracy_report.py --config config.yml`
     - Fixed lines: `python scripts/consensus_accuracy_report.py --fixed-line 9.5`
     - Random lines: `python scripts/consensus_accuracy_report.py --random-lines --line-min 5.5 --line-max 11.5`
@@ -214,3 +225,6 @@ The system is strictly an **analytics tool**.
     - Scraper futuro: `python scripts/superbet_scraper.py domingo --stream-seconds 90`
     - Scraper quick (SSE only): `python scripts/superbet_scraper.py amanha --quick`
     - Scraper all markets: `python scripts/superbet_scraper.py hoje --all-markets`
+    - Shadow pre-match: `python scripts/shadow_observe.py --pre-match hoje --config config.yml`
+    - Shadow dry-run: `python scripts/shadow_observe.py --pre-match hoje --dry-run`
+    - Refresh features: `python scripts/refresh_features.py --config config.yml`

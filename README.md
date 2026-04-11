@@ -2,7 +2,7 @@
 
 A system to identify potential value betting opportunities in football corner markets, using statistical analysis and machine learning models.
 
-**Status:** ✅ MVP Entregue + P0 100% + P1 100% Completo (03-APR-2026)
+**Status:** ✅ MVP Entregue + P0 100% + P1 100% + Shadow Pipeline Operational (11-APR-2026)
 
 ## 🎯 Goal
 
@@ -78,6 +78,31 @@ python scripts/consensus_accuracy_report.py --help
 
 Reports are saved to `log-test/` with timestamp.
 
+### 5. Shadow Pipeline (Observational Mode)
+
+The shadow pipeline evaluates matches using dual LLM agents without placing real bets.
+
+```bash
+# Step 1: Refresh feature store (daily)
+python scripts/refresh_features.py --config config.yml
+
+# Step 2: Collect pre-match odds
+python scripts/superbet_scraper.py hoje
+
+# Step 3: Run shadow evaluation (pre-match mode)
+python scripts/shadow_observe.py --pre-match hoje --config config.yml
+
+# Dry-run (skip LLM, consensus only)
+python scripts/shadow_observe.py --pre-match hoje --dry-run
+
+# Quick scraper (SSE only, no REST enrichment)
+python scripts/superbet_scraper.py amanha --quick
+```
+
+Requires `OPENAI_API_KEY` in `.env` (see `.env.example`). Shadow log saved to `logs/shadow_bets.log`.
+
+> ⚠️ **This system is strictly an analytics tool. No module places real bets.**
+
 ## 📁 Project Structure
 
 - `run.py`: Main entrypoint to execute the pipeline.
@@ -87,11 +112,14 @@ Reports are saved to `log-test/` with timestamp.
   - `betting/engine.py`: **Core logic** for probability, EV, and value calculation.
   - `features/`: Feature engineering modules.
   - `models/`: Model training and prediction.
-  - `odds/`: Odds collection.
-  - `pipeline/`: End-to-end pipeline orchestration for backtesting.
-  - `artifacts/models/`: Optional pre-trained ensemble artifacts auto-discovered by `run.py`.
-- `data/`: Datasets and other data files.
-- `tests/`: Test suite for the project.
+  - `odds/`: Odds collection (Superbet SSE + pre-match JSON loader).
+  - `agents/`: LLM-based decision agents (Gatekeeper for corners, Analyst for 1x2/BTTS).
+  - `pipeline/`: Pipeline orchestration (MVP training + Gatekeeper Live shadow mode).
+  - `data/`: Ingestion, Feature Store, Context Collector.
+  - `probability/`: Calibration metrics (Brier Score, ECE).
+- `data/`: Datasets, mappings, and odds snapshots.
+- `scripts/`: CLI tools (shadow observe, scraper, hyperopt, consensus report).
+- `tests/`: Test suite (218 tests, 21 files).
 - `docs/`: Project documentation.
 
 ## 🛠️ Requirements
@@ -104,16 +132,20 @@ Reports are saved to `log-test/` with timestamp.
 - `lightgbm`
 - `scipy`
 - `requests`
+- `httpx`
+- `openai`
+- `python-dotenv`
 - `optuna`
 - `shap`
 - `pytest`
 - `PyYAML`
 
-## ✅ P0 + P1 Completion Status
+## ✅ P0 + P1 + Shadow Pipeline Status
 
 **P0 - 100% COMPLETE** (30-MAR-2026)  
 **P0-FIX - 100% COMPLETE** (03-APR-2026) — 6 bugs críticos corrigidos  
-**P1 - 100% COMPLETE** (03-APR-2026) — 166/166 testes passando (20 arquivos)
+**P1 - 100% COMPLETE** (03-APR-2026)  
+**Shadow Pipeline - OPERATIONAL** (11-APR-2026) — 218/218 testes passando (21 arquivos)
 
 All 9 P0 items successfully implemented and validated with real data:
 

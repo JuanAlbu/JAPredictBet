@@ -1,9 +1,9 @@
 # JA PREDICT BET — ROADMAP P2+ (REVISÃO 11-APR-2026)
 
 **Data da Revisão:** 11 de Abril, 2026
-**Status Geral:** P0 ✅ | P0-FIX ✅ | P1 ✅ | Onda 1 ✅ | Onda 2 parcial | Onda 4 parcial — 201/201 testes passando (23 arquivos). 106 features. 30 modelos (11 XGB + 10 LGB + 5 Ridge + 4 EN).
-**Histórico Completo:** Todos os itens concluídos (P0, P0-FIX, P1, Onda 1) documentados em [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md).
-**Próxima Ação:** Onda 4 residual (SH4 preenchimento, SH10-SH14 scraper). Onda 2 residual (B3, B7, B8, C7).
+**Status Geral:** P0 ✅ | P0-FIX ✅ | P1 ✅ | Onda 1 ✅ | Onda 2 parcial | Onda 4 parcial — 218/218 testes passando (21 arquivos). 106 features. 30 modelos (11 XGB + 10 LGB + 5 Ridge + 4 EN).
+**Histórico Completo:** Todos os itens concluídos (P0, P0-FIX, P1, Onda 1, Onda 4 parcial) documentados em [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md).
+**Próxima Ação:** Onda 4 residual (SH4 preenchimento, SH11-SH19). Onda 2 residual (B3, B7, B8, C7).
 
 ### Sequência de Implementação Recomendada
 
@@ -15,13 +15,22 @@
 | 4 | **SH9** — `gatekeeper_live_pipeline.py` | ✅ feito | Orquestrador T-60: contexto → ensemble → Gatekeeper → shadow log |
 | 5 | **SH5b** — Integração ConsensusEngine | ✅ feito | `evaluate_with_consensus()` integrado no pipeline |
 | 6 | **SH6** — `shadow_observe.py` | ✅ feito | CLI entry point com `--dry-run`, `--verbose`, `--models-dir` |
-| 7 | **SH7** — Testes Shadow | ✅ feito | `test_superbet.py` (20 tests) + `test_gatekeeper.py` (14 tests) + 1 |
+| 7 | **SH7** — Testes Shadow | ✅ feito | `test_superbet.py` (20 tests) + `test_gatekeeper.py` (14 tests) + `test_analyst.py` (17 tests) |
+| 7b | **SH20** — Feature Store | ✅ feito | `feature_store.py` + `refresh_features.py` — pre-computed rolling features (Option C) |
+| 7c | **SH21** — Dynamic Tournament Whitelist | ✅ feito | `get_active_tournament_ids()` em `feature_store.py` — liga folders → Superbet IDs |
+| 7d | **SH22** — Analyst Agent (multi-market) | ✅ feito | `analyst.py` — LLM evaluation de 1x2/BTTS/Over-Under (não-escanteios) |
+| 7e | **SH23** — Pre-match architecture | ✅ feito | `pre_match_odds.py` + scraper auto-save JSON + `--pre-match` flag no shadow_observe |
 | 8 | **SH4** — Team mapping | ⬜ pendente | Preenchimento manual de `superbet_teams.json` por liga |
 | 9 | **SH10** — Superbet Scraper CLI | ✅ feito | `scripts/superbet_scraper.py` — SSE discovery + REST API full markets |
 | 10 | **SH11** — Tournament IDs faltantes | ⬜ pendente | Adicionar Bundesliga + Premier League a `league_tournament_ids.json` |
 | 11 | **SH12** — Filtro de mercados refinado | ⬜ pendente | Reduzir ruído de combo/player markets no display padrão |
 | 12 | **SH13** — Integrar scraper no pipeline | ⬜ pendente | Alimentar `gatekeeper_live_pipeline` com odds do scraper REST |
 | 13 | **SH14** — Limpeza temp files | ⬜ pendente | Remover `_probe_event.py`, `scraper_*.txt`, `probe_out.txt`, `_list_markets.py` |
+| 14 | **SH15** — Corrigir threshold do consenso no live pipeline | ⬜ pendente | `gatekeeper_live_pipeline.py` usa `config.consensus_threshold` em vez de `config.value.consensus_threshold` |
+| 15 | **SH16** — Implementar `--dry-run` real | ⬜ pendente | Pular OpenAI/Gatekeeper/Analyst quando `--dry-run` estiver ativo |
+| 16 | **SH17** — Separar `Superbet-only` de modo T-60 | ⬜ pendente | Evitar avaliar jogos fora da janela quando `API_FOOTBALL_KEY` estiver ausente |
+| 17 | **SH18** — Validar semântica do H2H no `FeatureStore` | ⬜ pendente | Garantir que features H2H sejam do par do confronto futuro, não da última linha isolada por time |
+| 18 | **SH19** — Cobertura de integração da trilha Shadow | ⬜ pendente | Testar `gatekeeper_live_pipeline`, `ContextCollector`, `FeatureStore`, `pre-match` e `dry-run` |
 
 ---
 
@@ -30,7 +39,7 @@
 Este documento contém **apenas itens em aberto**, organizados em ondas de execução por prioridade.
 Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md) ao serem fechados.
 
-**Itens em aberto:** 16 (P2) + 2 (P3) + 5 (R&D) = 23 total
+**Itens em aberto:** 18 (P2) + 2 (P3) + 5 (R&D) = 25 total
 
 ---
 
@@ -150,6 +159,12 @@ Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HI
 - `scripts/shadow_observe.py` ✅
 - `tests/odds/test_superbet.py` ✅
 - `tests/agents/test_gatekeeper.py` ✅
+- `tests/agents/test_analyst.py` ✅
+- `src/japredictbet/agents/analyst.py` ✅
+- `src/japredictbet/odds/pre_match_odds.py` ✅
+- `src/japredictbet/data/feature_store.py` ✅
+- `scripts/refresh_features.py` ✅
+- `docs/PROMPT_ANALYST.md` ✅
 - `data/mapping/superbet_teams.json` — SH4 (template criado ✅, preenchimento manual pendente)
 **Config adicionada:** Blocos `gatekeeper`, `api_keys`, `superbet_shadow`, `api_football` em `config.yml` + dataclasses correspondentes em `config.py`.
 **Nota técnica:** Endpoint Superbet usa SSE para discovery e REST JSON para enrichment (`/v2/pt-BR/events/{eventId}`). Campo `matchName` usa `·` (middle dot U+00B7) como separador. Preços em formato centesimal (>=100 → /100).
@@ -203,6 +218,28 @@ Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HI
   - Remover: `_probe_event.py`, `_list_markets.py`, `scraper_*.txt`, `probe_out.txt`, `markets_result.txt`.
   - **Nota:** Manter `data/odds/pre_match/*.json` (snapshots úteis).
 
+- [ ] **P2.SH15 - Corrigir uso de `consensus_threshold` no live pipeline**
+  - `gatekeeper_live_pipeline.py` ainda referencia `self._config.consensus_threshold`, mas o valor real mora em `self._config.value.consensus_threshold`.
+  - **Risco:** o consenso cai no `except`, fica silenciosamente `None` e o Gatekeeper roda sem suporte do ensemble.
+
+- [ ] **P2.SH16 - Implementar `--dry-run` de verdade**
+  - `scripts/shadow_observe.py` expõe `--dry-run`, mas o fluxo ainda exige `OPENAI_API_KEY` e instancia `GatekeeperAgent` / `AnalystAgent`.
+  - **Fix:** pular chamadas OpenAI e permitir execução local de coleta + consenso + logging sem credenciais LLM.
+
+- [ ] **P2.SH17 - Separar semântica de `Superbet-only` vs T-60**
+  - `context_collector.py` hoje retorna todos os snapshots do Superbet quando `API_FOOTBALL_KEY` está ausente, sem filtro de kickoff, mas continua logando como janela T-60.
+  - **Risco:** o pipeline avalia jogos fora da janela operacional e mistura modo degradado com modo T-60.
+  - **Fix:** ou aplicar filtro temporal alternativo, ou renomear/segregar explicitamente o modo degradado.
+
+- [ ] **P2.SH18 - Validar H2H no `FeatureStore` para inferência ao vivo**
+  - O store reduz para "última linha por time" e depois compõe `home` + `away`; isso pode carregar features H2H do último adversário de cada time, não do par do confronto futuro.
+  - **Risco:** consenso roda com features semanticamente incorretas mesmo quando o pipeline não quebra.
+  - **Fix:** recomputar H2H para o par consultado ou excluir H2H do `FeatureStore` até haver reconstrução correta.
+
+- [ ] **P2.SH19 - Criar testes de integração da trilha Shadow**
+  - Hoje há boa cobertura unitária para `test_superbet.py`, `test_gatekeeper.py` e `test_analyst.py`, mas faltam testes para `gatekeeper_live_pipeline`, `ContextCollector`, `FeatureStore`, `pre-match` e `dry-run`.
+  - **Risco:** regressões de integração passam despercebidas, especialmente em fallback/degradação silenciosa.
+
 ### Bloco 4B — Contexto T-60 (implementado)
 
 - [x] **P2.SH5a - Context Collector (API-Football + Superbet)** ✅ (11-APR-2026)
@@ -227,7 +264,8 @@ Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HI
 - [x] **P2.SH7 - Testes dedicados da trilha Shadow** ✅ (11-APR-2026)
   - `tests/odds/test_superbet.py`: SSE parsing (5), team names (3), market detection (3), odds extraction (5), dataclasses (3), sport filter (1) = 20 testes.
   - `tests/agents/test_gatekeeper.py`: pre-filter (4), LLM parsing (6), failure handling (1), BaseAgent contract (2), constructor (1) = 14 testes.
-  - Total: 201/201 passando (23 arquivos).
+  - `tests/agents/test_analyst.py`: pre-filter (3), LLM parsing (5), market evaluation (4), failure handling (2), constructor (3) = 17 testes.
+  - Total: 218/218 passando (21 arquivos).
 
 - [x] **P2.SH8 - Agente Gatekeeper (LLM + decisão)** ✅ (11-APR-2026)
   - `src/japredictbet/agents/gatekeeper.py` herdando de `BaseAgent`.
@@ -242,6 +280,35 @@ Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HI
   - Fluxo: Collect matches → Load ensemble → Consensus vote → Gatekeeper LLM → Cap entries → JSONL shadow log.
   - Factory method `from_config()` constrói pipeline completo a partir de `PipelineConfig`.
   - Max 5 entradas/dia (`gatekeeper.max_entries_per_day`).
+
+### Bloco 4E — Feature Store, Analyst Agent & Pre-match (✅ implementado — 11-APR-2026)
+
+- [x] **P2.SH20 - Feature Store (Option C — Daily Pre-computation)** ✅ (11-APR-2026)
+  - `src/japredictbet/data/feature_store.py`: `FeatureStore.build()/.save()/.load()/.get_match_features()`.
+  - Lê CSVs de `data/raw/leagues/`, aplica feature engineering completo, salva Parquet com uma linha por equipe.
+  - Fuzzy matching (similarity >= 0.82) para variações de nome de equipe.
+  - `scripts/refresh_features.py`: CLI para rebuild diário (`--leagues-dir`, `--output`, `--config`).
+
+- [x] **P2.SH21 - Dynamic Tournament Whitelist** ✅ (11-APR-2026)
+  - `get_active_tournament_ids()` em `feature_store.py`: escaneia pastas de `data/raw/leagues/`, faz match case-insensitive com `league_tournament_ids.json`.
+  - Substitui lista estática de tournament IDs no config. Pipeline Live filtra automaticamente por ligas com dados históricos.
+
+- [x] **P2.SH22 - Analyst Agent (Multi-Market LLM)** ✅ (11-APR-2026)
+  - `src/japredictbet/agents/analyst.py`: `AnalystAgent(BaseAgent)` para mercados não-escanteios.
+  - Avalia 1x2, BTTS, Over/Under Goals via LLM (PROMPT_ANALYST.md como system prompt).
+  - Output: `AnalystResult` com lista de `MarketEvaluation` (status, stake, edge, red_flags).
+  - Pré-filtro Python: rejeita se nenhuma odd não-corner ≥ `min_odd`.
+  - `docs/PROMPT_ANALYST.md`: system prompt dedicado.
+  - `tests/agents/test_analyst.py`: 17 testes.
+
+- [x] **P2.SH23 - Pre-match Architecture Split** ✅ (11-APR-2026)
+  - `src/japredictbet/odds/pre_match_odds.py`: Carrega snapshots JSON do scraper → `List[MatchContext]`.
+  - Helpers: `_is_corner_market()`, `_is_match_odds_market()`, `_is_btts_market()`.
+  - `scripts/superbet_scraper.py`: Auto-save para `data/odds/pre_match/{date}.json`, flag `--no-save`.
+  - `scripts/shadow_observe.py`: Flag `--pre-match DATE` (aceita `hoje`, `amanha`, `YYYY-MM-DD`).
+  - `gatekeeper_live_pipeline.py`: `run(pre_match_date=...)` carrega de JSON em vez de SSE.
+  - `ShadowEntry` expandido com campos `analyst_status`, `analyst_best_pick`, `analyst_markets`.
+  - **Dois modos operacionais:** Pre-match (scraper → JSON → pipeline) e Live (SSE + API-Football → pipeline).
 
 ---
 
@@ -288,12 +355,12 @@ Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HI
 
 | Dimensão | Nota | Comentário |
 |----------|------|------------|
-| Arquitetura | 9.5/10 | Design modular. Gatekeeper Live Pipeline completo (coleta → consensus → LLM → shadow log) |
-| Implementação | 9/10 | P0+P1+Onda4 completos. Scraper CLI funcional (SSE+REST). Penalizado por `update_pipeline.py` non-functional, holdout não-cronológico e hyperopt params não integrados |
+| Arquitetura | 9.5/10 | Design modular. Gatekeeper + Analyst dual-agent pipeline. Feature Store (Option C). Pre-match + Live modes |
+| Implementação | 9/10 | P0+P1+Onda4 completos. Scraper CLI + Pre-match loader + Analyst Agent. Penalizado por `update_pipeline.py` non-functional, holdout não-cronológico e hyperopt params não integrados |
 | Documentação | 8.5/10 | Drift corrigido (C6). AGENTS.md, ARCHITECTURE.md, next_pass.md sincronizados |
-| Testes | 7.5/10 | 201 testes (23 arquivos). Superbet + Gatekeeper cobertos. `data/ingestion.py` e `features/` com cobertura parcial |
+| Testes | 8/10 | 218 testes (21 arquivos). Superbet + Gatekeeper + Analyst cobertos. `data/ingestion.py` e `features/` com cobertura parcial |
 | Reprodutibilidade | 9/10 | SHA256, seeds, requirements pinados, config-driven, `.env.example` |
-| Production-Ready | 8/10 | Shadow pipeline operacional. Scraper CLI operacional com auto-save JSON. Penalizado por pickle sem hash e hyperopt params não integrados |
+| Production-Ready | 8/10 | Shadow pipeline operacional. Dual-agent (corners + multi-market). Penalizado por pickle sem hash, hyperopt params não integrados, `artifacts/models/` vazio |
 
 ---
 

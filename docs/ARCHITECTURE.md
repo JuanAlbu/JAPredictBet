@@ -236,14 +236,38 @@ Pre-filter (min_odd ≥ 1.60)
        ▼
 Ensemble Prediction        (existing 30-model consensus)
        │
-       ▼
-GatekeeperAgent            (agents/gatekeeper.py — planned)
-  ├─ Receives MatchContext + ensemble output
-  ├─ Applies Prompt Mestre V25 decision framework
-  └─ Returns GO / NO-GO with structured reasoning
-       │
-       ▼
+       ├─────────────────────────┐
+       ▼                         ▼
+GatekeeperAgent            AnalystAgent
+(agents/gatekeeper.py)     (agents/analyst.py)
+  ├─ Corners analysis        ├─ 1x2, BTTS, Over/Under
+  ├─ Prompt Mestre V25       ├─ PROMPT_ANALYST.md
+  └─ GO / NO-GO              └─ MarketEvaluations
+       │                         │
+       └─────────┬───────────────┘
+                 ▼
 Shadow Log                 (observational only)
+```
+
+### Two Operational Modes
+
+**Pre-match Mode** (primary):
+```
+superbet_scraper.py → data/odds/pre_match/{date}.json
+                              │
+                              ▼
+                    pre_match_odds.py → List[MatchContext]
+                              │
+                              ▼
+                 GatekeeperLivePipeline.run(pre_match_date=...)
+```
+
+**Live T-60 Mode** (fallback):
+```
+SuperbetCollector (SSE) + API-Football → ContextCollector → List[MatchContext]
+                              │
+                              ▼
+                 GatekeeperLivePipeline.run()
 ```
 
 ## Key Modules
@@ -286,7 +310,41 @@ Shadow Log                 (observational only)
 
 - **BaseAgent:** Abstract base with `run(context) → AgentResult` contract.
 - **AgentRegistry:** Name-based registration and lookup of agent implementations.
-- **Planned:** `GatekeeperAgent` (SH8) implementing the LLM decision logic.
+
+### Gatekeeper Agent (`agents/gatekeeper.py`)
+
+- **Purpose:** LLM-based evaluation of corner markets, combining ensemble consensus with qualitative analysis.
+- **System Prompt:** `docs/PROMPT_MESTRE.md` (V25 Final).
+- **Input:** `MatchContext` JSON + ensemble consensus output (lambda, vote count, edge).
+- **Pre-filter:** Hard Python filter rejects if best Superbet odd < `min_odd` (1.60) before calling LLM.
+- **Output:** `GatekeeperResult(status, stake, market, odd, edge, justification, red_flags)`.
+- **Status values:** APPROVED | NO BET | FILTERED | ERROR.
+
+### Analyst Agent (`agents/analyst.py`)
+
+- **Purpose:** LLM-based evaluation of non-corner markets (1x2, BTTS, Over/Under Goals).
+- **System Prompt:** `docs/PROMPT_ANALYST.md`.
+- **Input:** `MatchContext` JSON (no ensemble support — LLM-only analysis).
+- **Pre-filter:** Rejects if no non-corner odds ≥ `min_odd`.
+- **Output:** `AnalystResult` with `List[MarketEvaluation]` + `best_pick`.
+- **Market types:** Match Result (1x2), Both Teams To Score, Over/Under Goals.
+- **Note:** The Analyst operates without ensemble support because the 30-model consensus is corners-specific.
+
+### Feature Store (`data/feature_store.py`)
+
+- **Purpose:** Pre-computed rolling feature lookup table for live inference (Option C).
+- **Build process:** Reads all CSVs from `data/raw/leagues/`, applies full feature engineering pipeline (rolling mean/STD/EMA, H2H, ELO, matchup), extracts latest row per team.
+- **Storage:** Parquet file at `artifacts/feature_store.parquet`.
+- **Lookup:** `get_match_features(home, away)` returns single-row DataFrame with 106+ features.
+- **Fuzzy matching:** Team name variations matched with similarity ≥ 0.82.
+- **Refresh:** Daily via `scripts/refresh_features.py` (manual or cron).
+
+### Pre-match Odds Loader (`odds/pre_match_odds.py`)
+
+- **Purpose:** Load scraper JSON snapshots into pipeline-ready `MatchContext` objects.
+- **Input:** `data/odds/pre_match/YYYY-MM-DD.json` (auto-saved by scraper).
+- **Market extraction:** `_is_corner_market()`, `_is_match_odds_market()`, `_is_btts_market()`.
+- **Output:** `List[MatchContext]` with populated `OddsContext` (corner, 1x2, BTTS odds).
 
 ### Configuration (`config.yml`)
 
