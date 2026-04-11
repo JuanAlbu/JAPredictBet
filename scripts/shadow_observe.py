@@ -1,16 +1,24 @@
 #!/usr/bin/env python
 """Shadow-mode observation script for the Gatekeeper Live Pipeline.
 
+Supports two modes:
+  1. Pre-match (primary): reads odds from scraper snapshot JSON
+  2. Live T-60: connects to SSE feed for real-time monitoring
+
 Usage
 -----
-    # Default: loads config.yml, models from artifacts/models/
+    # Pre-match mode (recommended — run scraper first)
+    python scripts/superbet_scraper.py hoje
+    python scripts/shadow_observe.py --pre-match hoje
+
+    # Pre-match with specific date
+    python scripts/shadow_observe.py --pre-match 2026-04-12
+
+    # Live T-60 mode (fallback)
     python scripts/shadow_observe.py
 
     # Custom config + models dir
     python scripts/shadow_observe.py --config config.yml --models-dir artifacts/models
-
-    # Dry-run (collect + log, skip LLM calls)
-    python scripts/shadow_observe.py --dry-run
 
 Safety: This script is strictly observational.
         It never places real bets.
@@ -20,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -60,6 +69,17 @@ def _parse_args() -> argparse.Namespace:
         help="Collect context and run consensus only — skip LLM calls.",
     )
     parser.add_argument(
+        "--pre-match",
+        type=str,
+        default=None,
+        metavar="DATE",
+        help=(
+            "Pre-match mode: load odds from scraper snapshot. "
+            "Accepts: 'hoje', 'amanha', or YYYY-MM-DD. "
+            "Run 'python scripts/superbet_scraper.py <dia>' first."
+        ),
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
@@ -87,6 +107,30 @@ def main() -> None:
     else:
         logger.info("No .env file found — using system environment variables.")
 
+    # ── Pre-flight checks ────────────────────────────────────────────
+    if not os.getenv("OPENAI_API_KEY"):
+        logger.error(
+            "OPENAI_API_KEY is not set.\n"
+            "  1. Copy .env.example  →  .env\n"
+            "  2. Set your key:  OPENAI_API_KEY=sk-...\n"
+            "  3. Re-run this script."
+        )
+        sys.exit(1)
+
+    if not os.getenv("API_FOOTBALL_KEY"):
+        logger.warning(
+            "API_FOOTBALL_KEY not set — running in Superbet-only mode. "
+            "Lineups, injuries and standings will not be fetched."
+        )
+
+    if not any(args.models_dir.glob("*.pkl")):
+        logger.warning(
+            "No trained model artifacts found in '%s'. "
+            "Consensus will be skipped. "
+            "Run 'python run.py --config config.yml' to train the ensemble first.",
+            args.models_dir,
+        )
+
     # ── Config ───────────────────────────────────────────────────────
     config_path = args.config
     if not config_path.exists():
@@ -106,19 +150,37 @@ def main() -> None:
         logger.error("Pipeline setup failed: %s", exc)
         sys.exit(1)
 
+    # ── Resolve pre-match date ─────────────────────────────────────
+    pre_match_date = None
+    if args.pre_match:
+        from datetime import datetime, timedelta
+
+        alias = args.pre_match.lower().strip()
+        if alias in ("hoje", "today"):
+            pre_match_date = datetime.now().strftime("%Y-%m-%d")
+        elif alias in ("amanha", "amanhã", "tomorrow"):
+            pre_match_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+        else:
+            pre_match_date = alias  # Assume YYYY-MM-DD
+
+        logger.info("Pre-match mode: date=%s", pre_match_date)
+
     # ── Run ──────────────────────────────────────────────────────────
+    mode = "pre-match" if pre_match_date else "live T-60"
     logger.info(
-        "Starting shadow observation (dry_run=%s, models_dir=%s)...",
+        "Starting shadow observation (mode=%s, dry_run=%s, models_dir=%s)...",
+        mode,
         args.dry_run,
         args.models_dir,
     )
 
-    result = pipeline.run()
+    result = pipeline.run(pre_match_date=pre_match_date)
 
     # ── Summary ──────────────────────────────────────────────────────
     print("\n" + "=" * 60)
     print("SHADOW OBSERVATION SUMMARY")
     print("=" * 60)
+    print(f"  Mode:              {mode}")
     print(f"  Run at:            {result.run_at}")
     print(f"  Matches collected: {result.matches_collected}")
     print(f"  Matches evaluated: {result.matches_evaluated}")
@@ -146,6 +208,28 @@ def main() -> None:
         )
         if entry.gatekeeper_justification:
             print(f"        → {entry.gatekeeper_justification}")
+
+        # Analyst results (non-corner markets)
+        if entry.analyst_status and entry.analyst_status != "FILTERED":
+            analyst_icon = {
+                "APPROVED": "✅",
+                "NO BET": "❌",
+                "FILTERED": "⛔",
+                "ERROR": "⚠️",
+            }.get(entry.analyst_status, "❓")
+            print(
+                f"        📊 Analyst: {analyst_icon} {entry.analyst_status}"
+                f"  | {entry.analyst_markets_approved}/{entry.analyst_markets_evaluated} mercados"
+            )
+            if entry.analyst_best_market:
+                print(
+                    f"        📊 Best pick: {entry.analyst_best_market}"
+                    f"  @ {entry.analyst_best_odd}"
+                    f"  | stake={entry.analyst_best_stake}"
+                    f"  | edge={entry.analyst_best_edge}"
+                )
+                if entry.analyst_best_justification:
+                    print(f"        📊 → {entry.analyst_best_justification}")
 
     if not result.entries:
         print("  (nenhum jogo coletado dentro da janela T-60)")

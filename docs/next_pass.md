@@ -3,7 +3,7 @@
 **Data da Revisão:** 11 de Abril, 2026
 **Status Geral:** P0 ✅ | P0-FIX ✅ | P1 ✅ | Onda 1 ✅ | Onda 2 parcial | Onda 4 parcial — 201/201 testes passando (23 arquivos). 106 features. 30 modelos (11 XGB + 10 LGB + 5 Ridge + 4 EN).
 **Histórico Completo:** Todos os itens concluídos (P0, P0-FIX, P1, Onda 1) documentados em [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md).
-**Próxima Ação:** Onda 4 residual (SH4 preenchimento, SH5b integração). Onda 2 residual (B3, B7, B8, C7).
+**Próxima Ação:** Onda 4 residual (SH4 preenchimento, SH10-SH14 scraper). Onda 2 residual (B3, B7, B8, C7).
 
 ### Sequência de Implementação Recomendada
 
@@ -17,6 +17,11 @@
 | 6 | **SH6** — `shadow_observe.py` | ✅ feito | CLI entry point com `--dry-run`, `--verbose`, `--models-dir` |
 | 7 | **SH7** — Testes Shadow | ✅ feito | `test_superbet.py` (20 tests) + `test_gatekeeper.py` (14 tests) + 1 |
 | 8 | **SH4** — Team mapping | ⬜ pendente | Preenchimento manual de `superbet_teams.json` por liga |
+| 9 | **SH10** — Superbet Scraper CLI | ✅ feito | `scripts/superbet_scraper.py` — SSE discovery + REST API full markets |
+| 10 | **SH11** — Tournament IDs faltantes | ⬜ pendente | Adicionar Bundesliga + Premier League a `league_tournament_ids.json` |
+| 11 | **SH12** — Filtro de mercados refinado | ⬜ pendente | Reduzir ruído de combo/player markets no display padrão |
+| 12 | **SH13** — Integrar scraper no pipeline | ⬜ pendente | Alimentar `gatekeeper_live_pipeline` com odds do scraper REST |
+| 13 | **SH14** — Limpeza temp files | ⬜ pendente | Remover `_probe_event.py`, `scraper_*.txt`, `probe_out.txt`, `_list_markets.py` |
 
 ---
 
@@ -147,7 +152,7 @@ Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HI
 - `tests/agents/test_gatekeeper.py` ✅
 - `data/mapping/superbet_teams.json` — SH4 (template criado ✅, preenchimento manual pendente)
 **Config adicionada:** Blocos `gatekeeper`, `api_keys`, `superbet_shadow`, `api_football` em `config.yml` + dataclasses correspondentes em `config.py`.
-**Nota técnica:** Endpoint Superbet é SSE, não REST JSON. Campo `matchName` usa `·` (middle dot U+00B7) como separador.
+**Nota técnica:** Endpoint Superbet usa SSE para discovery e REST JSON para enrichment (`/v2/pt-BR/events/{eventId}`). Campo `matchName` usa `·` (middle dot U+00B7) como separador. Preços em formato centesimal (>=100 → /100).
 
 ### Bloco 4A — Infra de Coleta (parcialmente implementado)
 
@@ -165,6 +170,38 @@ Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HI
   - Arquivo: `data/mapping/superbet_teams.json` (template criado, preenchimento manual por liga).
   - `superbet_client.py` já aceita `team_mapping` param — equipes sem mapeamento geram WARNING e skip.
   - `context_collector.py` carrega mapping via `_load_team_mapping()` (None se arquivo ausente → sem filtro).
+
+### Bloco 4D — Superbet Scraper CLI (11-APR-2026)
+
+- [x] **P2.SH10 - Superbet Scraper (SSE + REST API)** ✅ (11-APR-2026)
+  - `scripts/superbet_scraper.py` (~800 linhas).
+  - **Fase 1 — SSE Discovery:** Conecta a dois endpoints SSE (prematch para jogos futuros, all para live). Coleta `event_id`, equipes, liga, horário.
+  - **Fase 2 — REST Enrichment:** Para cada evento, `GET /v2/pt-BR/events/{eventId}` retorna TODOS os mercados (700+ por jogo, 3000+ seleções). Parsing completo de odds centesimais (>=100 → /100).
+  - **Mercados cobertos:** Resultado Final, Total de Gols, Dupla Chance, Ambas as Equipes Marcam, Total de Escanteios, Total de Cartões, Total de Finalizações, Total de Chutes no Gol, Handicap, Handicap Asiático, combos de jogador.
+  - **CLI:** `python scripts/superbet_scraper.py <dia>` — aceita `hoje`, `amanha`, `domingo`, `YYYY-MM-DD`, `todos`.
+  - **Flags:** `--leagues`, `--stream-seconds`, `--json`, `--all-markets`, `--quick` (SSE only), `--debug`, `--verbose`, `--no-save`.
+  - **Auto-save:** `data/odds/pre_match/{date}.json` com snapshot completo.
+  - **Filtro:** `MARKETS_OF_INTEREST` (15 padrões) + `PLAYER_MARKET_KEYWORDS` (4 padrões).
+  - **Nota técnica:** Preços centesimais (250 → 2.50). Middle-dot `·` (U+00B7) como separador em `matchName`. URLs com normalização NFKD para caracteres especiais.
+
+- [ ] **P2.SH11 - Adicionar Bundesliga + Premier League ao mapeamento de ligas**
+  - `data/mapping/league_tournament_ids.json` tem 12 ligas mas faltam Bundesliga (1ª) e Premier League.
+  - **Fix:** Localizar `tournament_id` correto no feed SSE Superbet e adicionar ao JSON.
+  - **Nota:** Bundesliga 2 (ID existente) ≠ Bundesliga 1.
+
+- [ ] **P2.SH12 - Refinar filtro de mercados no scraper**
+  - Com `--all-markets` desligado, combos de jogador com keywords tipo "Ambas as equipes marcam" passam no filtro por substring match.
+  - **Fix:** Match mais estrito (exact ou regex com word boundary) para mercados core vs combos.
+  - Considerar flag `--player-markets` separado para exibir/ocultar mercados de jogador.
+
+- [ ] **P2.SH13 - Integrar scraper REST no pipeline live**
+  - Scraper é standalone (`scripts/`). Pipeline live (`gatekeeper_live_pipeline.py`) usa `SuperbetCollector` (SSE only, 3 mercados).
+  - **Fix:** Extrair lógica REST do scraper para `superbet_client.py` (método `fetch_full_event(event_id)`) e alimentar `MatchContext` com odds completas.
+  - **Impacto:** Gatekeeper LLM receberia 15+ mercados em vez de 3, melhorando análise de value.
+
+- [ ] **P2.SH14 - Limpeza de arquivos temporários**
+  - Remover: `_probe_event.py`, `_list_markets.py`, `scraper_*.txt`, `probe_out.txt`, `markets_result.txt`.
+  - **Nota:** Manter `data/odds/pre_match/*.json` (snapshots úteis).
 
 ### Bloco 4B — Contexto T-60 (implementado)
 
@@ -252,11 +289,11 @@ Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HI
 | Dimensão | Nota | Comentário |
 |----------|------|------------|
 | Arquitetura | 9.5/10 | Design modular. Gatekeeper Live Pipeline completo (coleta → consensus → LLM → shadow log) |
-| Implementação | 9/10 | P0+P1+Onda4 completos. Penalizado por `update_pipeline.py` non-functional, holdout não-cronológico e hyperopt params não integrados |
+| Implementação | 9/10 | P0+P1+Onda4 completos. Scraper CLI funcional (SSE+REST). Penalizado por `update_pipeline.py` non-functional, holdout não-cronológico e hyperopt params não integrados |
 | Documentação | 8.5/10 | Drift corrigido (C6). AGENTS.md, ARCHITECTURE.md, next_pass.md sincronizados |
 | Testes | 7.5/10 | 201 testes (23 arquivos). Superbet + Gatekeeper cobertos. `data/ingestion.py` e `features/` com cobertura parcial |
 | Reprodutibilidade | 9/10 | SHA256, seeds, requirements pinados, config-driven, `.env.example` |
-| Production-Ready | 8/10 | Shadow pipeline operacional. Penalizado por pickle sem hash e hyperopt params não integrados |
+| Production-Ready | 8/10 | Shadow pipeline operacional. Scraper CLI operacional com auto-save JSON. Penalizado por pickle sem hash e hyperopt params não integrados |
 
 ---
 

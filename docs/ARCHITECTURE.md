@@ -257,6 +257,22 @@ Shadow Log                 (observational only)
 - **Resilience:** Exponential backoff retry (2→4→8s) via `_fetch_sse_with_retry()`.
 - **Output:** `SuperbetSnapshot` with list of `SuperbetOdds` per match.
 
+### Superbet Scraper CLI (`scripts/superbet_scraper.py`)
+
+- **Purpose:** Standalone CLI tool for comprehensive odds collection across all market types.
+- **Two-Phase Architecture:**
+  1. **SSE Discovery:** Connects to Superbet's SSE feed to discover matches. Two endpoints:
+     - `/subscription/v2/pt-BR/events/prematch` — future matches (pre-match)
+     - `/subscription/v2/pt-BR/events/all` — live/in-play matches
+     - Output: `event_id`, team names, league, kickoff time. Only 3 odds (1X2) available at this stage.
+  2. **REST Enrichment:** For each discovered `event_id`, calls `GET /v2/pt-BR/events/{eventId}` on the same CDN. This endpoint returns **all** markets for the event (700+ markets, 3000+ selections per match). The scraper filters by `MARKETS_OF_INTEREST` (15 patterns) before display.
+- **Price Format:** Centesimal encoding — prices ≥ 100 are divided by 100 (e.g., 250 → 2.50 decimal odds).
+- **Markets Covered:** Resultado Final, Total de Gols, Dupla Chance, Ambas as Equipes Marcam, Total de Escanteios, Total de Cartões, Total de Finalizações, Total de Chutes no Gol, Handicap, Handicap Asiático, player combo markets.
+- **CLI Interface:** `python scripts/superbet_scraper.py <day>` — accepts `hoje`, `amanha`, `domingo`, `YYYY-MM-DD`, `todos`.
+- **Key Flags:** `--quick` (SSE only, skip REST), `--all-markets` (show all 700+ markets), `--json`, `--no-save`.
+- **Auto-Save:** JSON snapshots saved to `data/odds/pre_match/{date}.json`.
+- **League Filter:** Uses `data/mapping/league_tournament_ids.json` (12 leagues mapped).
+
 ### T-60 Context Collector (`data/context_collector.py`)
 
 - **Purpose:** Aggregate all pre-match context within a configurable time window (default 60 min before kickoff).

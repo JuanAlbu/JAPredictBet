@@ -29,7 +29,6 @@ import httpx
 
 from japredictbet.config import (
     ApiFootballConfig,
-    ApiKeysConfig,
     GatekeeperConfig,
     SuperbetShadowConfig,
 )
@@ -264,7 +263,7 @@ class ContextCollector:
     def __init__(
         self,
         superbet: SuperbetCollector,
-        api_football: ApiFootballClient,
+        api_football: Optional[ApiFootballClient],
         gatekeeper_cfg: GatekeeperConfig,
         team_mapping: Optional[Dict[str, str]] = None,
     ) -> None:
@@ -278,14 +277,28 @@ class ContextCollector:
         cls,
         superbet_cfg: SuperbetShadowConfig,
         api_football_cfg: ApiFootballConfig,
-        api_keys: ApiKeysConfig,
         gatekeeper_cfg: GatekeeperConfig,
+        api_football_key: str = "",
     ) -> ContextCollector:
-        """Factory that resolves API keys and loads team mapping."""
-        resolved = api_keys.resolve()
+        """Build the collector, making API-Football optional.
 
+        When *api_football_key* is empty the collector runs in
+        **Superbet-only mode**: only the live odds feed is used and no
+        lineup/injury/standings enrichment is performed.
+        """
         superbet = SuperbetCollector(superbet_cfg)
-        api_client = ApiFootballClient(resolved.api_football_key, api_football_cfg)
+
+        if api_football_key:
+            api_client: Optional[ApiFootballClient] = ApiFootballClient(
+                api_football_key, api_football_cfg
+            )
+        else:
+            logger.warning(
+                "API_FOOTBALL_KEY not set — ContextCollector running in "
+                "Superbet-only mode.  Lineups, injuries and standings will "
+                "not be available."
+            )
+            api_client = None
 
         team_mapping = _load_team_mapping(superbet_cfg.team_mapping_path)
 
@@ -315,81 +328,116 @@ class ContextCollector:
         logger.info("Fetching Superbet odds feed…")
         sb_snapshots = self._superbet.fetch_today_odds(self._team_mapping)
 
-        # ── API-Football fixtures ────────────────────────────────────
-        logger.info("Fetching today's fixtures from API-Football…")
-        fixtures = self._api.get_fixtures_today()
-
-        now = datetime.now(timezone.utc)
-        cutoff = now + timedelta(minutes=window)
-
         contexts: List[MatchContext] = []
 
-        for fix in fixtures:
-            fixture_info = fix.get("fixture", {})
-            fixture_id: int = fixture_info.get("id", 0)
-            kickoff_str: str = fixture_info.get("date", "")
-
-            try:
-                kickoff = datetime.fromisoformat(kickoff_str.replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
-                continue
-
-            # Only matches within the T-{window} window
-            if not (now <= kickoff <= cutoff):
-                continue
-
-            teams = fix.get("teams", {})
-            home_name: str = teams.get("home", {}).get("name", "")
-            away_name: str = teams.get("away", {}).get("name", "")
-            league_info = fix.get("league", {})
-
-            # ── Build odds context from Superbet snapshot ────────────
-            odds_ctx = self._match_superbet_odds(
-                home_name, away_name, sb_snapshots
+        if self._api is None:
+            # ── Superbet-only mode ───────────────────────────────────
+            logger.info(
+                "API-Football not configured — returning %d events from Superbet "
+                "(no kickoff filter, no lineup/injury/standings data).",
+                len(sb_snapshots),
             )
+            for snap in sb_snapshots.values():
+                odds_ctx = self._match_superbet_odds(
+                    snap.home_team, snap.away_team, sb_snapshots
+                )
+                contexts.append(
+                    MatchContext(
+                        event_id=snap.event_id,
+                        home_team=snap.home_team,
+                        away_team=snap.away_team,
+                        odds=odds_ctx,
+                    )
+                )
+        else:
+            # ── Full mode (API-Football + Superbet) ──────────────────
+            logger.info("Fetching today's fixtures from API-Football…")
+            fixtures = self._api.get_fixtures_today()
 
-            # ── Lineups ─────────────────────────────────────────────
-            lineups = self._safe_call(
-                self._api.get_lineups, fixture_id, label="lineups"
-            ) or {}
+            now = datetime.now(timezone.utc)
+            cutoff = now + timedelta(minutes=window)
 
-            home_lineup = lineups.get("home")
-            away_lineup = lineups.get("away")
+            for fix in fixtures:
+                fixture_info = fix.get("fixture", {})
+                fixture_id: int = fixture_info.get("id", 0)
+                kickoff_str: str = fixture_info.get("date", "")
 
-            # ── Injuries → merge into lineup.missing_players ────────
-            injuries = self._safe_call(
-                self._api.get_injuries, fixture_id, label="injuries"
-            ) or []
-            if injuries:
-                _merge_injuries(injuries, home_name, home_lineup)
-                _merge_injuries(injuries, away_name, away_lineup)
+                try:
+                    kickoff = datetime.fromisoformat(kickoff_str.replace("Z", "+00:00"))
+                except (ValueError, AttributeError):
+                    continue
 
-            # ── Standings ───────────────────────────────────────────
-            league_id: int = league_info.get("id", 0)
-            season: int = league_info.get("season", now.year)
-            standings = self._safe_call(
-                self._api.get_standings,
-                league_id,
-                season,
-                label="standings",
-            ) or []
+                # Only matches within the T-{window} window
+                if not (now <= kickoff <= cutoff):
+                    continue
 
-            home_standing = _find_standing(standings, home_name)
-            away_standing = _find_standing(standings, away_name)
+                teams = fix.get("teams", {})
+                home_name: str = teams.get("home", {}).get("name", "")
+                away_name: str = teams.get("away", {}).get("name", "")
+                league_info = fix.get("league", {})
 
-            ctx = MatchContext(
-                event_id=str(fixture_id),
-                home_team=home_name,
-                away_team=away_name,
-                kickoff_utc=kickoff.isoformat(),
-                league=league_info.get("name"),
-                odds=odds_ctx,
-                home_lineup=home_lineup,
-                away_lineup=away_lineup,
-                home_standing=home_standing,
-                away_standing=away_standing,
-            )
-            contexts.append(ctx)
+                # ── Build odds context from Superbet snapshot ────────
+                odds_ctx = self._match_superbet_odds(
+                    home_name, away_name, sb_snapshots
+                )
+
+                # ── Lineups ──────────────────────────────────────────
+                lineups = self._safe_call(
+                    self._api.get_lineups, fixture_id, label="lineups"
+                ) or {}
+
+                home_lineup = lineups.get("home")
+                away_lineup = lineups.get("away")
+
+                # ── Injuries → merge into lineup.missing_players ─────
+                injuries = self._safe_call(
+                    self._api.get_injuries, fixture_id, label="injuries"
+                ) or []
+                if injuries:
+                    _merge_injuries(injuries, home_name, home_lineup)
+                    _merge_injuries(injuries, away_name, away_lineup)
+
+                # ── Standings ────────────────────────────────────────
+                league_id: int = league_info.get("id", 0)
+                season: int = league_info.get("season", now.year)
+                standings = self._safe_call(
+                    self._api.get_standings,
+                    league_id,
+                    season,
+                    label="standings",
+                ) or []
+
+                # Free-tier API-Football only covers up to 2024 — fall back if empty
+                if not standings and season > 2024:
+                    logger.info(
+                        "Standings for league %d season %d unavailable — "
+                        "retrying with 2024 fallback.",
+                        league_id,
+                        season,
+                    )
+                    standings = self._safe_call(
+                        self._api.get_standings,
+                        league_id,
+                        2024,
+                        label="standings-fallback",
+                    ) or []
+
+                home_standing = _find_standing(standings, home_name)
+                away_standing = _find_standing(standings, away_name)
+
+                ctx = MatchContext(
+                    event_id=str(fixture_id),
+                    home_team=home_name,
+                    away_team=away_name,
+                    kickoff_utc=kickoff.isoformat(),
+                    league=league_info.get("name"),
+                    odds=odds_ctx,
+                    home_lineup=home_lineup,
+                    away_lineup=away_lineup,
+                    home_standing=home_standing,
+                    away_standing=away_standing,
+                )
+                contexts.append(ctx)
 
         logger.info(
             "ContextCollector: %d matches within T-%d window.", len(contexts), window

@@ -1,13 +1,23 @@
-"""Gatekeeper Live Pipeline — T-60 shadow-mode orchestration.
+"""Gatekeeper Live Pipeline — shadow-mode orchestration.
 
-Collects Superbet odds + API-Football context, runs the 30-model
-ensemble consensus, and passes each qualifying match to the
-``GatekeeperAgent`` for LLM-based evaluation.  All outputs are
-written to a shadow log — **no real bets are ever placed**.
+Supports two modes:
 
-Typical invocation (via ``scripts/shadow_observe.py``)::
+1. **Pre-match mode** (primary): loads odds from daily JSON snapshots
+   created by ``scripts/superbet_scraper.py``.  Runs consensus (corners)
+   + Gatekeeper + Analyst agents on all matches for the day.
 
+2. **Live mode** (T-60): connects to Superbet SSE feed + API-Football
+   to monitor odds movements during matches.
+
+All outputs are written to a shadow log — **no real bets are ever placed**.
+
+Typical invocation::
+
+    # Pre-match (from scraper snapshot)
     pipeline = GatekeeperLivePipeline.from_config(config)
+    results  = pipeline.run(pre_match_date="2026-04-11")
+
+    # Live T-60
     results  = pipeline.run()
 """
 
@@ -16,16 +26,19 @@ from __future__ import annotations
 import json
 import logging
 import pickle
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from japredictbet.agents.analyst import AnalystAgent, AnalystResult
 from japredictbet.agents.base import AgentContext
 from japredictbet.agents.gatekeeper import GatekeeperAgent, GatekeeperResult
 from japredictbet.betting.engine import ConsensusEngine
 from japredictbet.config import PipelineConfig
 from japredictbet.data.context_collector import ContextCollector, MatchContext
+from japredictbet.data.feature_store import FeatureStore, get_active_tournament_ids
+from japredictbet.odds.pre_match_odds import load_pre_match_contexts
 from japredictbet.models.predict import predict_expected_corners
 from japredictbet.models.train import TrainedModels
 
@@ -64,6 +77,15 @@ class ShadowEntry:
     gatekeeper_edge: Optional[str] = None
     gatekeeper_justification: Optional[str] = None
     gatekeeper_red_flags: List[str] = field(default_factory=list)
+    # Analyst agent (non-corner markets: 1x2, BTTS, etc.)
+    analyst_status: Optional[str] = None
+    analyst_best_market: Optional[str] = None
+    analyst_best_stake: Optional[float] = None
+    analyst_best_odd: Optional[float] = None
+    analyst_best_edge: Optional[str] = None
+    analyst_best_justification: Optional[str] = None
+    analyst_markets_evaluated: int = 0
+    analyst_markets_approved: int = 0
 
 
 @dataclass
@@ -101,12 +123,16 @@ class GatekeeperLivePipeline:
         gatekeeper: GatekeeperAgent,
         models: List[TrainedModels],
         consensus_engine: ConsensusEngine,
+        feature_store: Optional[FeatureStore] = None,
+        analyst: Optional[AnalystAgent] = None,
     ) -> None:
         self._config = config
         self._collector = context_collector
         self._gatekeeper = gatekeeper
+        self._analyst = analyst
         self._models = models
         self._consensus = consensus_engine
+        self._feature_store = feature_store
         self._shadow_log_path = Path(
             config.gatekeeper.shadow_log_path
             if config.gatekeeper
@@ -120,6 +146,7 @@ class GatekeeperLivePipeline:
         cls,
         config: PipelineConfig,
         models_dir: str | Path = "artifacts/models",
+        feature_store_path: str | Path | None = None,
     ) -> GatekeeperLivePipeline:
         """Build a ready-to-run pipeline from a ``PipelineConfig``.
 
@@ -145,16 +172,31 @@ class GatekeeperLivePipeline:
                 "add an 'api_keys' block to config.yml."
             )
 
+        # Derive tournament whitelist from league folders that actually have
+        # historical CSV data. This keeps Superbet aligned with the set of
+        # leagues for which we can build features.
+        active_tournament_ids = get_active_tournament_ids()
+        superbet_cfg = replace(
+            config.superbet_shadow,
+            tournament_ids=active_tournament_ids,
+        )
+
         # Context collector
         collector = ContextCollector.from_configs(
-            superbet_cfg=config.superbet_shadow,
+            superbet_cfg=superbet_cfg,
             api_football_cfg=config.api_football,
             api_football_key=api_keys.api_football_key,
             gatekeeper_cfg=gk_cfg,
         )
 
-        # Gatekeeper agent
+        # Gatekeeper agent (corners — consensus + LLM)
         gatekeeper = GatekeeperAgent(
+            gatekeeper_cfg=gk_cfg,
+            api_key=api_keys.llm_api_key,
+        )
+
+        # Analyst agent (non-corner markets — LLM-only)
+        analyst = AnalystAgent(
             gatekeeper_cfg=gk_cfg,
             api_key=api_keys.llm_api_key,
         )
@@ -162,12 +204,30 @@ class GatekeeperLivePipeline:
         # Load ensemble models
         models = _load_ensemble(Path(models_dir))
 
+        # Load feature store (optional — consensus skipped if missing)
+        # Prefer explicit arg → config field → default path
+        resolved_fs_path = (
+            Path(feature_store_path)
+            if feature_store_path is not None
+            else Path(gk_cfg.feature_store_path)
+        )
+        feature_store: Optional[FeatureStore] = None
+        try:
+            feature_store = FeatureStore.load(resolved_fs_path)
+        except FileNotFoundError:
+            logger.warning(
+                "Feature store not found at '%s'. "
+                "Consensus will be skipped. "
+                "Run 'python scripts/refresh_features.py' to build it.",
+                resolved_fs_path,
+            )
+
         # Consensus engine (reuse pipeline settings)
         consensus = ConsensusEngine(
             edge_threshold=0.01,
             use_dynamic_margin=True,
-            tight_margin_threshold=config.tight_margin_threshold,
-            tight_margin_consensus=config.tight_margin_consensus,
+            tight_margin_threshold=config.value.tight_margin_threshold,
+            tight_margin_consensus=config.value.tight_margin_consensus,
         )
 
         return cls(
@@ -176,18 +236,39 @@ class GatekeeperLivePipeline:
             gatekeeper=gatekeeper,
             models=models,
             consensus_engine=consensus,
+            feature_store=feature_store,
+            analyst=analyst,
         )
 
     # ── Main entry point ─────────────────────────────────────────────
 
-    def run(self) -> PipelineRunResult:
-        """Execute the full T-60 pipeline and return results."""
+    def run(
+        self,
+        pre_match_date: Optional[str] = None,
+    ) -> PipelineRunResult:
+        """Execute the pipeline and return results.
+
+        Parameters
+        ----------
+        pre_match_date:
+            If provided, loads pre-match odds from the scraper snapshot
+            for the given date (YYYY-MM-DD) instead of connecting to
+            the live SSE feed.  This is the **primary** mode of
+            operation — run the scraper first, then the pipeline.
+            If ``None``, falls back to live T-60 collection.
+        """
 
         now = datetime.now(timezone.utc)
         logger.info("=== Gatekeeper Live Pipeline — %s ===", now.isoformat())
 
-        # ── 1. Collect upcoming matches ──────────────────────────────
-        matches = self._collect_matches()
+        # ── 1. Collect matches ───────────────────────────────────────
+        if pre_match_date:
+            logger.info(
+                "Pre-match mode: loading snapshot for %s", pre_match_date
+            )
+            matches = load_pre_match_contexts(date=pre_match_date)
+        else:
+            matches = self._collect_matches()
         logger.info("Collected %d matches with context.", len(matches))
 
         if not matches:
@@ -265,11 +346,14 @@ class GatekeeperLivePipeline:
 
         logger.info("Evaluating: %s vs %s (event=%s)", home, away, event_id)
 
-        # ── Ensemble consensus ───────────────────────────────────────
+        # ── Ensemble consensus (corners only) ────────────────────────
         ensemble_output = self._run_consensus(match_ctx)
 
-        # ── Gatekeeper LLM ───────────────────────────────────────────
+        # ── Gatekeeper LLM (corners — with ensemble support) ────────
         gk_result = self._call_gatekeeper(match_ctx, ensemble_output)
+
+        # ── Analyst LLM (non-corner markets: 1x2, BTTS, etc.) ───────
+        analyst_result = self._call_analyst(match_ctx)
 
         # ── Build shadow entry ───────────────────────────────────────
         odds = match_ctx.odds
@@ -323,6 +407,38 @@ class GatekeeperLivePipeline:
             gatekeeper_edge=gk_result.edge,
             gatekeeper_justification=gk_result.justification,
             gatekeeper_red_flags=gk_result.red_flags,
+            analyst_status=analyst_result.status if analyst_result else None,
+            analyst_best_market=(
+                analyst_result.best_pick.market
+                if analyst_result and analyst_result.best_pick
+                else None
+            ),
+            analyst_best_stake=(
+                analyst_result.best_pick.stake
+                if analyst_result and analyst_result.best_pick
+                else None
+            ),
+            analyst_best_odd=(
+                analyst_result.best_pick.odd
+                if analyst_result and analyst_result.best_pick
+                else None
+            ),
+            analyst_best_edge=(
+                analyst_result.best_pick.edge
+                if analyst_result and analyst_result.best_pick
+                else None
+            ),
+            analyst_best_justification=(
+                analyst_result.best_pick.justification
+                if analyst_result and analyst_result.best_pick
+                else None
+            ),
+            analyst_markets_evaluated=len(analyst_result.markets) if analyst_result else 0,
+            analyst_markets_approved=(
+                sum(1 for m in analyst_result.markets if m.status == "APPROVED")
+                if analyst_result
+                else 0
+            ),
         )
 
     def _run_consensus(
@@ -347,25 +463,18 @@ class GatekeeperLivePipeline:
             return None
 
         try:
-            # Collect predictions from all loaded models
+            features = self._get_match_features(match_ctx)
+            if features is None:
+                logger.info(
+                    "%s vs %s — feature store unavailable, skipping consensus.",
+                    match_ctx.home_team,
+                    match_ctx.away_team,
+                )
+                return None
+
             predictions: List[Dict[str, float]] = []
             for model in self._models:
-                # predict_expected_corners expects a DataFrame; for now we need
-                # the feature-engineered row.  In Shadow Mode the models were
-                # already trained on historical data — we pass features through
-                # the standard predict path.
-                #
-                # NOTE: Full feature engineering for a *live* match is complex
-                # (requires rolling history).  For the MVP shadow pipeline we
-                # log lambda=None when feature data is unavailable and let the
-                # Gatekeeper operate on context + odds only.
-                #
-                # When pre-computed features are available (e.g. from a cron
-                # job that ran the full pipeline), they can be injected via
-                # ``match_ctx.payload["features"]`` (future extension).
-                home_pred, away_pred = predict_expected_corners(
-                    model, self._get_match_features(match_ctx)
-                )
+                home_pred, away_pred = predict_expected_corners(model, features)
                 predictions.append(
                     {
                         "lambda_home": float(home_pred.iloc[0]),
@@ -393,32 +502,35 @@ class GatekeeperLivePipeline:
             return None
 
     def _get_match_features(self, match_ctx: MatchContext):
-        """Extract or build a feature DataFrame for a single match.
+        """Build a feature DataFrame for a single live match.
 
-        For the MVP shadow pipeline, features must be pre-computed
-        by the daily cron and stored in ``artifacts/models/``.
-        This is a placeholder that returns an empty DataFrame —
-        callers should check for prediction failures gracefully.
+        Reads the pre-computed FeatureStore (built daily by
+        ``scripts/refresh_features.py``) to retrieve the most recent
+        rolling stats for each team.  Returns None if the store is
+        unavailable or either team is not found — the caller
+        (_run_consensus) will skip consensus in that case.
         """
-        import pandas as pd
+        if self._feature_store is None:
+            return None
 
-        # Future: load pre-engineered features for upcoming matches.
-        # For now, return empty frame — predict_expected_corners will
-        # handle missing columns via its fill-value mechanism.
-        logger.debug(
-            "Feature engineering for live matches not yet implemented. "
-            "Using empty feature frame for %s vs %s.",
-            match_ctx.home_team,
-            match_ctx.away_team,
+        features = self._feature_store.get_match_features(
+            home_team=match_ctx.home_team,
+            away_team=match_ctx.away_team,
         )
-        return pd.DataFrame([{}])
+        if features is None:
+            logger.warning(
+                "Feature store: no features for '%s' vs '%s' — consensus skipped.",
+                match_ctx.home_team,
+                match_ctx.away_team,
+            )
+        return features
 
     def _call_gatekeeper(
         self,
         match_ctx: MatchContext,
         ensemble_output: Optional[Dict[str, Any]],
     ) -> GatekeeperResult:
-        """Call the Gatekeeper LLM agent."""
+        """Call the Gatekeeper LLM agent (corners — with ensemble support)."""
         try:
             context = AgentContext(
                 payload={
@@ -446,6 +558,69 @@ class GatekeeperLivePipeline:
                 status="ERROR",
                 justification="Gatekeeper call failed — see logs.",
             )
+
+    def _call_analyst(
+        self,
+        match_ctx: MatchContext,
+    ) -> Optional[AnalystResult]:
+        """Call the Analyst agent for non-corner markets (1x2, BTTS, etc.).
+
+        Returns None if the analyst agent is not configured.
+        """
+        if self._analyst is None:
+            logger.debug("Analyst agent not configured — skipping.")
+            return None
+
+        try:
+            context = AgentContext(
+                payload={
+                    "match_context_json": match_ctx.to_json(),
+                }
+            )
+            raw = self._analyst.run(context)
+            markets_raw = raw.get("markets", [])
+            from japredictbet.agents.analyst import MarketEvaluation
+
+            markets = [
+                MarketEvaluation(
+                    market=m.get("market", "unknown"),
+                    status=m.get("status", "NO BET"),
+                    stake=m.get("stake"),
+                    odd=m.get("odd"),
+                    edge=m.get("edge"),
+                    justification=m.get("justification"),
+                    red_flags=m.get("red_flags", []),
+                )
+                for m in markets_raw
+                if isinstance(m, dict)
+            ]
+
+            best_raw = raw.get("best_pick")
+            best_pick = None
+            if best_raw and isinstance(best_raw, dict):
+                best_pick = MarketEvaluation(
+                    market=best_raw.get("market", "unknown"),
+                    status=best_raw.get("status", "NO BET"),
+                    stake=best_raw.get("stake"),
+                    odd=best_raw.get("odd"),
+                    edge=best_raw.get("edge"),
+                    justification=best_raw.get("justification"),
+                    red_flags=best_raw.get("red_flags", []),
+                )
+
+            has_approved = any(m.status == "APPROVED" for m in markets)
+            return AnalystResult(
+                status=raw.get("status", "APPROVED" if has_approved else "NO BET"),
+                markets=markets,
+                best_pick=best_pick,
+            )
+        except Exception:
+            logger.exception(
+                "Analyst call failed for %s vs %s.",
+                match_ctx.home_team,
+                match_ctx.away_team,
+            )
+            return AnalystResult(status="ERROR")
 
     def _write_shadow_log(self, result: PipelineRunResult) -> None:
         """Append the pipeline result to the shadow log (JSONL format)."""

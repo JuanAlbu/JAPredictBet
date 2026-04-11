@@ -43,6 +43,7 @@ Thumbs.db
 # Local configs
 .env
 .env.*
+!.env.example
 config_backup.yml
 config_test_*.yml
 
@@ -53,9 +54,22 @@ config_test_*.yml
 # Execution outputs
 *_output.txt
 *_output.log
+train_output.log
+shadow_run.txt
 
 # Logs
 log-test/
+logs/
+
+# Generated odds data
+data/odds/
+
+# Temporary / probe files
+_*.py
+probe_*.txt
+markets_result.txt
+scraper_*.txt
+scraper_*.json
 
 # Backups
 *~

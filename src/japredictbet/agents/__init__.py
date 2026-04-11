@@ -1,1 +1,1 @@
-"""Agents subpackage (future extension)."""
+"""Agents subpackage — Gatekeeper (corners) + Analyst (other markets)."""

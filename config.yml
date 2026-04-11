@@ -40,6 +40,7 @@ gatekeeper:
   min_odd: 1.60                    # Odd mínima operacional (filtro Python hardcoded)
   max_entries_per_day: 5           # Máximo de entradas diárias
   shadow_log_path: "logs/shadow_bets.log"
+  feature_store_path: "artifacts/feature_store.parquet"  # Built by: python scripts/refresh_features.py
 
 api_keys:
   api_football_key: "${API_FOOTBALL_KEY}"  # Env var — NUNCA commitar chave real
@@ -52,8 +53,12 @@ superbet_shadow:
   team_mapping_path: "data/mapping/superbet_teams.json"
   connect_timeout_s: 10.0
   read_timeout_s: 30.0
+  stream_duration_s: 30.0
   max_retries: 3
   backoff_base_s: 2.0                       # Exponential backoff: 2, 4, 8 …
+  # tournament_ids is derived automatically at runtime from the folders that
+  # actually contain historical CSVs under data/raw/leagues/, using
+  # data/mapping/league_tournament_ids.json.
 
 api_football:
   base_url: "https://v3.football.api-sports.io"

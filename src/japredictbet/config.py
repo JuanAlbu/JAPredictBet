@@ -87,6 +87,7 @@ class GatekeeperConfig:
     min_odd: float = 1.60
     max_entries_per_day: int = 5
     shadow_log_path: str = "logs/shadow_bets.log"
+    feature_store_path: str = "artifacts/feature_store.parquet"
 
 
 @dataclass(frozen=True)
@@ -117,8 +118,13 @@ class SuperbetShadowConfig:
     team_mapping_path: str = "data/mapping/superbet_teams.json"
     connect_timeout_s: float = 10.0
     read_timeout_s: float = 30.0
+    stream_duration_s: float = 30.0  # Seconds to listen to the SSE stream per collection cycle
     max_retries: int = 3
     backoff_base_s: float = 2.0
+    # Whitelist of Superbet tournamentId values to process.
+    # Empty tuple = no filter (all football events pass through).
+    # Populate with IDs for leagues available on football-data.org.
+    tournament_ids: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -182,7 +188,14 @@ class PipelineConfig:
             ApiKeysConfig(**raw["api_keys"]) if "api_keys" in raw else ApiKeysConfig()
         )
         superbet_cfg = (
-            SuperbetShadowConfig(**raw["superbet_shadow"])
+            SuperbetShadowConfig(
+                **{
+                    **raw["superbet_shadow"],
+                    "tournament_ids": tuple(
+                        raw["superbet_shadow"].get("tournament_ids", [])
+                    ),
+                }
+            )
             if "superbet_shadow" in raw
             else SuperbetShadowConfig()
         )

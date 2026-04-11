@@ -72,9 +72,16 @@ class SuperbetSnapshot:
 
 
 def _iter_sse_events(raw_lines: str) -> Generator[dict, None, None]:
-    """Yield parsed JSON dicts from an SSE text chunk.
+    """Yield the inner event dicts from an SSE text chunk.
 
-    Tolerant: malformed lines are logged and skipped.
+    The Superbet feed wraps each event as::
+
+        data:{"resourceId": "...", "timestamp": ..., "data": { <event> }}
+
+    We unwrap the outer envelope and yield the ``data`` sub-object so the
+    rest of the code can access ``sportId``, ``matchName``, etc. directly.
+    Heartbeat lines (no ``data`` key or empty payload) are skipped.
+    Malformed lines are logged and skipped.
     """
     for line in raw_lines.splitlines():
         line = line.strip()
@@ -82,7 +89,10 @@ def _iter_sse_events(raw_lines: str) -> Generator[dict, None, None]:
             continue
         payload = line[5:]  # strip "data:" prefix
         try:
-            yield json.loads(payload)
+            outer = json.loads(payload)
+            inner = outer.get("data")
+            if inner and isinstance(inner, dict):
+                yield inner
         except json.JSONDecodeError:
             logger.warning("Malformed SSE JSON skipped: %.120s…", payload)
 
@@ -133,7 +143,7 @@ def _extract_odds_from_selections(
             result["under"] = price
         elif code in ("1", "home"):
             result["home"] = price
-        elif code in ("x", "draw", "empate"):
+        elif code in ("0", "x", "draw", "empate"):
             result["draw"] = price
         elif code in ("2", "away"):
             result["away"] = price
@@ -210,15 +220,41 @@ class SuperbetCollector:
         ) from last_exc
 
     def _do_request(self) -> str:
-        """Execute a single HTTP GET and return the raw SSE text."""
+        """Stream the SSE endpoint for ``stream_duration_s`` seconds and
+        return the accumulated lines as a single string.
+
+        Using ``client.stream()`` instead of ``client.get()`` avoids blocking
+        forever on a never-closing SSE connection.
+        """
         headers = {
             "User-Agent": _USER_AGENT,
             "Accept": "text/event-stream",
         }
-        with httpx.Client(timeout=self._timeout) as client:
-            resp = client.get(self._cfg.sse_endpoint, headers=headers)
-            resp.raise_for_status()
-            return resp.text
+        # Per-read chunk timeout — short so we can break on the deadline
+        stream_timeout = httpx.Timeout(
+            connect=self._cfg.connect_timeout_s,
+            read=5.0,
+            write=10.0,
+            pool=10.0,
+        )
+        deadline = time.monotonic() + self._cfg.stream_duration_s
+        lines: list[str] = []
+
+        with httpx.Client(timeout=stream_timeout) as client:
+            with client.stream("GET", self._cfg.sse_endpoint, headers=headers) as resp:
+                resp.raise_for_status()
+                for line in resp.iter_lines():
+                    if line:
+                        lines.append(line)
+                    if time.monotonic() >= deadline:
+                        break
+
+        logger.debug(
+            "SSE stream collected %d lines over %.0fs.",
+            len(lines),
+            self._cfg.stream_duration_s,
+        )
+        return "\n".join(lines)
 
     # ── Event parsing ────────────────────────────────────────────────
 
@@ -252,6 +288,11 @@ class SuperbetCollector:
         if sport_id != self._cfg.sport_id:
             return  # Not football
 
+        # Tournament whitelist filter (empty = no filter)
+        tournament_id = event.get("tournamentId")
+        if self._cfg.tournament_ids and tournament_id not in self._cfg.tournament_ids:
+            return
+
         match_name: str = event.get("matchName", "")
         event_id: str = str(event.get("eventId", ""))
         if not match_name or not event_id:
@@ -277,21 +318,30 @@ class SuperbetCollector:
             )
         snap = snapshots[event_id]
 
-        for market in event.get("odds", []):
-            market_name: str = market.get("marketName", "")
-            if not market_name:
-                continue
+        # The Superbet feed sends a FLAT list of individual selection objects
+        # under event["odds"], each with an embedded "marketName" and "code".
+        # We group them by marketName first, then extract odds per group.
+        from collections import defaultdict
 
-            selections = market.get("selections", market.get("outcomes", []))
+        markets_raw: dict = defaultdict(list)
+        for sel in event.get("odds", []):
+            mn = sel.get("marketName", "")
+            if mn:
+                markets_raw[mn].append(sel)
+
+        for market_name, selections in markets_raw.items():
             sel_odds = _extract_odds_from_selections(selections)
 
+            # Try to get the line value from showSpecialBetValue / specialBetValue
             raw_line: Optional[float] = None
-            line_str = market.get("line") or market.get("specialBetValue")
-            if line_str is not None:
-                try:
-                    raw_line = float(line_str)
-                except (TypeError, ValueError):
-                    pass
+            for sel in selections:
+                line_str = sel.get("showSpecialBetValue") or sel.get("specialBetValue")
+                if line_str and str(line_str) not in ("0", ""):
+                    try:
+                        raw_line = float(line_str)
+                        break
+                    except (TypeError, ValueError):
+                        pass
 
             odds_obj = SuperbetOdds(
                 event_id=event_id,

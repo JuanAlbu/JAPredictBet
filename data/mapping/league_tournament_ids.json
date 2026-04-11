@@ -1,0 +1,19 @@
+{
+  "_comment": "Maps data/raw/leagues/<folder_name> → Superbet tournamentId. IDs confirmed via live SSE feed capture. Add new entries when new league folders are created.",
+  "_pending": [
+    "bundesliga: tournamentId not yet seen in feed — add when confirmed",
+    "premier_league: tournamentId not yet seen in feed — add when confirmed"
+  ],
+  "brasileirao": 1698,
+  "serie_a": 104,
+  "la_liga": 98,
+  "ligue_1": 100,
+  "ligue_2": 143,
+  "eredivisie": 256,
+  "primeira_liga": 142,
+  "mls": 897,
+  "bundesliga_2": 50,
+  "serie_b": 244,
+  "jupiler_pro_league": 1713,
+  "super_lig": 323
+}

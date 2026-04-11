@@ -41,9 +41,14 @@ def default_cfg() -> SuperbetShadowConfig:
 class TestIterSseEvents:
     """Test _iter_sse_events line-by-line SSE parser."""
 
+    def _wrap(self, inner: dict) -> str:
+        """Wrap an inner event dict in the real Superbet SSE envelope."""
+        outer = {"resourceId": "event:1", "timestamp": 0, "data": inner}
+        return f"data:{json.dumps(outer)}\n"
+
     def test_single_data_line(self):
         payload = {"id": 1, "sportId": 5, "matchName": "Time A\u00b7Time B"}
-        raw_text = f"data:{json.dumps(payload)}\n"
+        raw_text = self._wrap(payload)
         events = list(_iter_sse_events(raw_text))
         assert len(events) == 1
         assert events[0]["id"] == 1
@@ -53,18 +58,23 @@ class TestIterSseEvents:
             {"id": i, "sportId": 5, "matchName": f"Home{i}\u00b7Away{i}"}
             for i in range(3)
         ]
-        raw_text = "\n".join(f"data:{json.dumps(p)}" for p in payloads) + "\n"
+        raw_text = "\n".join(
+            f"data:{json.dumps({'resourceId': 'event:' + str(p['id']), 'timestamp': 0, 'data': p})}"
+            for p in payloads
+        ) + "\n"
         events = list(_iter_sse_events(raw_text))
         assert len(events) == 3
 
     def test_malformed_json_skipped(self):
-        raw_text = 'data:{invalid json}\ndata:{"id": 1, "sportId": 5}\n'
+        valid_outer = json.dumps({"resourceId": "e:1", "timestamp": 0, "data": {"id": 1, "sportId": 5}})
+        raw_text = f'data:{{invalid json}}\ndata:{valid_outer}\n'
         events = list(_iter_sse_events(raw_text))
         assert len(events) == 1
         assert events[0]["id"] == 1
 
     def test_retry_and_empty_lines_ignored(self):
-        raw_text = 'retry:1000\n\ndata:{"id": 1}\n\n'
+        outer = json.dumps({"resourceId": "e:1", "timestamp": 0, "data": {"id": 1}})
+        raw_text = f'retry:1000\n\ndata:{outer}\n\n'
         events = list(_iter_sse_events(raw_text))
         assert len(events) == 1
 
@@ -171,8 +181,9 @@ class TestSportFiltering:
     """Ensure non-football events (sportId != 5) are present in SSE parse."""
 
     def test_basketball_event_parsed(self):
-        event = {"id": 99, "sportId": 2, "matchName": "Lakers\u00b7Celtics"}
-        raw_text = f"data:{json.dumps(event)}\n"
+        inner = {"id": 99, "sportId": 2, "matchName": "Lakers\u00b7Celtics"}
+        outer = {"resourceId": "event:99", "timestamp": 0, "data": inner}
+        raw_text = f"data:{json.dumps(outer)}\n"
         events = list(_iter_sse_events(raw_text))
         assert len(events) == 1
         assert events[0]["sportId"] == 2

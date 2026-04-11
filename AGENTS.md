@@ -198,8 +198,19 @@ The system is strictly an **analytics tool**.
     - Deps: `openai>=1.14.0`, `python-dotenv>=1.0.1`, `httpx>=0.28.0`
     - API keys via env vars — **NUNCA commitados** (`.env` no `.gitignore`)
 11. **Agent Safety (reforço):** O sistema é estritamente analytics. Nenhum módulo executa aposta real. Shadow mode é observacional.
-12. **CLI commands validated:**
+12. **New modules (Superbet Scraper — 11-APR-2026):**
+    - `scripts/superbet_scraper.py` — CLI scraper standalone (SSE discovery + REST API enrichment)
+    - SSE endpoints: `prematch` (jogos futuros) e `all` (live)
+    - REST API: `GET /v2/pt-BR/events/{eventId}` — retorna 700+ mercados por jogo
+    - Preços centesimais (>=100 → /100). Middle-dot `·` (U+00B7) como separator em matchName
+    - Auto-save: `data/odds/pre_match/{date}.json`
+    - **Pendências:** SH11 (Bundesliga+PL IDs), SH12 (filtro mercados), SH13 (integrar no pipeline), SH14 (cleanup temp files)
+13. **CLI commands validated:**
     - Dynamic lines: `python scripts/consensus_accuracy_report.py --config config.yml`
     - Fixed lines: `python scripts/consensus_accuracy_report.py --fixed-line 9.5`
     - Random lines: `python scripts/consensus_accuracy_report.py --random-lines --line-min 5.5 --line-max 11.5`
     - HyperOpt: `python scripts/hyperopt_search.py --config config.yml --algorithm all --n-trials 50`
+    - Scraper hoje: `python scripts/superbet_scraper.py hoje`
+    - Scraper futuro: `python scripts/superbet_scraper.py domingo --stream-seconds 90`
+    - Scraper quick (SSE only): `python scripts/superbet_scraper.py amanha --quick`
+    - Scraper all markets: `python scripts/superbet_scraper.py hoje --all-markets`
