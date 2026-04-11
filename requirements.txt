@@ -9,3 +9,7 @@ httpx==0.28.1
 PyYAML==6.0.3
 optuna==4.3.0
 shap==0.51.0
+
+# Gatekeeper Live Pipeline Dependencies
+openai>=1.14.0
+python-dotenv>=1.0.1

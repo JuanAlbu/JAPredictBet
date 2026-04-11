@@ -146,7 +146,7 @@ The system is strictly an **analytics tool**.
 
 ### P1 Completion ✅ (03-APR-2026)
 - **Status:** 100% COMPLETE
-- **Tests:** 166/166 passing (20 test files)
+- **Tests:** 201/201 passing (23 test files)
 - **P1-A (Pipeline):** ✅ COMPLETE
   - A1: Hybrid 70/30 ensemble (21 boosters + 9 linear)
   - A2: Dynamic margin rule in engine.py
@@ -168,7 +168,7 @@ The system is strictly an **analytics tool**.
 - **Consensus script:** Synced with all P1 features (H2H + 106 rolling features)
 
 ### Next Priority
-- Onda 4: Gatekeeper Live Pipeline (SH4-SH9) — see docs/next_pass.md
+- Onda 4 residual: SH4 (team mapping preenchimento manual)
 - Onda 2 residual: B3, B7, B8, C7
 
 ### Important Notes for Agents
@@ -190,8 +190,13 @@ The system is strictly an **analytics tool**.
     - `src/japredictbet/data/context_collector.py` — T-60 context aggregation (API-Football lineups, injuries, standings + Superbet odds)
     - `src/japredictbet/agents/base.py` — BaseAgent framework
     - `src/japredictbet/agents/registry.py` — Agent registry
+    - `src/japredictbet/agents/gatekeeper.py` — LLM Gatekeeper agent (OpenAI, Prompt Mestre V25, pre-filter min_odd)
+    - `src/japredictbet/pipeline/gatekeeper_live_pipeline.py` — T-60 orchestration (collect → consensus → LLM → shadow log)
+    - `scripts/shadow_observe.py` — CLI entry point for shadow-mode observation
+    - `.env.example` — Credential template (OPENAI_API_KEY, API_FOOTBALL_KEY, SUPERBET_*)
     - Config blocks: `gatekeeper`, `api_keys`, `superbet_shadow`, `api_football` em `config.yml`
-    - API keys via env vars: `${API_FOOTBALL_KEY}`, `${LLM_API_KEY}` — **NUNCA commitados**
+    - Deps: `openai>=1.14.0`, `python-dotenv>=1.0.1`, `httpx>=0.28.0`
+    - API keys via env vars — **NUNCA commitados** (`.env` no `.gitignore`)
 11. **Agent Safety (reforço):** O sistema é estritamente analytics. Nenhum módulo executa aposta real. Shadow mode é observacional.
 12. **CLI commands validated:**
     - Dynamic lines: `python scripts/consensus_accuracy_report.py --config config.yml`

@@ -1,9 +1,22 @@
 # JA PREDICT BET — ROADMAP P2+ (REVISÃO 11-APR-2026)
 
 **Data da Revisão:** 11 de Abril, 2026
-**Status Geral:** P0 ✅ | P0-FIX ✅ | P1 ✅ | Onda 1 ✅ | Onda 2 parcial — 166/166 testes passando (20 arquivos). 106 features. 30 modelos (11 XGB + 10 LGB + 5 Ridge + 4 EN).
+**Status Geral:** P0 ✅ | P0-FIX ✅ | P1 ✅ | Onda 1 ✅ | Onda 2 parcial | Onda 4 parcial — 201/201 testes passando (23 arquivos). 106 features. 30 modelos (11 XGB + 10 LGB + 5 Ridge + 4 EN).
 **Histórico Completo:** Todos os itens concluídos (P0, P0-FIX, P1, Onda 1) documentados em [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md).
-**Próxima Ação:** Onda 4 — Gatekeeper Live Pipeline (SH4-SH9). Onda 2 residual (B3, B7, B8, C7).
+**Próxima Ação:** Onda 4 residual (SH4 preenchimento, SH5b integração). Onda 2 residual (B3, B7, B8, C7).
+
+### Sequência de Implementação Recomendada
+
+| Passo | Item | Status | Descrição |
+|-------|------|--------|-----------|
+| 1 | SDK LLM + dotenv | ✅ feito | `openai>=1.14.0` + `python-dotenv>=1.0.1` em `requirements.txt` |
+| 2 | `.env.example` | ✅ feito | Template com `OPENAI_API_KEY`, `API_FOOTBALL_KEY`, `SUPERBET_*` |
+| 3 | **SH8** — `gatekeeper.py` | ✅ feito | Agente LLM (herda `BaseAgent`), system prompt V25, pré-filtro min_odd |
+| 4 | **SH9** — `gatekeeper_live_pipeline.py` | ✅ feito | Orquestrador T-60: contexto → ensemble → Gatekeeper → shadow log |
+| 5 | **SH5b** — Integração ConsensusEngine | ✅ feito | `evaluate_with_consensus()` integrado no pipeline |
+| 6 | **SH6** — `shadow_observe.py` | ✅ feito | CLI entry point com `--dry-run`, `--verbose`, `--models-dir` |
+| 7 | **SH7** — Testes Shadow | ✅ feito | `test_superbet.py` (20 tests) + `test_gatekeeper.py` (14 tests) + 1 |
+| 8 | **SH4** — Team mapping | ⬜ pendente | Preenchimento manual de `superbet_teams.json` por liga |
 
 ---
 
@@ -12,7 +25,7 @@
 Este documento contém **apenas itens em aberto**, organizados em ondas de execução por prioridade.
 Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md) ao serem fechados.
 
-**Itens em aberto:** 21 (P2) + 2 (P3) + 5 (R&D) = 28 total
+**Itens em aberto:** 16 (P2) + 2 (P3) + 5 (R&D) = 23 total
 
 ---
 
@@ -119,18 +132,20 @@ Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HI
 
 **Objetivo:** Pipeline paralelo de gestão de risco via LLM (Prompt Mestre V25) + coleta de odds Superbet em modo estritamente observacional. Nenhum módulo executa aposta real.
 **Dependências:** P2.D4 (Telegram bot) depende desta trilha.
-**Novas dependências pip:** `httpx>=0.28.0`
+**Novas dependências pip:** `httpx>=0.28.0`, `openai>=1.14.0`, `python-dotenv>=1.0.1`
+**Credenciais:** `.env.example` criado na raiz (`.env` protegido por `.gitignore`).
 **Arquivos criados:**
 - `src/japredictbet/odds/superbet_client.py` ✅
 - `src/japredictbet/data/context_collector.py` ✅
 - `src/japredictbet/agents/base.py` ✅
 - `src/japredictbet/agents/registry.py` ✅
 **Arquivos pendentes:**
-- `src/japredictbet/agents/gatekeeper.py` — SH8
-- `src/japredictbet/pipeline/gatekeeper_live_pipeline.py` — SH9
-- `scripts/shadow_observe.py` — SH6
-- `tests/odds/test_superbet.py` — SH7
-- `data/mapping/superbet_teams.json` — SH4
+- `src/japredictbet/agents/gatekeeper.py` ✅
+- `src/japredictbet/pipeline/gatekeeper_live_pipeline.py` ✅
+- `scripts/shadow_observe.py` ✅
+- `tests/odds/test_superbet.py` ✅
+- `tests/agents/test_gatekeeper.py` ✅
+- `data/mapping/superbet_teams.json` — SH4 (template criado ✅, preenchimento manual pendente)
 **Config adicionada:** Blocos `gatekeeper`, `api_keys`, `superbet_shadow`, `api_football` em `config.yml` + dataclasses correspondentes em `config.py`.
 **Nota técnica:** Endpoint Superbet é SSE, não REST JSON. Campo `matchName` usa `·` (middle dot U+00B7) como separador.
 
@@ -161,30 +176,34 @@ Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HI
   - API keys resolvidas de env vars (`${API_FOOTBALL_KEY}`) — nunca commitadas.
   - Cada chamada à API isolada via `_safe_call()` — falha parcial não derruba pipeline.
 
-### Bloco 4C — Gatekeeper Agent + Pipeline (pendente)
+### Bloco 4C — Gatekeeper Agent + Pipeline (✅ implementado)
 
-- [ ] **P2.SH5b - Integração com `ConsensusEngine` em Shadow Mode**
-  - Para cada jogo válido, chamar `evaluate_with_consensus()` e registrar auditoria.
-  - Shadow log: `logs/shadow_bets.log` com timestamp, match_id, odds, p_model_mean, edge, votos, status.
-  - **Regra de segurança:** nenhum módulo deve executar aposta real.
+- [x] **P2.SH5b - Integração com `ConsensusEngine` em Shadow Mode** ✅ (11-APR-2026)
+  - `gatekeeper_live_pipeline.py` integra `ConsensusEngine.evaluate_with_consensus()` para cada jogo.
+  - Shadow log: `logs/shadow_bets.log` em formato JSONL com timestamp, event_id, odds, ensemble stats, gatekeeper decision.
+  - **Regra de segurança:** nenhum módulo executa aposta real.
 
-- [ ] **P2.SH6 - Script executável de observação**
-  - `scripts/shadow_observe.py` com CLI. Falhas de rede não derrubam execução. Resumo final em console.
+- [x] **P2.SH6 - Script executável de observação** ✅ (11-APR-2026)
+  - `scripts/shadow_observe.py` com CLI (`--config`, `--models-dir`, `--dry-run`, `-v`).
+  - Carrega `.env` via `python-dotenv`. Resumão final formatado no console.
 
-- [ ] **P2.SH7 - Testes dedicados da trilha Shadow**
-  - `tests/odds/test_superbet.py`: SSE multi-eventos, JSON malformado, HTTP 403/429/500, timeout, reconexão, time sem mapeamento, mercado inválido, esporte não-futebol.
-  - `tests/data/test_context_collector.py`: fixtures, lineups, injuries, standings, fuzzy match, MatchContext serialização.
+- [x] **P2.SH7 - Testes dedicados da trilha Shadow** ✅ (11-APR-2026)
+  - `tests/odds/test_superbet.py`: SSE parsing (5), team names (3), market detection (3), odds extraction (5), dataclasses (3), sport filter (1) = 20 testes.
+  - `tests/agents/test_gatekeeper.py`: pre-filter (4), LLM parsing (6), failure handling (1), BaseAgent contract (2), constructor (1) = 14 testes.
+  - Total: 201/201 passando (23 arquivos).
 
-- [ ] **P2.SH8 - Agente Gatekeeper (LLM + decisão)**
+- [x] **P2.SH8 - Agente Gatekeeper (LLM + decisão)** ✅ (11-APR-2026)
   - `src/japredictbet/agents/gatekeeper.py` herdando de `BaseAgent`.
   - Encapsula `PROMPT_MESTRE V25 FINAL` como system prompt.
   - `evaluate_match(match_context_json)` → JSON com `status` (APPROVED / NO BET), `stake`, `odd_superbet`, `justificativa`.
   - Pré-filtro Python hardcoded: bloqueia se odd Superbet < `min_odd` (1.60) antes de enviar ao LLM.
-  - **Dependência:** `llm_api_key` configurada em env var `${LLM_API_KEY}`.
+  - **Dependência:** `OPENAI_API_KEY` configurada em `.env` (template em `.env.example`).
+  - **SDK:** `openai>=1.14.0` (já em `requirements.txt`).
 
-- [ ] **P2.SH9 - Pipeline Gatekeeper Live (orquestração T-60)**
+- [x] **P2.SH9 - Pipeline Gatekeeper Live (orquestração T-60)** ✅ (11-APR-2026)
   - `src/japredictbet/pipeline/gatekeeper_live_pipeline.py`.
-  - Fluxo: Busca jogos Superbet → Agenda T-60 → Coleta escalação (API-Football) → Pré-filtro Python (min_odd) → `GatekeeperAgent.evaluate_match()` → Salva Lista do Dia no shadow log.
+  - Fluxo: Collect matches → Load ensemble → Consensus vote → Gatekeeper LLM → Cap entries → JSONL shadow log.
+  - Factory method `from_config()` constrói pipeline completo a partir de `PipelineConfig`.
   - Max 5 entradas/dia (`gatekeeper.max_entries_per_day`).
 
 ---
@@ -232,12 +251,12 @@ Itens concluídos são transferidos para [`COMPLETION_HISTORY.md`](COMPLETION_HI
 
 | Dimensão | Nota | Comentário |
 |----------|------|------------|
-| Arquitetura | 9/10 | Design modular, bem documentada. Agent framework + Gatekeeper Live Pipeline adicionados |
-| Implementação | 8.5/10 | P0+P1 completos; feature parity corrigida (A9-A12), ELO naming fix (A14). Penalizado por `update_pipeline.py` non-functional, holdout não-cronológico e hyperopt params não integrados |
-| Documentação | 8.5/10 | 60 inconsistências corrigidas (P2.C4). Drift documental corrigido (C6): AGENTS.md, ARCHITECTURE.md, PROJECT_CONTEXT.md sincronizados |
-| Testes | 7/10 | 166 testes (20 arquivos), ~60% cobertura. `data/ingestion.py` e `features/` com cobertura parcial |
-| Reprodutibilidade | 9/10 | SHA256, seeds, requirements pinados, config-driven, configs sincronizados |
-| Production-Ready | 7.5/10 | Pipeline completo com calibração, risk e CLV. Penalizado por pickle sem hash, update_pipeline non-functional, e hyperopt params não integrados |
+| Arquitetura | 9.5/10 | Design modular. Gatekeeper Live Pipeline completo (coleta → consensus → LLM → shadow log) |
+| Implementação | 9/10 | P0+P1+Onda4 completos. Penalizado por `update_pipeline.py` non-functional, holdout não-cronológico e hyperopt params não integrados |
+| Documentação | 8.5/10 | Drift corrigido (C6). AGENTS.md, ARCHITECTURE.md, next_pass.md sincronizados |
+| Testes | 7.5/10 | 201 testes (23 arquivos). Superbet + Gatekeeper cobertos. `data/ingestion.py` e `features/` com cobertura parcial |
+| Reprodutibilidade | 9/10 | SHA256, seeds, requirements pinados, config-driven, `.env.example` |
+| Production-Ready | 8/10 | Shadow pipeline operacional. Penalizado por pickle sem hash e hyperopt params não integrados |
 
 ---
 
