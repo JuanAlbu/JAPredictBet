@@ -120,7 +120,7 @@ class GatekeeperLivePipeline:
         self,
         config: PipelineConfig,
         context_collector: ContextCollector,
-        gatekeeper: GatekeeperAgent,
+        gatekeeper: Optional[GatekeeperAgent],
         models: List[TrainedModels],
         consensus_engine: ConsensusEngine,
         feature_store: Optional[FeatureStore] = None,
@@ -147,6 +147,7 @@ class GatekeeperLivePipeline:
         config: PipelineConfig,
         models_dir: str | Path = "artifacts/models",
         feature_store_path: str | Path | None = None,
+        dry_run: bool = False,
     ) -> GatekeeperLivePipeline:
         """Build a ready-to-run pipeline from a ``PipelineConfig``.
 
@@ -156,6 +157,9 @@ class GatekeeperLivePipeline:
             Fully-loaded ``PipelineConfig`` (including gatekeeper block).
         models_dir:
             Directory containing persisted ``.pkl`` ensemble artifacts.
+        dry_run:
+            If True, skip LLM agent creation (Gatekeeper + Analyst).
+            The pipeline will still collect matches and run consensus.
         """
         gk_cfg = config.gatekeeper
         if gk_cfg is None:
@@ -166,7 +170,7 @@ class GatekeeperLivePipeline:
 
         # Resolve API keys
         api_keys = config.api_keys.resolve() if config.api_keys else None
-        if api_keys is None:
+        if api_keys is None and not dry_run:
             raise ValueError(
                 "PipelineConfig.api_keys is None — "
                 "add an 'api_keys' block to config.yml."
@@ -185,21 +189,25 @@ class GatekeeperLivePipeline:
         collector = ContextCollector.from_configs(
             superbet_cfg=superbet_cfg,
             api_football_cfg=config.api_football,
-            api_football_key=api_keys.api_football_key,
+            api_football_key=api_keys.api_football_key if api_keys else None,
             gatekeeper_cfg=gk_cfg,
         )
 
         # Gatekeeper agent (corners — consensus + LLM)
-        gatekeeper = GatekeeperAgent(
-            gatekeeper_cfg=gk_cfg,
-            api_key=api_keys.llm_api_key,
-        )
+        gatekeeper: Optional[GatekeeperAgent] = None
+        analyst: Optional[AnalystAgent] = None
 
-        # Analyst agent (non-corner markets — LLM-only)
-        analyst = AnalystAgent(
-            gatekeeper_cfg=gk_cfg,
-            api_key=api_keys.llm_api_key,
-        )
+        if dry_run:
+            logger.info("Dry-run mode: LLM agents (Gatekeeper + Analyst) will be skipped.")
+        else:
+            gatekeeper = GatekeeperAgent(
+                gatekeeper_cfg=gk_cfg,
+                api_key=api_keys.llm_api_key if api_keys else None,
+            )
+            analyst = AnalystAgent(
+                gatekeeper_cfg=gk_cfg,
+                api_key=api_keys.llm_api_key if api_keys else None,
+            )
 
         # Load ensemble models
         models = _load_ensemble(Path(models_dir))
@@ -245,6 +253,7 @@ class GatekeeperLivePipeline:
     def run(
         self,
         pre_match_date: Optional[str] = None,
+        dry_run: bool = False,
     ) -> PipelineRunResult:
         """Execute the pipeline and return results.
 
@@ -256,6 +265,9 @@ class GatekeeperLivePipeline:
             the live SSE feed.  This is the **primary** mode of
             operation — run the scraper first, then the pipeline.
             If ``None``, falls back to live T-60 collection.
+        dry_run:
+            If True, skip LLM calls (Gatekeeper + Analyst).  Useful
+            for validating data flow without API keys.
         """
 
         now = datetime.now(timezone.utc)
@@ -292,7 +304,7 @@ class GatekeeperLivePipeline:
         approved_count = 0
 
         for match_ctx in matches:
-            entry = self._evaluate_single_match(match_ctx)
+            entry = self._evaluate_single_match(match_ctx, dry_run=dry_run)
             if entry is None:
                 continue
 
@@ -337,7 +349,7 @@ class GatekeeperLivePipeline:
             return []
 
     def _evaluate_single_match(
-        self, match_ctx: MatchContext
+        self, match_ctx: MatchContext, *, dry_run: bool = False,
     ) -> Optional[ShadowEntry]:
         """Run consensus + Gatekeeper for a single match."""
         home = match_ctx.home_team
@@ -350,10 +362,22 @@ class GatekeeperLivePipeline:
         ensemble_output = self._run_consensus(match_ctx)
 
         # ── Gatekeeper LLM (corners — with ensemble support) ────────
-        gk_result = self._call_gatekeeper(match_ctx, ensemble_output)
+        if dry_run or self._gatekeeper is None:
+            logger.info(
+                "Dry-run: skipping Gatekeeper LLM for %s vs %s.", home, away
+            )
+            gk_result = GatekeeperResult(
+                status="DRY_RUN",
+                justification="Dry-run mode — LLM evaluation skipped.",
+            )
+        else:
+            gk_result = self._call_gatekeeper(match_ctx, ensemble_output)
 
         # ── Analyst LLM (non-corner markets: 1x2, BTTS, etc.) ───────
-        analyst_result = self._call_analyst(match_ctx)
+        if dry_run or self._analyst is None:
+            analyst_result = None
+        else:
+            analyst_result = self._call_analyst(match_ctx)
 
         # ── Build shadow entry ───────────────────────────────────────
         odds = match_ctx.odds
@@ -489,7 +513,7 @@ class GatekeeperLivePipeline:
                     "odds": odds.corner_over_odds,
                     "type": "over",
                 },
-                threshold=self._config.consensus_threshold,
+                threshold=self._config.value.consensus_threshold,
             )
             return result
 

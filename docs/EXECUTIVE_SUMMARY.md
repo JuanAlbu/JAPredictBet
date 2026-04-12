@@ -90,7 +90,7 @@
 5. **P2.B8** — Corrigir holdout temporal cronológico
 6. **P2.C7** — Integrar params do hyperopt no ensemble
 7. **P2.SH15-SH19** — Itens residuais da trilha Shadow
-8. **P2.A1-A13** — Expandir testes para 70% cobertura
+8. **P2.A1-A8, A13** — Expandir testes para 70% cobertura
 
 ---
 

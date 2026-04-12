@@ -110,8 +110,8 @@ Config: `FeatureConfig.h2h_window = 3`.
 `add_elo_ratings()` computes per-team ELO scores updated match-by-match.
 
 Features:
-- home_elo
-- away_elo
+- home_elo_rating
+- away_elo_rating
 
 ---
 

@@ -156,7 +156,7 @@ The MVP execution now supports:
 - support for loading pre-trained ensemble artifacts from `artifacts/models`
 - **full reproducibility tracking with SHA256 dataset/config hashing (P0.8)**
 
-Operational note - Current State (01-APR-2026):
+Operational note - Current State (11-APR-2026):
 
 - The production MVP pipeline keeps the configured ensemble strategy from `config.yml`
   (currently 30 members with 70/30 hybrid mix and dynamic consensus sweep).

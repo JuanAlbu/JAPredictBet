@@ -25,7 +25,7 @@ Para garantir a diversidade e robustez, o conjunto utiliza um **mix híbrido 70/
 ## 4. Pipeline Técnico de Decisão
 O Agente deve implementar o fluxo seguindo esta sequência lógica:
 
-1.  [cite_start]**Geração de Lambdas:** Treinar as 30 variações (10 por algoritmo) variando parâmetros como profundidade das árvores, learning rate e número de estimadores[cite: 472, 481].
+1.  [cite_start]**Geração de Lambdas:** Treinar as 30 variações (11 XGB + 10 LGB + 5 Ridge + 4 EN) variando parâmetros como profundidade das árvores, learning rate e regularização[cite: 472, 481].
 2.  **Cálculo de Probabilidade:** Para cada modelo $i$, converter $\lambda_{total, i}$ na probabilidade do mercado (ex: Over 9.5) via Poisson:
     $$P(X > k) = 1 - \sum_{j=0}^{k} \frac{e^{-\lambda} \cdot \lambda^j}{j!}$$.
 3.  **Votação de Valor (Edge):** Cada modelo verifica se há vantagem contra a odd da casa ($P_{odds}$):

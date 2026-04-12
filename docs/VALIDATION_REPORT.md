@@ -222,12 +222,18 @@ Todos os relatórios em `log-test/`:
 - [x] P1.D3 — Gestão de Risco (Kelly, Drawdown) ✅
 
 ### P2 — Quality & Infrastructure (Próximo)
-- [ ] P2.C4 — Sincronizar documentação contraditória
-- [ ] P2.B6 — Centralizar config loading
+- [x] P2.C4 — Sincronizar documentação contraditória ✅ (03-APR-2026)
+- [x] P2.B6 — Centralizar config loading ✅ (03-APR-2026)
+- [x] P2-SHADOW (parcial) — Superbet Shadow Mode ✅ (11-APR-2026) — SH1-SH10, SH20-SH23 concluídos
 - [ ] P2.B3 — Reescrever `update_pipeline.py`
-- [ ] P2-SHADOW — Superbet Shadow Mode
-- [ ] Expandir testes para 70% cobertura
-- [ ] CI básico (pytest em push)
+- [ ] P2.B7 — Verificar integridade de pickle
+- [ ] P2.B8 — Corrigir holdout temporal cronológico
+- [ ] P2.C7 — Integrar params hyperopt
+- [ ] P2.SH4, SH11-SH19 — Shadow pipeline residual (10 itens)
+- [ ] Expandir testes para 70% cobertura (Onda 3 — 10 itens)
+- [ ] CI básico, logging, pyproject.toml (Onda 5 — 8 itens)
+
+**Total pendente:** 39 itens — ver [`next_pass.md`](next_pass.md) para detalhes.
 - [ ] Logging estruturado
 - [ ] Mover Poisson para `probability/` (boundary fix)
 

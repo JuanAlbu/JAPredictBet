@@ -1,9 +1,9 @@
-## CHECKLIST DE VALIDACAO FINAL (03-APR-2026)
+## CHECKLIST DE VALIDACAO FINAL (12-APR-2026)
 
 ### Validacoes Tecnicas
 
 **Estrutura de Codigo:**
-- [x] Modulos separados por responsabilidade (data, features, models, betting, probability, etc)
+- [x] Modulos separados por responsabilidade (data, features, models, betting, probability, odds, agents, pipeline)
 - [x] Configuracao centralizada em `config.yml` com parametros documentados
 - [x] Ensemble de 30 modelos implementado e testado (11 XGB + 10 LGB + 5 Ridge + 4 ElasticNet)
 - [x] Consenso com threshold parametrizado funcionando
@@ -12,7 +12,7 @@
 - [x] Loggers por execucao em `log-test/` ativos
 - [x] PEP8 compliance verificado em modulos principais
 - [x] Docstrings nas funcoes core (train.py, engine.py, pipeline.py)
-- [x] 158/158 testes passando (17 arquivos de teste)
+- [x] 218/218 testes passando (21 arquivos de teste)
 
 **Integridade de Dados:**
 - [x] Dataset raw em `data/raw/dataset.csv` validado

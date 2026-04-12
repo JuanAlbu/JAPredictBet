@@ -147,6 +147,27 @@
 - `config_test_50matches.yml` e `config_backup.yml` — adicionados 6 P1 flags: `rolling_use_std`, `rolling_use_ema`, `drop_redundant`, `h2h_window`, `tight_margin_threshold`, `tight_margin_consensus`
 - 165/165 testes passando após sincronização
 
+### P2.B6 — Centralizar `_load_config()` em `config.py` (RESOLVIDO — 03-APR-2026)
+
+- `PipelineConfig.from_yaml(path)` criado.
+- 5 scripts atualizados: `run.py`, `consensus_accuracy_report.py`, `hyperopt_search.py`, `model_inputs_correlation.py`, `update_pipeline.py`.
+
+### P2.A9 — Sincronizar keywords de feature selection (RESOLVIDO — 03-APR-2026)
+
+- `_is_model_feature_candidate()` agora inclui `_rolling` e `_momentum`, sincronizado com `_is_allowed_feature()`.
+
+### P2.A10 — Sincronizar features em `hyperopt_search.py` (RESOLVIDO — 03-APR-2026)
+
+- Adicionado ELO ratings e team target encoding em `_prepare_data()`. Corrigida chamada `_valid_training_mask()`.
+
+### P2.A11 — Sincronizar features em `walk_forward.py` (RESOLVIDO — 03-APR-2026)
+
+- Adicionados rolling STD, EMA, H2H e `drop_redundant_features()` em `_build_features()`. `WalkForwardConfig` expandido.
+
+### P2.A12 — `_build_ensemble_schedule` respeita parâmetro `algorithms` (RESOLVIDO — 03-APR-2026)
+
+- Hybrid mode agora só ativa quando `algorithms` contém tanto boosters quanto linear. `_build_hybrid_ensemble_schedule` parametrizado.
+
 ### Itens Absorvidos
 
 | Item Original | Absorvido Por | Motivo |
@@ -191,6 +212,23 @@
 - **AnalystAgent:** Herda `BaseAgent`. Avalia mercados não-escanteios via OpenAI (PROMPT_ANALYST.md). Output: `AnalystResult` com `List[MarketEvaluation]`. Pré-filtro Python: rejeita se nenhuma odd ≥ min_odd.
 - **Pre-match Split:** `pre_match_odds.py` carrega JSON do scraper → `List[MatchContext]`. `shadow_observe.py --pre-match hoje` aciona modo pre-match. `ShadowEntry` expandido com campos `analyst_*`.
 
+### SH15 — Corrigir namespace `consensus_threshold` (RESOLVIDO — 12-APR-2026)
+
+- **Arquivo:** `src/japredictbet/pipeline/gatekeeper_live_pipeline.py`
+- **Bug:** `self._config.consensus_threshold` → `self._config.value.consensus_threshold`. Atributo vive em `ValueConfig`, não `PipelineConfig`.
+- **Fix:** Linha ~492 corrigida. Crash em runtime eliminado.
+
+### SH16 — Implementar `--dry-run` de verdade (RESOLVIDO — 12-APR-2026)
+
+- **Arquivos:** `scripts/shadow_observe.py`, `src/japredictbet/pipeline/gatekeeper_live_pipeline.py`
+- **Bug:** Flag `--dry-run` era dead code — `sys.exit(1)` disparava antes por falta de `OPENAI_API_KEY`.
+- **Fix (3 partes):**
+  1. API key check gated: `if not os.getenv("OPENAI_API_KEY") and not args.dry_run:`
+  2. `dry_run` flag threaded: `from_config()` → `run()` → `_evaluate_single_match()`
+  3. Agents opcionais: quando `dry_run=True`, gatekeeper e analyst são `None`; avaliação retorna `GatekeeperResult(status="DRY_RUN")` stub.
+- **Validação:** `python scripts/shadow_observe.py --pre-match hoje --dry-run` — 2 jogos processados, pipeline end-to-end sem API keys.
+- **Testes:** 218/218 passando (sem regressão).
+
 ### P2.A14 — Corrigir drift de nomenclatura ELO (RESOLVIDO — 11-APR-2026)
 
 - `mvp_pipeline.py` e `test_missing_feature_imputation.py` atualizados para `home_elo_rating` / `away_elo_rating`.
@@ -202,7 +240,6 @@
 - `TRAINING_STRATEGY.md` corrigido.
 - `VALIDATION_REPORT.md` expandido.
 - `DATA_SCHEMA.md` ELO columns corrigidas.
-| P2.D3 — Integração com APIs Real-time | P2-SHADOW | Trilha SH1-SH7 implementa integração real-time em modo observacional |
 
 ---
 
@@ -232,3 +269,6 @@
 | 11-APR-2026 | **SH23 — Pre-match Architecture Split** — `pre_match_odds.py` (JSON loader), scraper auto-save, `--pre-match` flag no shadow_observe. Dois modos: pre-match (JSON) e live (SSE). |
 | 11-APR-2026 | Testes 201→218. 21 arquivos de teste. `ShadowEntry` expandido com campos `analyst_*`. |
 | 11-APR-2026 | Revisão completa de arquitetura: 26 módulos fonte, 10 scripts, 21 test files mapeados. Issues identificadas: `collector.py` legacy, `artifacts/models/` vazio, `update_pipeline.py` incompleto. |
+| 12-APR-2026 | Reestruturação do roadmap: `next_pass.md` limpo para conter apenas itens pendentes (39 total). Itens concluídos de Onda 2 (B6, A9-A12) adicionados ao histórico. Contagem corrigida (18→32 P2). Duplicata D3 removida. Documentação padronizada. |
+| 12-APR-2026 | **SH15 — consensus_threshold namespace fix** — `self._config.consensus_threshold` → `self._config.value.consensus_threshold` em `gatekeeper_live_pipeline.py`. |
+| 12-APR-2026 | **SH16 — dry-run implementado** — API key bypass, dry_run threading, agents opcionais. Dry-run validado end-to-end (2 jogos, sem API keys). 218/218 testes. |

@@ -108,12 +108,13 @@ def main() -> None:
         logger.info("No .env file found — using system environment variables.")
 
     # ── Pre-flight checks ────────────────────────────────────────────
-    if not os.getenv("OPENAI_API_KEY"):
+    if not os.getenv("OPENAI_API_KEY") and not args.dry_run:
         logger.error(
             "OPENAI_API_KEY is not set.\n"
             "  1. Copy .env.example  →  .env\n"
             "  2. Set your key:  OPENAI_API_KEY=sk-...\n"
-            "  3. Re-run this script."
+            "  3. Re-run this script.\n"
+            "  (or use --dry-run to skip LLM calls)"
         )
         sys.exit(1)
 
@@ -145,6 +146,7 @@ def main() -> None:
         pipeline = GatekeeperLivePipeline.from_config(
             config=config,
             models_dir=args.models_dir,
+            dry_run=args.dry_run,
         )
     except ValueError as exc:
         logger.error("Pipeline setup failed: %s", exc)
@@ -174,7 +176,7 @@ def main() -> None:
         args.models_dir,
     )
 
-    result = pipeline.run(pre_match_date=pre_match_date)
+    result = pipeline.run(pre_match_date=pre_match_date, dry_run=args.dry_run)
 
     # ── Summary ──────────────────────────────────────────────────────
     print("\n" + "=" * 60)
