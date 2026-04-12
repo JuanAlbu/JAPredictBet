@@ -1,9 +1,9 @@
 # JA PREDICT BET — ROADMAP (REVISÃO 12-APR-2026)
 
 **Data da Revisão:** 12 de Abril, 2026
-**Status Geral:** P0 ✅ | P0-FIX ✅ | P1 ✅ | Onda 1 ✅ | Onda 4 parcial — 218/218 testes (21 arquivos). 106 features. 30 modelos.
+**Status Geral:** P0 ✅ | P0-FIX ✅ | P1 ✅ | Onda 1 ✅ | Onda 4 parcial | P3-ARCH ✅ — 218/218 testes (21 arquivos). 106 features. 30 modelos.
 **Histórico Completo:** [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md)
-**Itens pendentes:** 30 (P2) + 2 (P3) + 5 (R&D) = 37 total
+**Itens pendentes:** 30 (P2) + 4 (P3) + 2 (P4) + 5 (R&D) = 41 total
 
 > Este documento contém **apenas itens em aberto**. Itens concluídos são registados em [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md).
 
@@ -12,10 +12,11 @@
 ## Prioridades Imediatas
 
 1. **Treinar ensemble** — `artifacts/models/` está vazio → `python run.py --config config.yml`
-2. **Revisão exaustiva de docs** — Passada 100% linha por linha em todos os docs restantes: ARCHITECTURE, BACKTESTING_STRATEGY, DATA_SCHEMA, FEATURE_ENGINEERING_PLAYBOOK, FEATURE_IMPORTANCE_GUIDE, MVP_PROJECT_PLAN, P0_COMPLETION_SUMMARY, PRODUCT_REQUIREMENTS, TRAINING_STRATEGY, WORK_MODEL. Padronizar datas, métricas (218 testes, 21 arquivos, 30 modelos, 106+ features, 37 pendentes), módulos e linguagem.
+2. **P3-ARCH concluído (12-APR-2026)** — Divergência Positiva implementada: motores ML e LLM separados, Handicap excluído, Matriz de Zonas de Odd ativa.
 3. **Confirmar tournament IDs** — Bundesliga + Premier League no SSE Superbet (SH11)
 4. **Onda 2 residual** — B3, B7, B8, C7 (pipeline integrity)
 5. **Onda 4 residual** — SH4, SH11-SH14, SH17-SH19 (shadow pipeline completion)
+6. **P3.ENG** — Execução assíncrona T-60 (próximo grande salto de performance)
 
 ---
 
@@ -146,10 +147,50 @@
 
 ---
 
-## P3 — Performance e Otimização (2 itens)
+## P3 — Performance, Otimização e Arquitetura (4 itens)
+
+- [x] **P3-ARCH - Divergência Positiva (12-APR-2026)** ✅
+  - Motor de Valor Cego (ML): 30-model ensemble opera apenas escanteios, gera `[SUGESTÕES ALGORITMO]`.
+  - Motor de Contexto (LLM): Gatekeeper analisa contexto + odds sem ML, gera `[SUGESTÕES GATEKEEPER]`.
+  - Ensemble output NUNCA é injetado no prompt LLM — motores paralelos independentes.
+  - Handicap excluído de TODOS os motores (ML e LLM).
+  - Matriz de Zonas de Odd: 4 faixas (Morta < 1.25, Builder 1.25–1.59, Alvo 1.60–2.20, Variância > 2.20).
+  - `min_odd` alterado de 1.60 → 1.25 para permitir pernas de composição.
 
 - [ ] **P3.1 - Otimizar loop de consensus sweep** — `O(rows × thresholds × 30 models)`. Vectorizar ou paralelizar.
+
 - [ ] **P3.2 - Cache de computações caras** — Rolling stats recalculadas a cada execução. Cache com invalidação por data.
+
+- [ ] **P3.ENG - Execução Assíncrona no T-60**
+  - **Tipo:** Melhoria de Engenharia.
+  - **Escopo:** Refatorar `gatekeeper.py`, `context_collector.py` e `gatekeeper_live_pipeline.py` usando `asyncio` e `httpx` assíncrono.
+  - **Objetivo:** Processar dezenas de jogos em paralelo na janela T-60, reduzindo tempo de varredura de minutos para segundos.
+  - **Justificativa:** Proteger contra esmagamento da linha de fecho.
+  - **Módulos:** `data/context_collector.py`, `agents/gatekeeper.py`, `agents/analyst.py`, `pipeline/gatekeeper_live_pipeline.py`.
+
+- [ ] **P3.ANCHOR - Ancoragem Quantitativa para o Analyst Agent**
+  - **Tipo:** Melhoria Analítica.
+  - **Escopo:** Adicionar modelo estatístico base (Distribuição de Poisson via Expected Goals — xG) para Match Odds (1x2) e BTTS.
+  - **Objetivo:** Impedir que o Analyst LLM aprove apostas baseado apenas em narrativa, obrigando cruzamento com "just price" matemático.
+  - **Módulos:** `agents/analyst.py`, novo `probability/xg_anchor.py`, `docs/PROMPT_ANALYST.md`.
+
+---
+
+## P4 — Automação e Operações (2 itens)
+
+- [ ] **P4.HEAL - Auto-Healing de Nomes de Equipas**
+  - **Tipo:** Melhoria de Dados.
+  - **Escopo:** Script de fim do dia que recolhe equipas “órfãs” (nome Superbet sem match na API-Football) e usa LLM barato para deduzir o match correto.
+  - **Objetivo:** Eliminar manutenção manual do `data/mapping/superbet_teams.json`.
+  - **Módulos:** Novo `scripts/auto_heal_teams.py`, `data/mapping/superbet_teams.json`.
+  - **Workflow:** Cron diário → recolhe orphans do shadow log → LLM resolve → append automático.
+
+- [ ] **P4.NOTIFY - Desacoplamento da Decisão via Telegram**
+  - **Tipo:** Melhoria Operacional.
+  - **Escopo:** Criar `notifier.py` para disparar entradas APPROVED para Telegram.
+  - **Objetivo:** Eliminar necessidade de ler logs no terminal para operar.
+  - **Módulos:** Novo `pipeline/notifier.py`, `pipeline/gatekeeper_live_pipeline.py`.
+  - **Payload:** Jogo, Odd, Stake, Classificação (Zona), Justificativa, Red Flags.
 
 ---
 

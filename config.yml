@@ -37,7 +37,7 @@ value:
 # ── Gatekeeper Live Pipeline ──────────────────────────────────────────
 gatekeeper:
   cron_trigger_minutes_before: 60  # T-60: coleta de contexto antes do jogo
-  min_odd: 1.60                    # Odd mínima operacional (filtro Python hardcoded)
+  min_odd: 1.25                    # Odd mínima operacional — ZONA MORTA abaixo deste valor
   max_entries_per_day: 5           # Máximo de entradas diárias
   shadow_log_path: "logs/shadow_bets.log"
   feature_store_path: "artifacts/feature_store.parquet"  # Built by: python scripts/refresh_features.py

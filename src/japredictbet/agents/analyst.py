@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 from openai import OpenAI
 
 from japredictbet.agents.base import AgentContext, BaseAgent
+from japredictbet.agents.gatekeeper import classify_odd
 from japredictbet.config import GatekeeperConfig
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,7 @@ class MarketEvaluation:
     stake: Optional[float] = None  # 0.5, 1.0, 2.0
     odd: Optional[float] = None
     edge: Optional[str] = None  # Alto | Médio | Baixo
+    classification: Optional[str] = None  # Pricing zone tag
     justification: Optional[str] = None
     red_flags: List[str] = field(default_factory=list)
 
@@ -119,6 +121,7 @@ class AnalystAgent(BaseAgent):
                     "stake": m.stake,
                     "odd": m.odd,
                     "edge": m.edge,
+                    "classification": m.classification,
                     "justification": m.justification,
                     "red_flags": m.red_flags,
                 }
@@ -131,6 +134,7 @@ class AnalystAgent(BaseAgent):
                     "stake": result.best_pick.stake,
                     "odd": result.best_pick.odd,
                     "edge": result.best_pick.edge,
+                    "classification": result.best_pick.classification,
                     "justification": result.best_pick.justification,
                     "red_flags": result.best_pick.red_flags,
                 }
@@ -247,12 +251,23 @@ class AnalystAgent(BaseAgent):
         parts = [
             "Avalie os mercados complementares (NÃO escanteios) deste jogo. "
             "Responda **exclusivamente** com um JSON válido contendo:\n"
-            "  markets (lista de objetos com: market, status, stake, odd, edge, justification, red_flags),\n"
-            "  best_pick (o melhor mercado ou null).\n",
+            "  markets (lista de objetos com: market, status, stake, odd, edge, "
+            "classification, justification, red_flags),\n"
+            "  best_pick (o melhor mercado ou null).\n"
+            "\n"
+            "REGRAS DE ZONA (classification):\n"
+            "- Odd < 1.25 → REJEITAR (ZONA MORTA)\n"
+            "- Odd 1.25–1.59 → classification=\"PERNA DE COMPOSIÇÃO\" "
+            "(proibido como aposta simples)\n"
+            "- Odd 1.60–2.20 → classification=\"APOSTA SIMPLES\"\n"
+            "- Odd > 2.20 → classification=\"APOSTA SIMPLES — VARIÂNCIA\" "
+            "(stake máx 0.5u)\n",
             "Mercados a avaliar: **1x2 (Resultado Final)**, **BTTS (Ambas Marcam)**, "
-            "e quaisquer outros disponíveis nas odds.\n",
-            "Ignore completamente o mercado de escanteios — ele é coberto por um "
-            "sistema de consenso estatístico separado.\n",
+            "**Over/Under Gols** e quaisquer outros disponíveis nas odds.\n",
+            "Ignore completamente o mercado de **escanteios** — ele é coberto por um "
+            "sistema de consenso estatístico separado.\n"
+            "Ignore completamente o mercado de **Handicap** — não faz parte do "
+            "perfil operacional.\n",
             "=== CONTEXTO DO JOGO ===",
             match_context_json,
             "\nSe não houver cenário favorável em nenhum mercado, retorne "
@@ -319,6 +334,9 @@ class AnalystAgent(BaseAgent):
                     stake=stake,
                     odd=m.get("odd"),
                     edge=m.get("edge"),
+                    classification=m.get("classification") or classify_odd(
+                        float(m["odd"]) if m.get("odd") is not None else None
+                    ),
                     justification=m.get("justification"),
                     red_flags=m.get("red_flags", []),
                 )
@@ -348,6 +366,9 @@ class AnalystAgent(BaseAgent):
                 stake=bp_stake,
                 odd=best_pick_raw.get("odd"),
                 edge=best_pick_raw.get("edge"),
+                classification=best_pick_raw.get("classification") or classify_odd(
+                    float(best_pick_raw["odd"]) if best_pick_raw.get("odd") is not None else None
+                ),
                 justification=best_pick_raw.get("justification"),
                 red_flags=best_pick_raw.get("red_flags", []),
             )

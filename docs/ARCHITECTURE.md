@@ -313,11 +313,13 @@ SuperbetCollector (SSE) + API-Football → ContextCollector → List[MatchContex
 
 ### Gatekeeper Agent (`agents/gatekeeper.py`)
 
-- **Purpose:** LLM-based evaluation of corner markets, combining ensemble consensus with qualitative analysis.
+- **Purpose:** LLM-based evaluation of all valid markets (excluding Handicap), using qualitative context analysis.
 - **System Prompt:** `docs/PROMPT_MESTRE.md` (V25 Final).
-- **Input:** `MatchContext` JSON + ensemble consensus output (lambda, vote count, edge).
-- **Pre-filter:** Hard Python filter rejects if best Superbet odd < `min_odd` (1.60) before calling LLM.
-- **Output:** `GatekeeperResult(status, stake, market, odd, edge, justification, red_flags)`.
+- **Input:** `MatchContext` JSON only (context, odds, lineups, standings).
+- **Independence:** Does NOT receive ensemble/ML output.  This is a pure **Context Engine**.
+- **Pre-filter:** Hard Python filter rejects if best odd < `min_odd` (1.25) before calling LLM.
+- **Pricing Zones:** Applies the 4-zone classification (Dead / Builder / Single / Variance).
+- **Output:** `GatekeeperResult(status, stake, market, odd, edge, classification, justification, red_flags)`.
 - **Status values:** APPROVED | NO BET | FILTERED | ERROR.
 
 ### Analyst Agent (`agents/analyst.py`)
@@ -326,6 +328,7 @@ SuperbetCollector (SSE) + API-Football → ContextCollector → List[MatchContex
 - **System Prompt:** `docs/PROMPT_ANALYST.md`.
 - **Input:** `MatchContext` JSON (no ensemble support — LLM-only analysis).
 - **Pre-filter:** Rejects if no non-corner odds ≥ `min_odd`.
+- **Market exclusions:** Escanteios (covered by ML engine) and Handicap (not part of operational profile).
 - **Output:** `AnalystResult` with `List[MarketEvaluation]` + `best_pick`.
 - **Market types:** Match Result (1x2), Both Teams To Score, Over/Under Goals.
 - **Note:** The Analyst operates without ensemble support because the 30-model consensus is corners-specific.

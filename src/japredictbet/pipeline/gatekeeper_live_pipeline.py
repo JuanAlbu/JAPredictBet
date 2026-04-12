@@ -110,10 +110,15 @@ class GatekeeperLivePipeline:
     1. Collect upcoming matches via ``ContextCollector`` (Superbet + API-Football).
     2. Load pre-trained ensemble models from the artifacts directory.
     3. For each match with valid odds:
-       a. Run 30-model consensus voting.
-       b. Feed ``MatchContext`` + ensemble output to ``GatekeeperAgent``.
+       a. **ML Value Engine** (blind): run 30-model consensus voting on corners.
+       b. **Context Engine** (Gatekeeper LLM): evaluate all markets via context only (no ML data).
+       c. **Analyst Engine** (LLM): evaluate non-corner markets via context only.
     4. Cap approved entries at ``max_entries_per_day``.
     5. Write all evaluations to the shadow log.
+
+    The ML and LLM engines operate **independently** — their outputs are
+    surfaced as separate suggestion lists ([SUGESTÕES ALGORITMO] and
+    [SUGESTÕES GATEKEEPER]) for the human decisor to compare.
     """
 
     def __init__(
@@ -358,10 +363,10 @@ class GatekeeperLivePipeline:
 
         logger.info("Evaluating: %s vs %s (event=%s)", home, away, event_id)
 
-        # ── Ensemble consensus (corners only) ────────────────────────
+        # ── Motor 1: ML Value Engine (corners only — blind) ───────────
         ensemble_output = self._run_consensus(match_ctx)
 
-        # ── Gatekeeper LLM (corners — with ensemble support) ────────
+        # ── Motor 2: Context Engine / Gatekeeper LLM (no ML data) ─────
         if dry_run or self._gatekeeper is None:
             logger.info(
                 "Dry-run: skipping Gatekeeper LLM for %s vs %s.", home, away
@@ -371,9 +376,9 @@ class GatekeeperLivePipeline:
                 justification="Dry-run mode — LLM evaluation skipped.",
             )
         else:
-            gk_result = self._call_gatekeeper(match_ctx, ensemble_output)
+            gk_result = self._call_gatekeeper(match_ctx)
 
-        # ── Analyst LLM (non-corner markets: 1x2, BTTS, etc.) ───────
+        # ── Motor 3: Analyst LLM (non-corner markets: 1x2, BTTS, etc.) ─
         if dry_run or self._analyst is None:
             analyst_result = None
         else:
@@ -552,14 +557,12 @@ class GatekeeperLivePipeline:
     def _call_gatekeeper(
         self,
         match_ctx: MatchContext,
-        ensemble_output: Optional[Dict[str, Any]],
     ) -> GatekeeperResult:
-        """Call the Gatekeeper LLM agent (corners — with ensemble support)."""
+        """Call the Gatekeeper LLM agent (context-only, no ML data)."""
         try:
             context = AgentContext(
                 payload={
                     "match_context_json": match_ctx.to_json(),
-                    "ensemble_output": ensemble_output,
                 }
             )
             raw = self._gatekeeper.run(context)

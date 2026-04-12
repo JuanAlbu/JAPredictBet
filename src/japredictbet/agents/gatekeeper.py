@@ -40,6 +40,27 @@ _DEFAULT_MODEL = "gpt-4o-mini"
 # ── Data classes ─────────────────────────────────────────────────────
 
 
+# ── Pricing Zones ────────────────────────────────────────────────────
+
+_ZONE_DEAD = "ZONA MORTA"           # < 1.25
+_ZONE_BUILDER = "PERNA DE COMPOSIÇÃO"  # 1.25–1.59
+_ZONE_SINGLE = "APOSTA SIMPLES"       # 1.60–2.20
+_ZONE_VARIANCE = "APOSTA SIMPLES — VARIÂNCIA"  # > 2.20
+
+
+def classify_odd(odd: Optional[float]) -> Optional[str]:
+    """Return the pricing-zone tag for a given odd value."""
+    if odd is None:
+        return None
+    if odd < 1.25:
+        return _ZONE_DEAD
+    if odd < 1.60:
+        return _ZONE_BUILDER
+    if odd <= 2.20:
+        return _ZONE_SINGLE
+    return _ZONE_VARIANCE
+
+
 @dataclass
 class GatekeeperResult:
     """Structured output from the Gatekeeper evaluation."""
@@ -49,6 +70,7 @@ class GatekeeperResult:
     market: Optional[str] = None
     odd: Optional[float] = None
     edge: Optional[str] = None  # Alto | Médio | Baixo
+    classification: Optional[str] = None  # Pricing zone tag
     justification: Optional[str] = None
     red_flags: List[str] = field(default_factory=list)
     raw_llm_response: Optional[str] = None
@@ -62,10 +84,15 @@ class GatekeeperAgent(BaseAgent):
 
     Flow
     ----
-    1. Python hard-filter: reject when best Superbet corner odd < min_odd.
-    2. Build LLM prompt with match context JSON + ensemble output.
+    1. Python hard-filter: reject when best Superbet odd < min_odd.
+    2. Build LLM prompt with match context JSON (context-only, no ML data).
     3. Call OpenAI chat completion (system = Prompt Mestre V25).
     4. Parse structured JSON response → ``GatekeeperResult``.
+
+    Note: The Gatekeeper is strictly a **context engine**.  It receives
+    desfalques, table standings, odds and qualitative factors.  It does
+    NOT receive ensemble/ML output — that is produced independently by
+    the ML Value Engine and surfaced as a separate suggestion list.
     """
 
     name: str = "gatekeeper"
@@ -97,13 +124,9 @@ class GatekeeperAgent(BaseAgent):
         ---------------------
         match_context_json : str
             Serialised ``MatchContext`` (from ``MatchContext.to_json()``).
-        ensemble_output : dict, optional
-            Keys: ``mean_lambda``, ``consensus_pct``, ``vote_over``,
-            ``vote_under``, ``p_over``, ``edge``.
         """
         result = self.evaluate_match(
             match_context_json=context.payload.get("match_context_json", "{}"),
-            ensemble_output=context.payload.get("ensemble_output"),
         )
         return {
             "status": result.status,
@@ -111,6 +134,7 @@ class GatekeeperAgent(BaseAgent):
             "market": result.market,
             "odd": result.odd,
             "edge": result.edge,
+            "classification": result.classification,
             "justification": result.justification,
             "red_flags": result.red_flags,
         }
@@ -120,7 +144,6 @@ class GatekeeperAgent(BaseAgent):
     def evaluate_match(
         self,
         match_context_json: str,
-        ensemble_output: Optional[Dict[str, Any]] = None,
     ) -> GatekeeperResult:
         """Evaluate a match and return a structured decision.
 
@@ -128,9 +151,6 @@ class GatekeeperAgent(BaseAgent):
         ----------
         match_context_json:
             JSON string produced by ``MatchContext.to_json()``.
-        ensemble_output:
-            Optional dict with consensus engine results
-            (mean_lambda, consensus_pct, etc.).
         """
 
         # ── Step 1: hard pre-filter (min_odd) ────────────────────────
@@ -139,9 +159,7 @@ class GatekeeperAgent(BaseAgent):
             return filtered
 
         # ── Step 2: build user prompt ────────────────────────────────
-        user_prompt = self._build_user_prompt(
-            match_context_json, ensemble_output
-        )
+        user_prompt = self._build_user_prompt(match_context_json)
 
         # ── Step 3: call LLM ─────────────────────────────────────────
         raw_response = self._call_llm(user_prompt)
@@ -221,9 +239,8 @@ class GatekeeperAgent(BaseAgent):
     @staticmethod
     def _build_user_prompt(
         match_context_json: str,
-        ensemble_output: Optional[Dict[str, Any]],
     ) -> str:
-        """Compose the user message sent to the LLM."""
+        """Compose the user message sent to the LLM (context-only, no ML)."""
         parts = [
             "Avalie o jogo abaixo e responda **exclusivamente** com um "
             "JSON válido contendo os campos:\n"
@@ -232,15 +249,28 @@ class GatekeeperAgent(BaseAgent):
             "  market (string ou null),\n"
             "  odd (number ou null),\n"
             '  edge ("Alto" / "Médio" / "Baixo" ou null),\n'
+            '  classification ("PERNA DE COMPOSIÇÃO" / "APOSTA SIMPLES" / '
+            '"APOSTA SIMPLES — VARIÂNCIA" ou null — '
+            "conforme MATRIZ DE PRECIFICAÇÃO),\n"
             "  justification (string — breve),\n"
-            "  red_flags (lista de strings).\n",
+            "  red_flags (lista de strings).\n"
+            "\n"
+            "REGRAS DE ZONA:\n"
+            "- Odd < 1.25 → REJEITAR (ZONA MORTA)\n"
+            "- Odd 1.25–1.59 → classification=\"PERNA DE COMPOSIÇÃO\" "
+            "(proibido como aposta simples)\n"
+            "- Odd 1.60–2.20 → classification=\"APOSTA SIMPLES\"\n"
+            "- Odd > 2.20 → classification=\"APOSTA SIMPLES — VARIÂNCIA\" "
+            "(stake máx 0.5u)\n"
+            "\n"
+            "Se o mesmo jogo tiver linhas em zonas diferentes, liste cada "
+            "uma separadamente como objeto no array 'entries'.\n"
+            "\n"
+            "IMPORTANTE: Ignore completamente o mercado de Handicap. "
+            "Handicap NÃO faz parte do perfil operacional.\n",
             "=== CONTEXTO DO JOGO ===",
             match_context_json,
         ]
-
-        if ensemble_output:
-            parts.append("\n=== OUTPUT DO ENSEMBLE (30 modelos) ===")
-            parts.append(json.dumps(ensemble_output, ensure_ascii=False, indent=2))
 
         parts.append(
             "\nSe não houver cenário favorável, retorne "
@@ -294,12 +324,19 @@ class GatekeeperAgent(BaseAgent):
             except (ValueError, TypeError):
                 stake = None
 
+        odd_val = data.get("odd")
+        # Use LLM-provided classification, or derive from odd value
+        classification = data.get("classification") or classify_odd(
+            float(odd_val) if odd_val is not None else None
+        )
+
         return GatekeeperResult(
             status=status,
             stake=stake,
             market=data.get("market"),
-            odd=data.get("odd"),
+            odd=odd_val,
             edge=data.get("edge"),
+            classification=classification,
             justification=data.get("justification"),
             red_flags=data.get("red_flags", []),
             raw_llm_response=raw,
