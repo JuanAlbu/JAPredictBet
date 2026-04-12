@@ -272,3 +272,4 @@
 | 12-APR-2026 | Reestruturação do roadmap: `next_pass.md` limpo para conter apenas itens pendentes (39 total). Itens concluídos de Onda 2 (B6, A9-A12) adicionados ao histórico. Contagem corrigida (18→32 P2). Duplicata D3 removida. Documentação padronizada. |
 | 12-APR-2026 | **SH15 — consensus_threshold namespace fix** — `self._config.consensus_threshold` → `self._config.value.consensus_threshold` em `gatekeeper_live_pipeline.py`. |
 | 12-APR-2026 | **SH16 — dry-run implementado** — API key bypass, dry_run threading, agents opcionais. Dry-run validado end-to-end (2 jogos, sem API keys). 218/218 testes. |
+| 12-APR-2026 | **SH11 — Bundesliga + Premier League tournament IDs** — Scan SSE feed: Bundesliga=245 (Colônia vs Werder Bremen), Premier League=106 (Nottingham Forest vs Aston Villa, Sunderland vs Tottenham). `league_tournament_ids.json` atualizado: 12→14 ligas mapeadas, `_pending` removido. |

@@ -87,16 +87,18 @@ class AnalystAgent(BaseAgent):
         *,
         model: str = _DEFAULT_MODEL,
         api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
     ) -> None:
         self._cfg = gatekeeper_cfg
-        self._model = model
-        resolved_key = api_key or os.environ.get("OPENAI_API_KEY", "")
+        self._model = model or _DEFAULT_MODEL
+        resolved_key = api_key or os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY", "")
         if not resolved_key:
             raise ValueError(
-                "OpenAI API key not provided.  "
-                "Set the OPENAI_API_KEY environment variable or pass api_key=."
+                "LLM API key not provided.  "
+                "Set LLM_API_KEY (or OPENAI_API_KEY) environment variable or pass api_key=."
             )
-        self._client = OpenAI(api_key=resolved_key)
+        resolved_base_url = base_url or os.environ.get("LLM_BASE_URL") or None
+        self._client = OpenAI(api_key=resolved_key, base_url=resolved_base_url)
         self._system_prompt = self._load_system_prompt()
 
     # ── BaseAgent contract ───────────────────────────────────────────

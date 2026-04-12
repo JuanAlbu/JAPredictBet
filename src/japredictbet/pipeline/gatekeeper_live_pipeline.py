@@ -205,13 +205,19 @@ class GatekeeperLivePipeline:
         if dry_run:
             logger.info("Dry-run mode: LLM agents (Gatekeeper + Analyst) will be skipped.")
         else:
+            llm_base_url = api_keys.llm_base_url if api_keys else None
+            llm_model = api_keys.llm_model if api_keys else None
             gatekeeper = GatekeeperAgent(
                 gatekeeper_cfg=gk_cfg,
                 api_key=api_keys.llm_api_key if api_keys else None,
+                base_url=llm_base_url or None,
+                model=llm_model or "gpt-4o-mini",
             )
             analyst = AnalystAgent(
                 gatekeeper_cfg=gk_cfg,
                 api_key=api_keys.llm_api_key if api_keys else None,
+                base_url=llm_base_url or None,
+                model=llm_model or "gpt-4o-mini",
             )
 
         # Load ensemble models

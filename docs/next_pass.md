@@ -3,7 +3,7 @@
 **Data da Revisão:** 12 de Abril, 2026
 **Status Geral:** P0 ✅ | P0-FIX ✅ | P1 ✅ | Onda 1 ✅ | Onda 4 parcial | P3-ARCH ✅ — 218/218 testes (21 arquivos). 106 features. 30 modelos.
 **Histórico Completo:** [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md)
-**Itens pendentes:** 30 (P2) + 4 (P3) + 2 (P4) + 5 (R&D) = 41 total
+**Itens pendentes:** 29 (P2) + 4 (P3) + 2 (P4) + 5 (R&D) = 41 total (inclui SH24)
 
 > Este documento contém **apenas itens em aberto**. Itens concluídos são registados em [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md).
 
@@ -13,9 +13,13 @@
 
 1. **Treinar ensemble** — `artifacts/models/` está vazio → `python run.py --config config.yml`
 2. **P3-ARCH concluído (12-APR-2026)** — Divergência Positiva implementada: motores ML e LLM separados, Handicap excluído, Matriz de Zonas de Odd ativa.
-3. **Confirmar tournament IDs** — Bundesliga + Premier League no SSE Superbet (SH11)
+3. **⏳ DECISÃO AMANHÃ (13-APR-2026) — Provedor LLM gratuito:**
+   - **Opção A — Groq** (`llama-3.3-70b-versatile`): latência baixa (~1s), tier gratuito generoso, API OpenAI-compatible já suportada.
+   - **Opção B — Gemini Flash** (`gemini-2.0-flash`): Google AI Studio, tier gratuito, suporte JSON mode, endpoint OpenAI-compatible.
+   - **Ação:** Cadastrar em um dos provedores, gerar chave, atualizar `.env` com `LLM_API_KEY`, `LLM_BASE_URL` e `LLM_MODEL`, rodar `python scripts/shadow_observe.py --pre-match hoje` para validar.
+3. **Confirmar tournament IDs** — ✅ RESOLVIDO (Bundesliga=245, Premier League=106)
 4. **Onda 2 residual** — B3, B7, B8, C7 (pipeline integrity)
-5. **Onda 4 residual** — SH4, SH11-SH14, SH17-SH19 (shadow pipeline completion)
+5. **Onda 4 residual** — SH4, SH12-SH14, SH17-SH19 (shadow pipeline completion)
 6. **P3.ENG** — Execução assíncrona T-60 (próximo grande salto de performance)
 
 ---
@@ -87,19 +91,15 @@
 
 ---
 
-## Onda 4 — Shadow Pipeline Residual (8 itens)
+## Onda 4 — Shadow Pipeline Residual (7 itens)
 
 **Objetivo:** Completar integração do shadow pipeline com scraper REST, refinar filtros, cobertura de integração.
 **Dependências:** P2.D4 (Telegram bot) depende desta trilha.
-**Itens concluídos:** SH1-SH10, SH15-SH16, SH20-SH23 — ver [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md).
+**Itens concluídos:** SH1-SH11, SH15-SH16, SH20-SH23 — ver [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md).
 
 - [ ] **SH4 - Mapeamento Superbet → IDs internos**
   - `data/mapping/superbet_teams.json` (template criado, preenchimento manual por liga).
   - `superbet_client.py` já aceita `team_mapping` — equipes sem mapeamento geram WARNING e skip.
-
-- [ ] **SH11 - Adicionar Bundesliga + Premier League ao mapeamento de ligas**
-  - `data/mapping/league_tournament_ids.json` tem 12 ligas, faltam Bundesliga (1ª) e Premier League.
-  - **Fix:** Localizar `tournament_id` no feed SSE Superbet.
 
 - [ ] **SH12 - Refinar filtro de mercados no scraper**
   - Combos de jogador passam no filtro por substring match.
@@ -119,6 +119,13 @@
 - [ ] **SH18 - Validar H2H no `FeatureStore` para inferência ao vivo**
   - O store reduz para "última linha por time" — pode carregar H2H do último adversário, não do par futuro.
   - **Fix:** Recomputar H2H para o par consultado ou excluir H2H do `FeatureStore`.
+
+- [ ] **SH24 - Enriquecer pre-match com API-Football (lineups, standings, injuries)**
+  - Modo pre-match (`load_pre_match_contexts`) retorna `MatchContext` apenas com odds — sem escalações, classificação ou lesões.
+  - Gatekeeper + Analyst decidem com contexto limitado vs Live T-60 que tem enriquecimento completo.
+  - **Fix:** Após `load_pre_match_contexts()`, chamar `ApiFootballClient` para buscar `get_lineups()`, `get_injuries()`, `get_standings()` e popular os campos de cada `MatchContext`.
+  - **Módulos:** `pipeline/gatekeeper_live_pipeline.py` (método `run()` bloco pre-match), `data/context_collector.py` (reutilizar lógica de enriquecimento).
+  - **Dep:** `API_FOOTBALL_KEY` configurada no `.env`.
 
 - [ ] **SH19 - Criar testes de integração da trilha Shadow**
   - Faltam testes para `gatekeeper_live_pipeline`, `ContextCollector`, `FeatureStore`, `pre-match` e `dry-run`.

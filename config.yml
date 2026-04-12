@@ -45,6 +45,8 @@ gatekeeper:
 api_keys:
   api_football_key: "${API_FOOTBALL_KEY}"  # Env var — NUNCA commitar chave real
   llm_api_key: "${LLM_API_KEY}"            # Env var — NUNCA commitar chave real
+  llm_base_url: "${LLM_BASE_URL}"          # Opcional — vazio = OpenAI. Exemplos: Groq, Gemini
+  llm_model: "${LLM_MODEL}"               # Opcional — vazio = gpt-4o-mini (padrão dos agentes)
 
 superbet_shadow:
   sse_endpoint: "https://production-superbet-offer-br.freetls.fastly.net/subscription/v2/pt-BR/events/all"

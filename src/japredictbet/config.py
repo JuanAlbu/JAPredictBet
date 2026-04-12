@@ -96,12 +96,16 @@ class ApiKeysConfig:
 
     api_football_key: str = ""
     llm_api_key: str = ""
+    llm_base_url: str = ""   # Empty = OpenAI default. Set to Groq/Gemini endpoint for free tiers.
+    llm_model: str = ""      # Empty = use agent default (gpt-4o-mini). Override e.g. llama-3.3-70b-versatile.
 
     def resolve(self) -> ApiKeysConfig:
         """Return a new instance with env-var placeholders expanded."""
         return ApiKeysConfig(
             api_football_key=_resolve_env(self.api_football_key),
             llm_api_key=_resolve_env(self.llm_api_key),
+            llm_base_url=_resolve_env(self.llm_base_url),
+            llm_model=_resolve_env(self.llm_model),
         )
 
 
