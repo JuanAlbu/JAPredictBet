@@ -1,9 +1,9 @@
-# JA PREDICT BET — ROADMAP (REVISÃO 12-APR-2026)
+# JA PREDICT BET — ROADMAP (REVISÃO 13-APR-2026)
 
-**Data da Revisão:** 12 de Abril, 2026
+**Data da Revisão:** 13 de Abril, 2026
 **Status Geral:** P0 ✅ | P0-FIX ✅ | P1 ✅ | Onda 1 ✅ | Onda 4 parcial | P3-ARCH ✅ — 218/218 testes (21 arquivos). 106 features. 30 modelos.
 **Histórico Completo:** [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md)
-**Itens pendentes:** 29 (P2) + 4 (P3) + 2 (P4) + 5 (R&D) = 41 total (inclui SH24)
+**Itens pendentes:** 29 (P2) + 4 (P3) + 2 (P4) + 5 (R&D) = 40 total
 
 > Este documento contém **apenas itens em aberto**. Itens concluídos são registados em [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md).
 
@@ -11,16 +11,30 @@
 
 ## Prioridades Imediatas
 
-1. **Treinar ensemble** — `artifacts/models/` está vazio → `python run.py --config config.yml`
-2. **P3-ARCH concluído (12-APR-2026)** — Divergência Positiva implementada: motores ML e LLM separados, Handicap excluído, Matriz de Zonas de Odd ativa.
-3. **⏳ DECISÃO AMANHÃ (13-APR-2026) — Provedor LLM gratuito:**
-   - **Opção A — Groq** (`llama-3.3-70b-versatile`): latência baixa (~1s), tier gratuito generoso, API OpenAI-compatible já suportada.
-   - **Opção B — Gemini Flash** (`gemini-2.0-flash`): Google AI Studio, tier gratuito, suporte JSON mode, endpoint OpenAI-compatible.
-   - **Ação:** Cadastrar em um dos provedores, gerar chave, atualizar `.env` com `LLM_API_KEY`, `LLM_BASE_URL` e `LLM_MODEL`, rodar `python scripts/shadow_observe.py --pre-match hoje` para validar.
+1. **Treinar ensemble** — `artifacts/models/` não existe no estado atual → `python run.py --config config.yml`
+2. **⏳ DECISÃO AMANHÃ (13-APR-2026) — Provedor LLM gratuito:**
+  - **Opção A — OpenRouter** (`meta-llama/llama-3.3-70b-instruct:free`): recomendado, gratuito, sem limite regional, API OpenAI-compatible já suportada.
+  - **Opção B — Groq** (`llama-3.3-70b-versatile`): 100k tokens/dia, reset meia-noite UTC.
+  - **Opção C — Gemini Flash** (`gemini-2.0-flash`): Google AI Studio, NÃO disponível no Brasil (limit: 0).
+  - **Ação:** Criar chave em https://openrouter.ai/settings/keys, atualizar `.env` com:
+    ```
+    LLM_API_KEY="sk-or-..."
+    LLM_BASE_URL="https://openrouter.ai/api/v1"
+    LLM_MODEL="meta-llama/llama-3.3-70b-instruct:free"
+    ```
+    Rodar `python scripts/shadow_observe.py --pre-match hoje` para validar.
 3. **Confirmar tournament IDs** — ✅ RESOLVIDO (Bundesliga=245, Premier League=106)
 4. **Onda 2 residual** — B3, B7, B8, C7 (pipeline integrity)
-5. **Onda 4 residual** — SH4, SH12-SH14, SH17-SH19 (shadow pipeline completion)
+5. **Onda 4 residual** — SH4, SH12-SH14, SH17-SH19, SH24 (shadow pipeline completion)
 6. **P3.ENG** — Execução assíncrona T-60 (próximo grande salto de performance)
+
+---
+
+## Observações LLM (13-APR-2026)
+
+- O Analyst só é chamado quando o Gatekeeper retorna GO, reduzindo o consumo de tokens em até 50%.
+- Nenhum agente executa apostas reais — Shadow Mode é 100% observacional.
+- Gemini AI Studio não está disponível no Brasil (limit: 0). Use OpenRouter ou Groq.
 
 ---
 
@@ -91,7 +105,7 @@
 
 ---
 
-## Onda 4 — Shadow Pipeline Residual (7 itens)
+## Onda 4 — Shadow Pipeline Residual (8 itens)
 
 **Objetivo:** Completar integração do shadow pipeline com scraper REST, refinar filtros, cobertura de integração.
 **Dependências:** P2.D4 (Telegram bot) depende desta trilha.
@@ -108,6 +122,11 @@
 - [ ] **SH13 - Integrar scraper REST no pipeline live**
   - Scraper é standalone. Pipeline live usa `SuperbetCollector` (SSE only, 3 mercados).
   - **Fix:** Extrair lógica REST para `superbet_client.py` (`fetch_full_event(event_id)`).
+
+- [ ] **SH13.B - Hardening do scraper pre-match**
+  - Tratar casos em que o endpoint SSE responde `200 OK`, mas não entrega eventos dentro do timeout.
+  - Definir fallback oficial quando a página web tem jogos visíveis e o SSE/REST falha.
+  - Objetivo: estabilizar a geração de snapshots pre-match para `hoje` e `amanhã`.
 
 - [ ] **SH14 - Limpeza de arquivos temporários**
   - Remover: `_probe_event.py`, `_list_markets.py`, `scraper_*.txt`, `probe_out.txt`, `markets_result.txt`.
@@ -151,6 +170,28 @@
 - [ ] **P2.D1 - Tratamento de Erros Robusto** — `try-except` em `fetch_odds` e pontos críticos.
 - [ ] **P2.D2 - Dashboard de Saúde do Modelo** — Volume, hit rate, ROI, CLV, calibração por período.
 - [ ] **P2.D4 - Bot de Alertas (Telegram)** — Notificação de oportunidades. **Dep:** Onda 4.
+- [ ] **P2.D5 - Pipeline de Mercados Gerais via LLM**
+  - **Escopo:** Criar pipeline pre-match para mercados gerais: buscar jogos via scraping da Superbet, buscar odds de outros mercados, enriquecer contexto, rodar análise LLM e gerar relatório final com apostas simples e compostas recomendadas conforme as regras do prompt.
+  - **Fluxo:** `superbet_scraper.py` → snapshot JSON → `pre_match_odds.py` / `MatchContext` → enriquecimento contextual → análise LLM → relatório final.
+  - **Saída esperada:** Relatório com picks simples, combinações sugeridas, justificativas, red flags e classificação final por entrada.
+  - **Dependências:** SH13, SH17, SH24.
+- [ ] **P2.D6 - Menu Central de Execução**
+  - **Escopo:** Criar um menu/CLI central para operações principais do projeto, reduzindo dependência de comandos soltos e padronizando o fluxo operacional.
+  - **Opções iniciais:**
+    1. Atualizar planilha
+    2. Treinar e atualizar parâmetros, pesos e calibrações necessárias
+    3. Executar previsões
+    4. Executar apenas escanteios
+    5. Executar odds em geral
+    6. Listar mais funções existentes
+  - **Objetivo:** Unificar treino, atualização de artefatos e execução analítica em um ponto de entrada único.
+  - **Módulos:** novo `scripts/menu.py` ou `run.py` expandido com modo interativo.
+  - **Dependências:** P2.B3, P2.C7, P2.D5.
+- [ ] **P2.D6.B - Bootstrap Operacional do Menu**
+  - **Escopo:** Garantir que todas as opções do menu tenham pré-checagens e mensagens claras de prontidão operacional.
+  - **Checklist mínima:** snapshot disponível, `artifacts/models` treinados, `feature_store.parquet` disponível, chaves LLM configuradas quando aplicável.
+  - **Objetivo:** Separar claramente "menu pronto" de "pipeline pronto", evitando que o utilizador execute fluxos incompletos sem diagnóstico amigável.
+  - **Dependências:** P2.D6, SH13.B, SH24.
 
 ---
 
@@ -180,6 +221,14 @@
   - **Escopo:** Adicionar modelo estatístico base (Distribuição de Poisson via Expected Goals — xG) para Match Odds (1x2) e BTTS.
   - **Objetivo:** Impedir que o Analyst LLM aprove apostas baseado apenas em narrativa, obrigando cruzamento com "just price" matemático.
   - **Módulos:** `agents/analyst.py`, novo `probability/xg_anchor.py`, `docs/PROMPT_ANALYST.md`.
+
+- [ ] **P3.LLM-CONSENSUS - Consenso entre Groq e Gemini Flash para resposta final**
+  - **Tipo:** Melhoria de Arquitetura Analítica.
+  - **Escopo:** Criar uma camada de consenso entre dois provedores LLM (ex.: Groq + Gemini Flash) para avaliação dos mercados gerais, inspirada na lógica de consenso já usada no ensemble de escanteios.
+  - **Objetivo:** Reduzir variância de resposta de um único LLM e aumentar robustez da decisão final para picks simples e compostas.
+  - **Regra base proposta:** cada modelo analisa o mesmo `MatchContext`; a resposta final só aprova entrada quando houver convergência mínima configurável entre os dois agentes.
+  - **Saída esperada:** parecer consolidado com status final, justificativa comum, divergências relevantes e recomendação final única.
+  - **Módulos:** `agents/analyst.py`, novo `agents/llm_consensus.py`, `pipeline/gatekeeper_live_pipeline.py`, `docs/PROMPT_ANALYST.md`.
 
 ---
 

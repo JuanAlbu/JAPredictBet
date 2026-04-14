@@ -98,6 +98,10 @@ class ApiKeysConfig:
     llm_api_key: str = ""
     llm_base_url: str = ""   # Empty = OpenAI default. Set to Groq/Gemini endpoint for free tiers.
     llm_model: str = ""      # Empty = use agent default (gpt-4o-mini). Override e.g. llama-3.3-70b-versatile.
+    # Fallback provider — used automatically when primary returns HTTP 429.
+    llm_fallback_api_key: str = ""
+    llm_fallback_base_url: str = ""
+    llm_fallback_model: str = ""
 
     def resolve(self) -> ApiKeysConfig:
         """Return a new instance with env-var placeholders expanded."""
@@ -106,6 +110,9 @@ class ApiKeysConfig:
             llm_api_key=_resolve_env(self.llm_api_key),
             llm_base_url=_resolve_env(self.llm_base_url),
             llm_model=_resolve_env(self.llm_model),
+            llm_fallback_api_key=_resolve_env(self.llm_fallback_api_key),
+            llm_fallback_base_url=_resolve_env(self.llm_fallback_base_url),
+            llm_fallback_model=_resolve_env(self.llm_fallback_model),
         )
 
 

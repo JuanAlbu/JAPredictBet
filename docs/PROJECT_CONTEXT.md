@@ -1,5 +1,25 @@
 # Project Context (Atualizado 11-APR-2026)
 
+
+## LLM Providers (Atualização 13-APR-2026)
+
+O sistema suporta múltiplos provedores LLM gratuitos via API OpenAI-compatible:
+
+- **Groq** — 100k tokens/dia (reset meia-noite UTC)
+- **Gemini AI Studio** — NÃO disponível no Brasil (limit: 0)
+- **OpenRouter** — recomendado, modelos open source gratuitos, sem limite regional
+
+Configuração recomendada no `.env`:
+```
+LLM_API_KEY="sk-or-..."
+LLM_BASE_URL="https://openrouter.ai/api/v1"
+LLM_MODEL="meta-llama/llama-3.3-70b-instruct:free"
+```
+
+**Importante:** O Analyst só é chamado quando o Gatekeeper retorna GO, reduzindo o consumo de tokens em até 50%.
+
+Nenhum agente executa apostas reais — Shadow Mode é 100% observacional.
+
 ## Status Atual
 
 ### P0 Completion ✅

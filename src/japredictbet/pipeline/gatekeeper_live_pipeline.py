@@ -385,7 +385,9 @@ class GatekeeperLivePipeline:
             gk_result = self._call_gatekeeper(match_ctx)
 
         # ── Motor 3: Analyst LLM (non-corner markets: 1x2, BTTS, etc.) ─
-        if dry_run or self._analyst is None:
+        # Only called when Gatekeeper approves (GO) — saves tokens on filtered matches
+        gk_approved = gk_result.status == "GO"
+        if dry_run or self._analyst is None or not gk_approved:
             analyst_result = None
         else:
             analyst_result = self._call_analyst(match_ctx)
@@ -568,7 +570,7 @@ class GatekeeperLivePipeline:
         try:
             context = AgentContext(
                 payload={
-                    "match_context_json": match_ctx.to_json(),
+                    "match_context_json": match_ctx.to_llm_context(),
                 }
             )
             raw = self._gatekeeper.run(context)
@@ -607,7 +609,7 @@ class GatekeeperLivePipeline:
         try:
             context = AgentContext(
                 payload={
-                    "match_context_json": match_ctx.to_json(),
+                    "match_context_json": match_ctx.to_llm_context(),
                 }
             )
             raw = self._analyst.run(context)

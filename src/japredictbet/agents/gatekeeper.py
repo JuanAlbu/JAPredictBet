@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from openai import OpenAI
+from openai import OpenAI, RateLimitError
 
 from japredictbet.agents.base import AgentContext, BaseAgent
 from japredictbet.config import GatekeeperConfig
@@ -115,6 +115,25 @@ class GatekeeperAgent(BaseAgent):
             )
         resolved_base_url = base_url or os.environ.get("LLM_BASE_URL") or None
         self._client = OpenAI(api_key=resolved_key, base_url=resolved_base_url)
+
+        # Optional fallback provider (activated on HTTP 429 from primary)
+        fallback_key = os.environ.get("LLM_FALLBACK_API_KEY") or ""
+        if fallback_key:
+            fallback_base_url = os.environ.get("LLM_FALLBACK_BASE_URL") or None
+            self._fallback_client: Optional[OpenAI] = OpenAI(
+                api_key=fallback_key, base_url=fallback_base_url
+            )
+            self._fallback_model: Optional[str] = (
+                os.environ.get("LLM_FALLBACK_MODEL") or _DEFAULT_MODEL
+            )
+            logger.info(
+                "Gatekeeper: fallback LLM provider configured (model=%s).",
+                self._fallback_model,
+            )
+        else:
+            self._fallback_client = None
+            self._fallback_model = None
+
         self._system_prompt = self._load_system_prompt()
 
     # ── BaseAgent contract ───────────────────────────────────────────
@@ -281,24 +300,60 @@ class GatekeeperAgent(BaseAgent):
         return "\n".join(parts)
 
     def _call_llm(self, user_prompt: str) -> Optional[str]:
-        """Send prompt to OpenAI and return raw content string."""
+        """Send prompt to primary LLM; on HTTP 429 retry with fallback provider."""
         try:
-            response = self._client.chat.completions.create(
-                model=self._model,
-                messages=[
-                    {"role": "system", "content": self._system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=0.3,
-                max_tokens=1024,
-                response_format={"type": "json_object"},
+            return self._call_provider(
+                self._client, self._model, user_prompt, max_tokens=1024
             )
-            content = response.choices[0].message.content
-            logger.debug("LLM raw response: %s", content)
-            return content
+        except RateLimitError as exc:
+            logger.warning(
+                "Gatekeeper: rate limit / cota esgotada no provedor principal — %s", exc
+            )
+            if self._fallback_client is None:
+                logger.error(
+                    "Gatekeeper: nenhum fallback configurado. "
+                    "Defina LLM_FALLBACK_API_KEY no .env para ativar Groq → Gemini."
+                )
+                return None
+            logger.info(
+                "Gatekeeper: alternando para fallback (model=%s).", self._fallback_model
+            )
+            try:
+                return self._call_provider(
+                    self._fallback_client,
+                    self._fallback_model,
+                    user_prompt,
+                    max_tokens=1024,
+                )
+            except Exception:
+                logger.exception("Gatekeeper: fallback LLM call also failed")
+                return None
         except Exception:
-            logger.exception("LLM call failed")
+            logger.exception("Gatekeeper: LLM call failed")
             return None
+
+    def _call_provider(
+        self,
+        client: OpenAI,
+        model: Optional[str],
+        user_prompt: str,
+        *,
+        max_tokens: int,
+    ) -> Optional[str]:
+        """Execute a single chat completion request and return the content string."""
+        response = client.chat.completions.create(
+            model=model or _DEFAULT_MODEL,
+            messages=[
+                {"role": "system", "content": self._system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.3,
+            max_tokens=max_tokens,
+            response_format={"type": "json_object"},
+        )
+        content = response.choices[0].message.content
+        logger.debug("LLM raw response: %s", content)
+        return content
 
     @staticmethod
     def _parse_response(raw: str) -> GatekeeperResult:

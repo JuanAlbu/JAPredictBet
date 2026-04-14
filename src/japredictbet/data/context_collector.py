@@ -92,6 +92,11 @@ class OddsContext:
     away_odds: Optional[float] = None
     btts_yes: Optional[float] = None
     btts_no: Optional[float] = None
+    # Over/Under goals — lines 1.5 and 2.5 (most traded)
+    goals_over_1_5: Optional[float] = None
+    goals_under_1_5: Optional[float] = None
+    goals_over_2_5: Optional[float] = None
+    goals_under_2_5: Optional[float] = None
 
 
 @dataclass
@@ -114,8 +119,64 @@ class MatchContext:
     )
 
     def to_json(self) -> str:
-        """Serialise to a JSON string (for LLM injection)."""
+        """Serialise to a JSON string (for logging / storage)."""
         return json.dumps(asdict(self), ensure_ascii=False, indent=2)
+
+    def to_llm_context(self) -> str:
+        """Compact JSON intended for LLM injection — minimises token usage.
+
+        Differences vs ``to_json()``:
+        - No indentation (compact serialisation)
+        - Omits internal metadata (``event_id``, ``collected_at``)
+        - Lineups: only ``formation`` + ``missing_players`` (absences matter;
+          the full starting XI is irrelevant to LLM reasoning)
+        - Standings: only ``rank``, ``points``, ``form`` (team name is
+          already present as ``home_team`` / ``away_team``)
+        """
+
+        def _slim_lineup(lineup: Optional[TeamLineup]) -> Optional[dict]:
+            if lineup is None:
+                return None
+            return {
+                "formation": lineup.formation,
+                "missing_players": lineup.missing_players,
+            }
+
+        def _slim_standing(entry: Optional[StandingsEntry]) -> Optional[dict]:
+            if entry is None:
+                return None
+            return {
+                "rank": entry.rank,
+                "points": entry.points,
+                "form": entry.form,
+            }
+
+        payload: dict = {
+            "home_team": self.home_team,
+            "away_team": self.away_team,
+            "kickoff_utc": self.kickoff_utc,
+            "league": self.league,
+            "odds": {k: v for k, v in asdict(self.odds).items() if v is not None},
+        }
+
+        home_lu = _slim_lineup(self.home_lineup)
+        away_lu = _slim_lineup(self.away_lineup)
+        if home_lu is not None:
+            payload["home_lineup"] = home_lu
+        if away_lu is not None:
+            payload["away_lineup"] = away_lu
+
+        if self.referee is not None:
+            payload["referee"] = asdict(self.referee)
+
+        home_st = _slim_standing(self.home_standing)
+        away_st = _slim_standing(self.away_standing)
+        if home_st is not None:
+            payload["home_standing"] = home_st
+        if away_st is not None:
+            payload["away_standing"] = away_st
+
+        return json.dumps(payload, ensure_ascii=False)
 
 
 # ── API-Football client ──────────────────────────────────────────────

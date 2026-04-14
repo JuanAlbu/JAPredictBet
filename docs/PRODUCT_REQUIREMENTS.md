@@ -2,6 +2,21 @@
 
 ## Product Overview
 
+## LLM Providers
+
+O sistema suporta múltiplos provedores LLM gratuitos via API OpenAI-compatible (Groq, Gemini, OpenRouter). Recomenda-se OpenRouter para uso gratuito no Brasil.
+
+Configuração `.env` exemplo:
+```
+LLM_API_KEY="sk-or-..."
+LLM_BASE_URL="https://openrouter.ai/api/v1"
+LLM_MODEL="meta-llama/llama-3.3-70b-instruct:free"
+```
+
+O Analyst só é chamado quando o Gatekeeper retorna GO, reduzindo o consumo de tokens.
+
+Nenhum agente executa apostas reais — Shadow Mode é 100% observacional.
+
 The system identifies value betting opportunities in football corner markets by comparing model-generated probabilities with bookmaker odds.
 
 ---

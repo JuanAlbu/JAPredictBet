@@ -45,6 +45,11 @@ def _is_btts_market(name: str) -> bool:
     return "ambas" in lower or "btts" in lower or "both teams" in lower
 
 
+def _is_goals_ou_market(name: str) -> bool:
+    lower = name.lower()
+    return lower in ("total de gols", "total goals", "over/under goals")
+
+
 def _extract_odds_context(markets: Dict[str, Dict[str, Any]]) -> OddsContext:
     """Convert a scraper markets dict into an OddsContext."""
     odds = OddsContext()
@@ -64,6 +69,26 @@ def _extract_odds_context(markets: Dict[str, Dict[str, Any]]) -> OddsContext:
             if odds.btts_yes is None:
                 odds.btts_yes = m.get("yes")
                 odds.btts_no = m.get("no")
+        elif _is_goals_ou_market(mname):
+            # Parse each selection for lines 1.5 and 2.5
+            for sel in m.get("selections", []):
+                sel_name = str(sel.get("name", "")).lower()
+                price = sel.get("price")
+                line = sel.get("line")
+                if price is None or line is None:
+                    continue
+                is_over = "mais" in sel_name or "over" in sel_name
+                is_under = "menos" in sel_name or "under" in sel_name
+                if line == 1.5:
+                    if is_over and odds.goals_over_1_5 is None:
+                        odds.goals_over_1_5 = price
+                    elif is_under and odds.goals_under_1_5 is None:
+                        odds.goals_under_1_5 = price
+                elif line == 2.5:
+                    if is_over and odds.goals_over_2_5 is None:
+                        odds.goals_over_2_5 = price
+                    elif is_under and odds.goals_under_2_5 is None:
+                        odds.goals_under_2_5 = price
 
     return odds
 

@@ -211,6 +211,26 @@ P1 introduced several new components to improve model performance, auditability,
 
 # P2 Architectural Extensions — Gatekeeper Live Pipeline
 
+## LLM Providers
+
+O pipeline suporta provedores OpenAI-compatíveis (Groq, Gemini, OpenRouter). Recomenda-se OpenRouter para uso gratuito no Brasil.
+
+Configuração `.env` exemplo:
+```
+LLM_API_KEY="sk-or-..."
+LLM_BASE_URL="https://openrouter.ai/api/v1"
+LLM_MODEL="meta-llama/llama-3.3-70b-instruct:free"
+```
+
+**Política de tokens:**
+- Groq: 100k tokens/dia (reset meia-noite UTC)
+- Gemini: indisponível no Brasil (limit: 0)
+- OpenRouter: modelos gratuitos, cota generosa
+
+**O Analyst só é chamado quando o Gatekeeper retorna GO.**
+
+Nenhum agente executa apostas reais — Shadow Mode é 100% observacional.
+
 P2 introduces the **Gatekeeper Live Pipeline**, an observational (Shadow Mode) system that collects real-time odds and match context, runs the existing ensemble, and evaluates entries via an LLM-based decision agent — without placing real bets.
 
 ## Pipeline Flow

@@ -93,10 +93,17 @@ def main() -> None:
 
     # ── Logging ──────────────────────────────────────────────────────
     level = logging.DEBUG if args.verbose else logging.INFO
+    _log_dir = _ROOT / "logs"
+    _log_dir.mkdir(parents=True, exist_ok=True)
+    _log_file = _log_dir / "shadow_observe.log"
     logging.basicConfig(
         level=level,
         format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler(_log_file, encoding="utf-8"),
+        ],
     )
 
     # ── Load .env for API keys ───────────────────────────────────────
@@ -108,11 +115,12 @@ def main() -> None:
         logger.info("No .env file found — using system environment variables.")
 
     # ── Pre-flight checks ────────────────────────────────────────────
-    if not os.getenv("OPENAI_API_KEY") and not args.dry_run:
+    has_llm_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
+    if not has_llm_key and not args.dry_run:
         logger.error(
-            "OPENAI_API_KEY is not set.\n"
+            "LLM API key is not set.\n"
             "  1. Copy .env.example  →  .env\n"
-            "  2. Set your key:  OPENAI_API_KEY=sk-...\n"
+            "  2. Set LLM_API_KEY (Groq/Gemini) ou OPENAI_API_KEY\n"
             "  3. Re-run this script.\n"
             "  (or use --dry-run to skip LLM calls)"
         )
@@ -191,12 +199,12 @@ def main() -> None:
 
     for entry in result.entries:
         status_icon = {
-            "APPROVED": "✅",
-            "NO BET": "❌",
-            "FILTERED": "⛔",
-            "CAPPED": "🔒",
-            "ERROR": "⚠️",
-        }.get(entry.gatekeeper_status or "", "❓")
+            "APPROVED": "[OK]",
+            "NO BET": "[NO]",
+            "FILTERED": "[SKIP]",
+            "CAPPED": "[CAP]",
+            "ERROR": "[ERR]",
+        }.get(entry.gatekeeper_status or "", "[?]")
 
         print(
             f"  {status_icon} {entry.home_team} vs {entry.away_team}"
@@ -209,29 +217,29 @@ def main() -> None:
             f"  | stake={entry.gatekeeper_stake}"
         )
         if entry.gatekeeper_justification:
-            print(f"        → {entry.gatekeeper_justification}")
+            print(f"        -> {entry.gatekeeper_justification}")
 
         # Analyst results (non-corner markets)
         if entry.analyst_status and entry.analyst_status != "FILTERED":
             analyst_icon = {
-                "APPROVED": "✅",
-                "NO BET": "❌",
-                "FILTERED": "⛔",
-                "ERROR": "⚠️",
-            }.get(entry.analyst_status, "❓")
+                "APPROVED": "[OK]",
+                "NO BET": "[NO]",
+                "FILTERED": "[SKIP]",
+                "ERROR": "[ERR]",
+            }.get(entry.analyst_status, "[?]")
             print(
-                f"        📊 Analyst: {analyst_icon} {entry.analyst_status}"
+                f"        Analyst: {analyst_icon} {entry.analyst_status}"
                 f"  | {entry.analyst_markets_approved}/{entry.analyst_markets_evaluated} mercados"
             )
             if entry.analyst_best_market:
                 print(
-                    f"        📊 Best pick: {entry.analyst_best_market}"
+                    f"        Best pick: {entry.analyst_best_market}"
                     f"  @ {entry.analyst_best_odd}"
                     f"  | stake={entry.analyst_best_stake}"
                     f"  | edge={entry.analyst_best_edge}"
                 )
                 if entry.analyst_best_justification:
-                    print(f"        📊 → {entry.analyst_best_justification}")
+                    print(f"        -> {entry.analyst_best_justification}")
 
     if not result.entries:
         print("  (nenhum jogo coletado dentro da janela T-60)")

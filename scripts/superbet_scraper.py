@@ -190,7 +190,7 @@ def _stream_sse(
     """
     endpoint = SSE_ENDPOINT_PREMATCH if use_prematch else SSE_ENDPOINT
     headers = {"User-Agent": USER_AGENT, "Accept": "text/event-stream"}
-    timeout = httpx.Timeout(connect=10.0, read=5.0, write=10.0, pool=10.0)
+    timeout = httpx.Timeout(connect=10.0, read=12.0, write=10.0, pool=10.0)
 
     events: Dict[str, Dict[str, Any]] = {}
     deadline = time.monotonic() + duration_s
@@ -232,8 +232,14 @@ def _stream_sse(
                     if time.monotonic() >= deadline:
                         break
     except (httpx.HTTPStatusError, httpx.TransportError) as exc:
-        logger.error("Erro na conexão SSE: %s", exc)
-        raise
+        if events:
+            logger.warning(
+                "SSE interrompido (%s), preservando %d eventos coletados.",
+                exc,
+                len(events),
+            )
+        else:
+            logger.warning("Erro na conexão SSE: %s", exc)
 
     logger.info(
         "SSE: %d linhas lidas, %d eventos de futebol coletados.",
@@ -241,6 +247,91 @@ def _stream_sse(
         len(events),
     )
     return list(events.values())
+
+
+def _collect_raw_events_with_fallback(
+    target_date: Optional[str],
+    tournament_filter: set[int],
+    stream_seconds: float,
+) -> List[Dict[str, Any]]:
+    """Collect SSE events with broader fallback strategies when needed."""
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    use_prematch = target_date is not None and target_date > today_str
+
+    if target_date is None:
+        logger.info("Coletando eventos LIVE + PREMATCH...")
+        raw_live = _stream_sse(
+            duration_s=stream_seconds,
+            tournament_ids=tournament_filter,
+            use_prematch=False,
+        )
+        raw_pre = _stream_sse(
+            duration_s=stream_seconds,
+            tournament_ids=tournament_filter,
+            use_prematch=True,
+        )
+        seen: set[str] = set()
+        merged: List[Dict[str, Any]] = []
+        for ev in raw_live + raw_pre:
+            eid = str(ev.get("eventId", ""))
+            if eid and eid not in seen:
+                seen.add(eid)
+                merged.append(ev)
+        return merged
+
+    attempts: List[tuple[str, bool, Optional[set[int]]]] = [
+        ("endpoint principal + filtro de torneios", use_prematch, tournament_filter),
+    ]
+
+    if use_prematch:
+        attempts.extend(
+            [
+                ("endpoint ALL + filtro de torneios", False, tournament_filter),
+                ("endpoint PREMATCH sem filtro de torneios", True, None),
+                ("endpoint ALL sem filtro de torneios", False, None),
+            ]
+        )
+    else:
+        attempts.append(("endpoint atual sem filtro de torneios", use_prematch, None))
+
+    for label, prematch_flag, tournament_ids in attempts:
+        logger.info("Tentativa SSE fallback: %s", label)
+        raw_events = _stream_sse(
+            duration_s=stream_seconds,
+            tournament_ids=tournament_ids,
+            use_prematch=prematch_flag,
+        )
+        if raw_events and target_date is not None:
+            matching_events = [
+                ev for ev in raw_events if _extract_event_date(ev) == target_date
+            ]
+            undated_events = [
+                ev for ev in raw_events if _extract_event_date(ev) is None
+            ]
+            if not matching_events and not undated_events:
+                dates_found = sorted(
+                    {
+                        ev_date
+                        for ev_date in (_extract_event_date(ev) for ev in raw_events)
+                        if ev_date
+                    }
+                )
+                logger.info(
+                    "Tentativa sem eventos da data alvo (%s). Datas vistas: %s",
+                    target_date,
+                    ", ".join(dates_found) if dates_found else "nenhuma",
+                )
+                continue
+
+        if raw_events:
+            logger.info(
+                "Tentativa bem-sucedida: %s (%d eventos brutos).",
+                label,
+                len(raw_events),
+            )
+            return raw_events
+
+    return []
 
 
 # ── REST API per-event (full markets) ────────────────────────────────
@@ -747,39 +838,11 @@ def main() -> None:
         ),
     )
 
-    # Decide which SSE endpoint to use:
-    # - Future dates → prematch endpoint (pre-match events)
-    # - Today / no filter → all endpoint (live + some pre-match)
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    use_prematch = target_date is not None and target_date > today_str
-
-    # For "todos" (no filter): stream both endpoints
-    if target_date is None:
-        logger.info("Coletando eventos LIVE + PREMATCH...")
-        raw_live = _stream_sse(
-            duration_s=args.stream_seconds,
-            tournament_ids=tournament_filter,
-            use_prematch=False,
-        )
-        raw_pre = _stream_sse(
-            duration_s=args.stream_seconds,
-            tournament_ids=tournament_filter,
-            use_prematch=True,
-        )
-        # Merge, dedup by eventId
-        seen: set = set()
-        raw_events: List[Dict[str, Any]] = []
-        for ev in raw_live + raw_pre:
-            eid = str(ev.get("eventId", ""))
-            if eid and eid not in seen:
-                seen.add(eid)
-                raw_events.append(ev)
-    else:
-        raw_events = _stream_sse(
-            duration_s=args.stream_seconds,
-            tournament_ids=tournament_filter,
-            use_prematch=use_prematch,
-        )
+    raw_events = _collect_raw_events_with_fallback(
+        target_date=target_date,
+        tournament_filter=tournament_filter,
+        stream_seconds=args.stream_seconds,
+    )
 
     if not raw_events:
         print("\n[!] Nenhum evento encontrado no feed SSE para as ligas selecionadas.")
