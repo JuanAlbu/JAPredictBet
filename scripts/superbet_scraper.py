@@ -187,6 +187,11 @@ def _stream_sse(
                       If False, uses the all/live endpoint.
 
     Returns list of raw event dicts that pass sport + tournament filters.
+
+    Hardening (P2-SH13.B):
+    - Tracks HTTP response status vs zero-events to aid diagnostics.
+    - Returns ``None`` when the connection fails entirely (transport error
+      before any data), vs. an empty list when 200 OK but no events arrived.
     """
     endpoint = SSE_ENDPOINT_PREMATCH if use_prematch else SSE_ENDPOINT
     headers = {"User-Agent": USER_AGENT, "Accept": "text/event-stream"}
@@ -195,6 +200,7 @@ def _stream_sse(
     events: Dict[str, Dict[str, Any]] = {}
     deadline = time.monotonic() + duration_s
     lines_read = 0
+    connection_succeeded = False
 
     logger.info(
         "Conectando ao feed SSE Superbet %s (%.0fs)...",
@@ -206,6 +212,7 @@ def _stream_sse(
         with httpx.Client(timeout=timeout) as client:
             with client.stream("GET", endpoint, headers=headers) as resp:
                 resp.raise_for_status()
+                connection_succeeded = True
                 for line in resp.iter_lines():
                     if not line or not line.startswith("data:"):
                         continue
@@ -241,11 +248,22 @@ def _stream_sse(
         else:
             logger.warning("Erro na conexão SSE: %s", exc)
 
-    logger.info(
-        "SSE: %d linhas lidas, %d eventos de futebol coletados.",
-        lines_read,
-        len(events),
-    )
+    if connection_succeeded and lines_read == 0:
+        logger.warning(
+            "SSE conectou (200 OK) mas nenhuma linha recebida em %.0fs. "
+            "O feed pode estar vazio ou o timeout muito curto.",
+            duration_s,
+        )
+    elif connection_succeeded and events:
+        logger.info(
+            "SSE: %d linhas lidas, %d eventos de futebol coletados.",
+            lines_read,
+            len(events),
+        )
+
+    # Signal "connection failed entirely" vs "empty response"
+    if not connection_succeeded and not events:
+        return None  # Transport error — distinct from empty but connected
     return list(events.values())
 
 
@@ -254,7 +272,15 @@ def _collect_raw_events_with_fallback(
     tournament_filter: set[int],
     stream_seconds: float,
 ) -> List[Dict[str, Any]]:
-    """Collect SSE events with broader fallback strategies when needed."""
+    """Collect SSE events with broader fallback strategies when needed.
+
+    Hardening (P2-SH13.B):
+    - ``_stream_sse`` now returns ``None`` on transport error vs ``[]`` on empty.
+    - Falls back to a long-duration SSE stream (2× duration) when all
+      standard attempts return empty.
+    - Checks for existing ``data/odds/pre_match/{target_date}.json`` as
+      a last-resort cache fallback.
+    """
     today_str = datetime.now().strftime("%Y-%m-%d")
     use_prematch = target_date is not None and target_date > today_str
 
@@ -272,7 +298,7 @@ def _collect_raw_events_with_fallback(
         )
         seen: set[str] = set()
         merged: List[Dict[str, Any]] = []
-        for ev in raw_live + raw_pre:
+        for ev in (raw_live or []) + (raw_pre or []):
             eid = str(ev.get("eventId", ""))
             if eid and eid not in seen:
                 seen.add(eid)
@@ -294,6 +320,7 @@ def _collect_raw_events_with_fallback(
     else:
         attempts.append(("endpoint atual sem filtro de torneios", use_prematch, None))
 
+    all_failed = True  # Track if ALL attempts were transport errors
     for label, prematch_flag, tournament_ids in attempts:
         logger.info("Tentativa SSE fallback: %s", label)
         raw_events = _stream_sse(
@@ -301,7 +328,20 @@ def _collect_raw_events_with_fallback(
             tournament_ids=tournament_ids,
             use_prematch=prematch_flag,
         )
-        if raw_events and target_date is not None:
+
+        # None = transport error (connection never established)
+        if raw_events is None:
+            logger.warning("Falha de conexão na tentativa: %s", label)
+            continue
+
+        # Empty list = 200 OK but 0 events — keep trying
+        if not raw_events:
+            logger.info("Tentativa sem eventos: %s", label)
+            continue
+
+        all_failed = False
+
+        if target_date is not None:
             matching_events = [
                 ev for ev in raw_events if _extract_event_date(ev) == target_date
             ]
@@ -323,13 +363,51 @@ def _collect_raw_events_with_fallback(
                 )
                 continue
 
-        if raw_events:
+        logger.info(
+            "Tentativa bem-sucedida: %s (%d eventos brutos).",
+            label,
+            len(raw_events),
+        )
+        return raw_events
+
+    # ── Final long-duration last resort ──────────────────────────────
+    if all_failed:
+        logger.warning(
+            "Todas as tentativas SSE falharam por erro de conexão. "
+            "Tentando stream longo (%.0fs) como último recurso…",
+            stream_seconds * 2,
+        )
+        final_events = _stream_sse(
+            duration_s=stream_seconds * 2,
+            tournament_ids=tournament_filter,
+            use_prematch=use_prematch,
+        )
+        if final_events:
             logger.info(
-                "Tentativa bem-sucedida: %s (%d eventos brutos).",
-                label,
-                len(raw_events),
+                "Stream longo recuperou %d eventos.", len(final_events)
             )
-            return raw_events
+            return final_events
+
+    # ── Cache fallback ───────────────────────────────────────────────
+    if target_date is not None:
+        cache_path = PRE_MATCH_DIR / f"{target_date}.json"
+        if cache_path.exists():
+            logger.warning(
+                "SSE não retornou eventos. Usando cache existente: %s",
+                cache_path,
+            )
+            try:
+                with open(cache_path, "r", encoding="utf-8") as f:
+                    cached = json.load(f)
+                if cached:
+                    logger.info(
+                        "Cache fallback: %d eventos carregados de %s.",
+                        len(cached),
+                        cache_path,
+                    )
+                    return cached
+            except (json.JSONDecodeError, OSError) as exc:
+                logger.warning("Cache corrompido ou ilegível: %s", exc)
 
     return []
 
@@ -365,11 +443,18 @@ PLAYER_MARKET_KEYWORDS = [
 
 
 def _is_market_of_interest(market_name: str) -> bool:
-    """Check if a market name matches our interest list."""
+    """Check if a market name matches our interest list (SH12 — word boundary).
+
+    Uses regex with word boundaries (\\b) to prevent player-level combos
+    (e.g. "Total de Gols do Jogador") from matching team/match markets
+    (e.g. "Total de Gols").
+    """
     lower = market_name.lower()
-    # Exact/substring match against team/match markets
     for keyword in MARKETS_OF_INTEREST:
-        if keyword in lower:
+        # Build word-boundary pattern: /\b{keyword}\b/
+        escaped = re.escape(keyword)
+        pattern = re.compile(r"\b" + escaped + r"\b")
+        if pattern.search(lower):
             return True
     return False
 

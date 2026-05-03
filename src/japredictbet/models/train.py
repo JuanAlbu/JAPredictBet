@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import pickle
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
+
+logger = logging.getLogger(__name__)
 
 import numpy as np
 import pandas as pd
@@ -173,6 +176,16 @@ def train_ensemble_models(
     return trained, specs
 
 
+def _compute_file_hash(filepath: Path) -> str:
+    """Compute SHA256 short hash of a file."""
+    import hashlib
+    sha = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            sha.update(chunk)
+    return sha.hexdigest()[:16]
+
+
 def save_ensemble_models(
     models: list[TrainedModels],
     specs: list[EnsembleModelSpec],
@@ -181,7 +194,7 @@ def save_ensemble_models(
     """Persist trained ensemble members to disk with standard names.
     
     Each model is saved as a .pkl file alongside a .json metadata file
-    containing auditable hyperparameters (P1.C3).
+    containing auditable hyperparameters (P1.C3) and artifact hash (P2.B7).
     """
 
     if len(models) != len(specs):
@@ -198,12 +211,15 @@ def save_ensemble_models(
         saved_paths.append(output_path)
 
         # P1.C3: Save auditable hyperparameter metadata as JSON
+        # P2.B7: Include artifact_hash for integrity verification
+        artifact_hash = _compute_file_hash(output_path)
         meta_path = output_path.with_suffix(".json")
         metadata = {
             "algorithm": spec.algorithm,
             "variation_index": spec.variation_index,
             "random_state": spec.random_state,
             "model_name": spec.model_name,
+            "artifact_hash": artifact_hash,
             "params": _serialize_params(spec.params),
             "feature_columns": list(model.feature_columns),
             "n_features": len(model.feature_columns),
@@ -508,17 +524,48 @@ def _build_hybrid_ensemble_schedule(
 
 
 
+def _load_hyperopt_best_params(algorithm: str) -> dict[str, Any] | None:
+    """Load best hyperparams from hyperopt search results (P2.C7).
+
+    Looks for ``artifacts/hyperopt/{algo}_best_params.json`` and returns
+    the ``best_params`` dict if found, else ``None``.
+    """
+    hyperopt_dir = Path("artifacts") / "hyperopt"
+    algo_file = hyperopt_dir / f"{algorithm}_best_params.json"
+    if not algo_file.exists():
+        return None
+    try:
+        with open(algo_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        best = data.get("best_params")
+        if isinstance(best, dict) and best:
+            logger.info(
+                "Hyperopt params loaded for %s (best_value=%.4f)", algorithm, data.get("best_value", -1)
+            )
+            return best
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.warning("Failed to load hyperopt params for %s: %s", algorithm, exc)
+    return None
+
+
 def build_variation_params(algorithm: str, variation_index: int) -> dict[str, Any]:
-    """Generate deterministic hyperparameter variations (10 per algorithm)."""
+    """Generate deterministic hyperparameter variations (10 per algorithm).
+
+    If hyperopt best params exist (P2.C7), they are used as the base and
+    the variation only perturbs a few key knobs to maintain ensemble diversity.
+    Otherwise falls back to the legacy hardcoded variation schedules.
+    """
 
     algo = algorithm.strip().lower()
     idx = variation_index % 10
 
+    # ── Attempt to load hyperopt best params (P2.C7) ────────────────────
+    hyperopt_base = _load_hyperopt_best_params(algo)
+    if hyperopt_base is not None:
+        return _build_variation_from_hyperopt(algo, hyperopt_base, idx)
+
+    # ── Legacy hardcoded variations (fallback) ──────────────────────────
     if algo == "xgboost":
-        # Diversificacao guiada por seed/variacao:
-        # 1) max_depth alterna especialistas/generalistas
-        # 2) colsample_bytree varia combinacoes de estatisticas
-        # 3) subsample varia fatias do historico
         rng = np.random.default_rng(10_000 + variation_index)
         return {
             "objective": "count:poisson",
@@ -527,7 +574,6 @@ def build_variation_params(algorithm: str, variation_index: int) -> dict[str, An
             "max_depth": int(rng.choice([3, 4, 5, 6])),
             "subsample": float(rng.uniform(0.7, 0.9)),
             "colsample_bytree": float(rng.uniform(0.7, 0.9)),
-            # Mantem leve variacao de regularizacao entre membros.
             "min_child_weight": [1, 2, 3, 1, 2, 3, 2, 1, 3, 2][idx],
         }
 
@@ -550,7 +596,6 @@ def build_variation_params(algorithm: str, variation_index: int) -> dict[str, An
         }
 
     if algo == "ridge":
-        # Ridge regression with variable alpha (regularization strength)
         return {
             "alpha": [0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 10.0, 0.02, 0.08, 2.0][idx],
             "solver": "auto",
@@ -558,7 +603,6 @@ def build_variation_params(algorithm: str, variation_index: int) -> dict[str, An
         }
 
     if algo == "elasticnet":
-        # ElasticNet with variable alpha and l1_ratio
         rng = np.random.default_rng(20_000 + variation_index)
         return {
             "alpha": [0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 10.0, 0.02, 0.08, 2.0][idx],
@@ -567,6 +611,52 @@ def build_variation_params(algorithm: str, variation_index: int) -> dict[str, An
         }
 
     return {}
+
+
+def _build_variation_from_hyperopt(
+    algo: str, best: dict[str, Any], idx: int
+) -> dict[str, Any]:
+    """Build a variation around hyperopt best params for ensemble diversity.
+
+    The best params are used as the base; a few key knobs are slightly
+    perturbed per variation index to maintain diversity across the ensemble.
+    """
+    params = dict(best)
+
+    if algo == "xgboost":
+        # Perturb learning_rate ±10%, max_depth, subsample/colsample
+        base_lr = best.get("learning_rate", 0.05)
+        params["learning_rate"] = base_lr * [0.9, 0.95, 1.0, 1.05, 1.1, 0.92, 1.08, 0.88, 1.02, 0.98][idx]
+        params["max_depth"] = best.get("max_depth", 4) + [-1, 0, 1, 0, -1, 1, 0, -1, 1, 0][idx]
+        params["max_depth"] = max(3, int(params["max_depth"]))
+        # Add objective if missing
+        params.setdefault("objective", "count:poisson")
+
+    elif algo == "lightgbm":
+        base_lr = best.get("learning_rate", 0.05)
+        params["learning_rate"] = base_lr * [0.9, 0.95, 1.0, 1.05, 1.1, 0.92, 1.08, 0.88, 1.02, 0.98][idx]
+        params["num_leaves"] = best.get("num_leaves", 31) + [-2, -1, 0, 1, 2, -1, 1, 0, -2, 2][idx]
+        params["num_leaves"] = max(8, int(params["num_leaves"]))
+        params.setdefault("objective", "poisson")
+
+    elif algo == "randomforest":
+        params["max_depth"] = best.get("max_depth", 10) + [-1, 0, 1, 0, -1, 1, 0, -1, 1, 0][idx]
+        params["max_depth"] = max(5, int(params["max_depth"]))
+
+    elif algo == "ridge":
+        base_alpha = best.get("alpha", 1.0)
+        params["alpha"] = base_alpha * [0.8, 0.9, 1.0, 1.1, 1.2, 0.85, 1.05, 1.15, 0.95, 1.25][idx]
+        params.setdefault("solver", "auto")
+        params.setdefault("max_iter", 10000)
+
+    elif algo == "elasticnet":
+        base_alpha = best.get("alpha", 0.1)
+        base_l1 = best.get("l1_ratio", 0.5)
+        params["alpha"] = base_alpha * [0.8, 0.9, 1.0, 1.1, 1.2, 0.85, 1.05, 1.15, 0.95, 1.25][idx]
+        params["l1_ratio"] = min(1.0, max(0.0, base_l1 + [-0.1, -0.05, 0.0, 0.05, 0.1, -0.08, 0.08, -0.03, 0.03, 0.0][idx]))
+        params.setdefault("max_iter", 20000)
+
+    return params
 
 
 def _build_model_filename(algorithm: str, variation_index: int) -> str:

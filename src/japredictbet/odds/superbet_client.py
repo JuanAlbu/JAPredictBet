@@ -32,6 +32,12 @@ _USER_AGENT = (
     "Chrome/125.0.0.0 Safari/537.36"
 )
 
+# REST API endpoint for full event data (700+ markets vs SSE's ~3)
+_REST_EVENT_URL = (
+    "https://production-superbet-offer-br.freetls.fastly.net"
+    "/v2/pt-BR/events/{event_id}"
+)
+
 
 # ── Data models ──────────────────────────────────────────────────────
 
@@ -62,10 +68,12 @@ class SuperbetSnapshot:
     event_id: str
     home_team: str
     away_team: str
+    match_name: str = ""
     corners: List[SuperbetOdds] = field(default_factory=list)
     match_odds: List[SuperbetOdds] = field(default_factory=list)
     btts: List[SuperbetOdds] = field(default_factory=list)
     other: List[SuperbetOdds] = field(default_factory=list)
+    raw_event: Dict = field(default_factory=dict)
 
 
 # ── SSE line parser ──────────────────────────────────────────────────
@@ -367,3 +375,134 @@ class SuperbetCollector:
                 snap.btts.append(odds_obj)
             else:
                 snap.other.append(odds_obj)
+
+    # ── REST API enrichment (full markets, not just SSE ~3) ──────────
+
+    def fetch_full_event(self, event_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch full event data (all 700+ markets) from the REST API.
+
+        Uses: GET /v2/pt-BR/events/{eventId}
+
+        Returns the first event dict with full odds, or ``None`` on error.
+        This is a clean extraction of the logic from ``scripts/superbet_scraper.py``
+        so the live pipeline can access complete market data (P2-SH13).
+        """
+        url = _REST_EVENT_URL.format(event_id=event_id)
+        headers = {
+            "User-Agent": _USER_AGENT,
+            "Accept": "application/json",
+            "Origin": "https://superbet.bet.br",
+            "Referer": "https://superbet.bet.br/",
+        }
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                r = client.get(url, headers=headers)
+                r.raise_for_status()
+                data = r.json()
+                if data.get("error"):
+                    logger.warning(
+                        "REST API error for event %s: %s", event_id, data
+                    )
+                    return None
+                events = data.get("data", [])
+                if events:
+                    return events[0]
+        except (httpx.HTTPStatusError, httpx.TransportError) as exc:
+            logger.warning("Failed to fetch event %s: %s", event_id, exc)
+        except (json.JSONDecodeError, KeyError) as exc:
+            logger.warning("Malformed response for event %s: %s", event_id, exc)
+        return None
+
+    def enrich_snapshots_with_rest(
+        self,
+        snapshots: Dict[str, SuperbetSnapshot],
+    ) -> Dict[str, SuperbetSnapshot]:
+        """Enrich SSE snapshots with full market data from the REST API.
+
+        For each snapshot, fetches the REST ``/v2/pt-BR/events/{eventId}`` endpoint
+        and rebuilds all market groups (corners, match_odds, btts, other) from the
+        complete REST response.  SSE data is replaced where REST is available.
+
+        Args:
+            snapshots: Dict of ``event_id`` → :class:`SuperbetSnapshot` from SSE.
+
+        Returns:
+            The same dict with enriched snapshots (SSE fallback where REST fails).
+        """
+        from collections import defaultdict
+
+        enriched_count = 0
+        for event_id, snap in snapshots.items():
+            full_event = self.fetch_full_event(event_id)
+            if full_event is None:
+                continue  # Keep SSE data as fallback
+
+            # Parse REST odds grouped by marketName
+            markets_raw: Dict[str, list] = defaultdict(list)
+            for sel in full_event.get("odds") or []:
+                mn = sel.get("marketName", "")
+                if mn:
+                    markets_raw[mn].append(sel)
+
+            # Clear SSE data — will rebuild from REST
+            snap.corners.clear()
+            snap.match_odds.clear()
+            snap.btts.clear()
+            snap.other.clear()
+            snap.raw_event = full_event  # Preserve full REST payload
+
+            for market_name, selections in markets_raw.items():
+                sel_odds = _extract_odds_from_selections(selections)
+
+                # REST API uses centesimal pricing (e.g. 150 → 1.50)
+                for key in ("over", "under", "home", "draw", "away", "yes", "no"):
+                    val = sel_odds.get(key)
+                    if val is not None and val >= 100:
+                        sel_odds[key] = val / 100.0
+
+                # Try to get the line value
+                raw_line: Optional[float] = None
+                for sel in selections:
+                    line_str = sel.get("showSpecialBetValue") or sel.get(
+                        "specialBetValue"
+                    )
+                    if line_str and str(line_str) not in ("0", ""):
+                        try:
+                            raw_line = float(line_str)
+                            break
+                        except (TypeError, ValueError):
+                            pass
+
+                odds_obj = SuperbetOdds(
+                    event_id=event_id,
+                    home_team=snap.home_team,
+                    away_team=snap.away_team,
+                    market_name=market_name,
+                    market_line=raw_line,
+                    over_odds=sel_odds.get("over"),
+                    under_odds=sel_odds.get("under"),
+                    home_odds=sel_odds.get("home"),
+                    draw_odds=sel_odds.get("draw"),
+                    away_odds=sel_odds.get("away"),
+                    yes_odds=sel_odds.get("yes"),
+                    no_odds=sel_odds.get("no"),
+                    raw_event=full_event,
+                )
+
+                if _is_corner_market(market_name, self._cfg):
+                    snap.corners.append(odds_obj)
+                elif _is_match_odds_market(market_name):
+                    snap.match_odds.append(odds_obj)
+                elif _is_btts_market(market_name):
+                    snap.btts.append(odds_obj)
+                else:
+                    snap.other.append(odds_obj)
+
+            enriched_count += 1
+
+        logger.info(
+            "REST enrichment: %d/%d snapshots enriched with full market data.",
+            enriched_count,
+            len(snapshots),
+        )
+        return snapshots

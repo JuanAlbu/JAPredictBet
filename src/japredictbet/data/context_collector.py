@@ -225,14 +225,28 @@ class ApiFootballClient:
 
         return data
 
-    # ── fixtures (today's matches) ───────────────────────────────────
+    # ── fixtures ─────────────────────────────────────────────────────
 
     def get_fixtures_today(
         self, league_id: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """Return today's fixtures, optionally filtered by league."""
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        params: Dict[str, Any] = {"date": today}
+        return self.get_fixtures_by_date(today, league_id=league_id)
+
+    def get_fixtures_by_date(
+        self, date: str, league_id: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """Return fixtures for a specific date, optionally filtered by league.
+
+        Parameters
+        ----------
+        date:
+            ISO date string (YYYY-MM-DD).
+        league_id:
+            Optional API-Football league ID to filter by.
+        """
+        params: Dict[str, Any] = {"date": date}
         if league_id is not None:
             params["league"] = league_id
         data = self._get("fixtures", params)
@@ -327,11 +341,13 @@ class ContextCollector:
         api_football: Optional[ApiFootballClient],
         gatekeeper_cfg: GatekeeperConfig,
         team_mapping: Optional[Dict[str, str]] = None,
+        use_rest_enrichment: bool = False,
     ) -> None:
         self._superbet = superbet
         self._api = api_football
         self._gk_cfg = gatekeeper_cfg
         self._team_mapping = team_mapping
+        self._use_rest_enrichment = use_rest_enrichment
 
     @classmethod
     def from_configs(
@@ -340,12 +356,18 @@ class ContextCollector:
         api_football_cfg: ApiFootballConfig,
         gatekeeper_cfg: GatekeeperConfig,
         api_football_key: str = "",
+        use_rest_enrichment: bool = False,
     ) -> ContextCollector:
         """Build the collector, making API-Football optional.
 
         When *api_football_key* is empty the collector runs in
         **Superbet-only mode**: only the live odds feed is used and no
         lineup/injury/standings enrichment is performed.
+
+        When *use_rest_enrichment* is ``True``, each SSE snapshot is
+        enriched with full market data (700+ markets) from the Superbet
+        REST API — giving the pipeline access to all odds, not just the
+        ~3 markets from the SSE feed (P2-SH13).
         """
         superbet = SuperbetCollector(superbet_cfg)
 
@@ -368,6 +390,7 @@ class ContextCollector:
             api_football=api_client,
             gatekeeper_cfg=gatekeeper_cfg,
             team_mapping=team_mapping,
+            use_rest_enrichment=use_rest_enrichment,
         )
 
     # ── public ───────────────────────────────────────────────────────
@@ -378,10 +401,16 @@ class ContextCollector:
     ) -> List[MatchContext]:
         """Collect context for matches kicking off within the next ``minutes_before`` minutes.
 
-        1. Fetch today's Superbet odds snapshot.
-        2. For each football match with a known kick-off time within the
+        1. Fetch today's Superbet odds snapshot (SSE feed).
+        2. Optionally enrich with full market data from REST API (P2-SH13).
+        3. For each football match with a known kick-off time within the
            window, fetch lineups + injuries + standings from API-Football.
-        3. Combine into :class:`MatchContext` objects.
+        4. Combine into :class:`MatchContext` objects.
+
+        In Superbet-only mode (no API-Football key), the method now
+        extracts kickoff times from the Superbet event raw data and
+        applies a temporal filter — preventing stale/all-day snapshots
+        from entering the pipeline (P2-SH17).
         """
         window = minutes_before or self._gk_cfg.cron_trigger_minutes_before
 
@@ -389,27 +418,52 @@ class ContextCollector:
         logger.info("Fetching Superbet odds feed…")
         sb_snapshots = self._superbet.fetch_today_odds(self._team_mapping)
 
+        # ── Optional REST enrichment ─────────────────────────────────
+        if self._use_rest_enrichment and sb_snapshots:
+            logger.info(
+                "REST enrichment enabled — fetching full market data for %d events…",
+                len(sb_snapshots),
+            )
+            sb_snapshots = self._superbet.enrich_snapshots_with_rest(sb_snapshots)
+
         contexts: List[MatchContext] = []
 
         if self._api is None:
-            # ── Superbet-only mode ───────────────────────────────────
-            logger.info(
-                "API-Football not configured — returning %d events from Superbet "
-                "(no kickoff filter, no lineup/injury/standings data).",
-                len(sb_snapshots),
-            )
+            # ── Superbet-only mode (with temporal filter) ────────────
+            now = datetime.now(timezone.utc)
+            cutoff = now + timedelta(minutes=window)
+            matched = 0
+
             for snap in sb_snapshots.values():
+                kickoff = self._extract_kickoff_from_snapshot(snap)
+                if kickoff is not None:
+                    # Apply temporal window filter
+                    if not (now <= kickoff <= cutoff):
+                        continue
+
+                # When kickoff is unavailable, include the match
+                # (better to over-include than silently drop)
                 odds_ctx = self._match_superbet_odds(
                     snap.home_team, snap.away_team, sb_snapshots
                 )
-                contexts.append(
-                    MatchContext(
-                        event_id=snap.event_id,
-                        home_team=snap.home_team,
-                        away_team=snap.away_team,
-                        odds=odds_ctx,
-                    )
+                ctx = MatchContext(
+                    event_id=snap.event_id,
+                    home_team=snap.home_team,
+                    away_team=snap.away_team,
+                    odds=odds_ctx,
                 )
+                if kickoff is not None:
+                    ctx.kickoff_utc = kickoff.isoformat()
+                contexts.append(ctx)
+                matched += 1
+
+            logger.info(
+                "Superbet-only mode: %d/%d events within T-%d window "
+                "(or without kickoff data).",
+                matched,
+                len(sb_snapshots),
+                window,
+            )
         else:
             # ── Full mode (API-Football + Superbet) ──────────────────
             logger.info("Fetching today's fixtures from API-Football…")
@@ -505,6 +559,138 @@ class ContextCollector:
         )
         return contexts
 
+    # ── pre-match enrichment ───────────────────────────────────────────
+
+    def enrich_pre_match_contexts(
+        self,
+        contexts: List[MatchContext],
+        date: str,
+    ) -> List[MatchContext]:
+        """Enrich pre-match contexts with API-Football data (lineups, standings, injuries).
+
+        Called by the pipeline after ``load_pre_match_contexts()`` so that
+        pre-match evaluations have the same contextual richness as live
+        T-60 evaluations.
+
+        This method is a no-op (returns ``contexts`` unchanged) when no
+        API-Football client is available.
+
+        Parameters
+        ----------
+        contexts:
+            Pre-match contexts from :func:`load_pre_match_contexts`.
+        date:
+            ISO date string (YYYY-MM-DD) for the API-Football fixtures query.
+
+        Returns
+        -------
+        The same list of contexts, enriched in-place.
+        """
+        if self._api is None:
+            logger.info(
+                "No API-Football client — skipping pre-match enrichment."
+            )
+            return contexts
+
+        logger.info(
+            "Enriching %d pre-match contexts with API-Football (date=%s)…",
+            len(contexts),
+            date,
+        )
+
+        fixtures = self._api.get_fixtures_by_date(date)
+        if not fixtures:
+            logger.warning(
+                "No API-Football fixtures found for %s — enrichment skipped.",
+                date,
+            )
+            return contexts
+
+        enriched = 0
+        for ctx in contexts:
+            home = ctx.home_team
+            away = ctx.away_team
+
+            # ── Fuzzy matching by team names ──────────────────────
+            match_fix: Optional[Dict[str, Any]] = None
+            for fix in fixtures:
+                teams = fix.get("teams", {})
+                api_home = teams.get("home", {}).get("name", "").lower()
+                api_away = teams.get("away", {}).get("name", "").lower()
+                ctx_home = home.lower()
+                ctx_away = away.lower()
+
+                if (ctx_home in api_home or api_home in ctx_home) and (
+                    ctx_away in api_away or api_away in ctx_away
+                ):
+                    match_fix = fix
+                    break
+
+            if match_fix is None:
+                continue
+
+            fixture_id: int = match_fix.get("fixture", {}).get("id", 0)
+            if not fixture_id:
+                continue
+
+            league_info = match_fix.get("league", {})
+
+            # ── Lineups ───────────────────────────────────────────
+            lineups = self._safe_call(
+                self._api.get_lineups, fixture_id, label="lineups"
+            ) or {}
+            home_lineup = lineups.get("home")
+            away_lineup = lineups.get("away")
+
+            # ── Injuries → merge into lineup.missing_players ──────
+            injuries = self._safe_call(
+                self._api.get_injuries, fixture_id, label="injuries"
+            ) or []
+            if injuries:
+                _merge_injuries(injuries, home, home_lineup)
+                _merge_injuries(injuries, away, away_lineup)
+
+            # ── Standings ─────────────────────────────────────────
+            league_id: int = league_info.get("id", 0)
+            season: int = league_info.get(
+                "season", datetime.now(timezone.utc).year
+            )
+            standings = self._safe_call(
+                self._api.get_standings,
+                league_id,
+                season,
+                label="standings",
+            ) or []
+
+            # Free-tier API-Football only covers up to 2024
+            if not standings and season > 2024:
+                standings = self._safe_call(
+                    self._api.get_standings,
+                    league_id,
+                    2024,
+                    label="standings-fallback",
+                ) or []
+
+            home_standing = _find_standing(standings, home)
+            away_standing = _find_standing(standings, away)
+
+            # ── Populate context ──────────────────────────────────
+            ctx.home_lineup = home_lineup
+            ctx.away_lineup = away_lineup
+            ctx.home_standing = home_standing
+            ctx.away_standing = away_standing
+            if not ctx.league:
+                ctx.league = league_info.get("name")
+
+            enriched += 1
+
+        logger.info(
+            "Pre-match enrichment: %d/%d contexts matched and populated.",
+            enriched,
+            len(contexts),
+        )
+        return contexts
+
     # ── private helpers ──────────────────────────────────────────────
 
     def _match_superbet_odds(
@@ -543,6 +729,54 @@ class ContextCollector:
                     break
 
         return odds
+
+    @staticmethod
+    def _extract_kickoff_from_snapshot(
+        snap: SuperbetSnapshot,
+    ) -> Optional[datetime]:
+        """Extract kickoff datetime from a Superbet snapshot's raw event data.
+
+        Superbet SSE events carry ``unixDateMillis``, ``matchDate``,
+        ``utcDate``, etc.  Returns ``None`` if none are parseable.
+        """
+        event = snap.raw_event
+        if not event:
+            return None
+
+        # unixDateMillis (most reliable)
+        unix_ms = event.get("unixDateMillis")
+        if unix_ms:
+            try:
+                ts = int(str(unix_ms)) / 1000
+                return datetime.fromtimestamp(ts, tz=timezone.utc)
+            except (ValueError, OSError, TypeError):
+                pass
+
+        # Try ISO string fields
+        for field in ("matchDate", "utcDate", "startDate", "startTime", "matchStartDate"):
+            val = event.get(field)
+            if val is None:
+                continue
+            val_str = str(val)
+
+            # Epoch milliseconds
+            if val_str.isdigit() and len(val_str) >= 10:
+                try:
+                    ts = int(val_str)
+                    if ts > 1e12:
+                        ts = ts / 1000
+                    return datetime.fromtimestamp(ts, tz=timezone.utc)
+                except (ValueError, OSError):
+                    continue
+
+            # ISO 8601
+            try:
+                dt = datetime.fromisoformat(val_str.replace("Z", "+00:00"))
+                return dt
+            except ValueError:
+                continue
+
+        return None
 
     @staticmethod
     def _safe_call(func, *args, label: str = "call", **kwargs):  # type: ignore[no-untyped-def]

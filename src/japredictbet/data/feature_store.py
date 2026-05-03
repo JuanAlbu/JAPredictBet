@@ -367,6 +367,13 @@ def _extract_latest_per_team(df: pd.DataFrame) -> pd.DataFrame:
     """Return one row per team: the most recent feature snapshot.
 
     Uses vectorized pandas operations (no iterrows) for performance.
+
+    Notes
+    -----
+    H2H (head-to-head) features are **excluded** from the store because
+    they are pair-specific: the most recent row for a team contains H2H
+    stats against its *last opponent*, not against the queried opponent.
+    Using stale H2H would corrupt inference (P2-SH18).
     """
     feature_cols = [
         c for c in df.columns
@@ -376,6 +383,11 @@ def _extract_latest_per_team(df: pd.DataFrame) -> pd.DataFrame:
                      "home_yellow_cards", "away_yellow_cards",
                      "home_red_cards", "away_red_cards",
                      "home_shots_on_target", "away_shots_on_target")
+        # Exclude pair-specific H2H features — they reference the last
+        # opponent, not the upcoming match pair (P2-SH18).
+        and not c.startswith("total_corners_h2h_last")
+        and not c.startswith("total_goals_h2h_last")
+        and not c.startswith("total_shots_h2h_last")
     ]
 
     # Build two views: one keyed by home_team, one by away_team,

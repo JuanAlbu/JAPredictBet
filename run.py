@@ -1,6 +1,9 @@
 """Main entrypoint to run the MVP pipeline."""
 
 import argparse
+import hashlib
+import json
+import logging
 import pickle
 from pathlib import Path
 import math
@@ -9,6 +12,56 @@ import pandas as pd
 from japredictbet.config import PipelineConfig
 from japredictbet.models.train import TrainedModels
 from japredictbet.pipeline.mvp_pipeline import run_mvp_pipeline
+
+logger = logging.getLogger(__name__)
+
+
+def _compute_artifact_hash(filepath: Path) -> str:
+    """Compute SHA256 hash of a file for auditability (P2.B7)."""
+    if not filepath.exists():
+        return "FILE_NOT_FOUND"
+    sha = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            sha.update(chunk)
+    return sha.hexdigest()[:16]  # Short hash
+
+
+def _verify_artifact_integrity(pkl_path: Path) -> None:
+    """Verify .pkl SHA256 hash matches .json metadata before deserializing (P2.B7).
+
+    Raises:
+        ValueError: If hash verification fails or metadata is missing.
+    """
+    json_path = pkl_path.with_suffix(".json")
+    if not json_path.exists():
+        raise ValueError(
+            f"Metadata file not found: {json_path}. "
+            "Cannot verify artifact integrity."
+        )
+    with open(json_path, "r", encoding="utf-8") as f:
+        metadata = json.load(f)
+
+    expected_hash = metadata.get("artifact_hash", "")
+    if not expected_hash:
+        # Legacy artifact without hash — compute and store for next time
+        actual_hash = _compute_artifact_hash(pkl_path)
+        metadata["artifact_hash"] = actual_hash
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(metadata, f, indent=2, ensure_ascii=False)
+        logger.info(
+            "Artifact %s: hash field added (legacy migration).", pkl_path.name
+        )
+        return
+
+    actual_hash = _compute_artifact_hash(pkl_path)
+    if actual_hash != expected_hash:
+        raise ValueError(
+            f"Hash mismatch for {pkl_path.name}: "
+            f"expected={expected_hash}, actual={actual_hash}. "
+            "Artifact may be corrupted."
+        )
+    logger.debug("Artifact integrity verified: %s", pkl_path.name)
 
 
 def load_config(config_path: Path) -> PipelineConfig:
@@ -48,10 +101,11 @@ def parse_args() -> argparse.Namespace:
 
 
 def load_model_artifacts(artifact_paths: list[Path]) -> list[TrainedModels]:
-    """Load a list of pickled TrainedModels artifacts."""
+    """Load a list of pickled TrainedModels artifacts with integrity verification (P2.B7)."""
 
     loaded_models: list[TrainedModels] = []
     for artifact in artifact_paths:
+        _verify_artifact_integrity(artifact)  # SHA256 check before deserializing
         with open(artifact, "rb") as handle:
             model = pickle.load(handle)
         if not isinstance(model, TrainedModels):

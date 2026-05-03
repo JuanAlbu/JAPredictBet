@@ -290,6 +290,13 @@ class GatekeeperLivePipeline:
                 "Pre-match mode: loading snapshot for %s", pre_match_date
             )
             matches = load_pre_match_contexts(date=pre_match_date)
+
+            # Enrich with API-Football data (lineups, standings, injuries)
+            # so pre-match evaluations have the same richness as live T-60.
+            # This is a no-op when no API-Football key is configured (P2-SH24).
+            matches = self._collector.enrich_pre_match_contexts(
+                matches, date=pre_match_date,
+            )
         else:
             matches = self._collect_matches()
         logger.info("Collected %d matches with context.", len(matches))

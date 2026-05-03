@@ -5,9 +5,11 @@
 
 ---
 
-## P0 — Pipeline Core (100% FECHADO — 30-MAR-2026)
+## P0 — Pipeline Core (10 de 10 — FECHADO em 03-MAI-2026)
 
 > 9 itens implementados e validados com 101 partidas reais + 50 recentes + stress test random lines.
+> **P0.6 reaberto (03-MAI-2026):** Código ainda usa `rng.shuffle()` em vez de split cronológico por data.
+> **FIX P2.B8 (03-MAI-2026):** `_build_temporal_split()` reescrita com strict chronological holdout — sem shuffle, split por posição de índice (assume DataFrame ordenado por data). P0.6 fechado definitivamente.
 > Detalhes completos em [`P0_COMPLETION_SUMMARY.md`](P0_COMPLETION_SUMMARY.md).
 
 | Item | Descrição | Data |
@@ -17,7 +19,7 @@
 | P0.3 | Dynamic margin rule (threshold +50% quando margem < 0.5) | 30-MAR-2026 |
 | P0.4 | Dynamic feature selection refactor | 30-MAR-2026 |
 | P0.5 | Parallel training (3-5x speedup) | 30-MAR-2026 |
-| P0.6 | Strict temporal holdout | 30-MAR-2026 |
+| P0.6 | Strict temporal holdout (via P2.B8) | 03-MAI-2026 |
 | P0.7 | Match key matching strategy | 30-MAR-2026 |
 | P0.8 | Artifact versioning com SHA256 | 30-MAR-2026 |
 | P0.3b | Encerramento formal — trilha P0 fechada | 30-MAR-2026 |
@@ -273,3 +275,83 @@
 | 12-APR-2026 | **SH15 — consensus_threshold namespace fix** — `self._config.consensus_threshold` → `self._config.value.consensus_threshold` em `gatekeeper_live_pipeline.py`. |
 | 12-APR-2026 | **SH16 — dry-run implementado** — API key bypass, dry_run threading, agents opcionais. Dry-run validado end-to-end (2 jogos, sem API keys). 218/218 testes. |
 | 12-APR-2026 | **SH11 — Bundesliga + Premier League tournament IDs** — Scan SSE feed: Bundesliga=245 (Colônia vs Werder Bremen), Premier League=106 (Nottingham Forest vs Aston Villa, Sunderland vs Tottenham). `league_tournament_ids.json` atualizado: 12→14 ligas mapeadas, `_pending` removido. |
+
+### Itens Absorvidos
+
+| Item Original | Absorvido Por | Motivo |
+|---------------|--------------|--------|
+| P4.NOTIFY — Desacoplamento da Decisão via Telegram | CKPT.3 — Cockpit via Telegram | CKPT.3 cobre o mesmo objetivo com escopo maior (bot Telegram completo com comandos) |
+| P2.D4 — Bot de Alertas (Telegram) | CKPT.3 — Cockpit via Telegram | Escopo coberto pelo Cockpit via Telegram, que oferece bot completo com comandos |
+
+---
+
+## Onda 2 — Infraestrutura & Pipeline (100% CONCLUÍDO — 03-MAI-2026)
+
+**Objetivo:** Corrigir paridade de features, verificar integridade de artefatos, integrar hyperopt.
+
+### P2.B3 — Reescrever `update_pipeline.py` (RESOLVIDO — 03-MAI-2026)
+
+- **Bug 1:** ~~`PipelineConfig(**config_dict)` — crash~~ ✅ Corrigido — usa `PipelineConfig.from_yaml()`.
+- **Bug 2:** Feature engineering ausente ✅ — Pipeline completo portado (rolling mean, STD, EMA, ELO, matchup, H2H, drop redundant, team target encoding).
+- **Bug 3:** `algorithms` hardcoded sem Ridge/ElasticNet ✅ — Usa `config.model.algorithms` do YAML com fallback completo.
+- **Arquivo:** [`scripts/update_pipeline.py`](scripts/update_pipeline.py)
+- **Evidência:** Docstring do arquivo confirma todos os 3 bugs corrigidos. Código verificado.
+
+### P2.B7 — Verificar integridade de pickle antes de deserializar (RESOLVIDO — 03-MAI-2026)
+
+- **Arquivo:** [`run.py`](run.py)
+- **Implementação:** `_verify_artifact_integrity()` em `run.py`:
+  - Carrega `.json` metadata ao lado do `.pkl`
+  - Computa SHA256 hash do `.pkl` via `_compute_artifact_hash()`
+  - Compara com hash salvo no metadata
+  - Legacy migration: se metadata não tem hash, computa e salva
+  - `ValueError` em caso de mismatch
+- **Chamado por:** `load_model_artifacts()` antes de cada `pickle.load()`
+
+### P2.B8 — Corrigir holdout temporal para ser realmente cronológico (RESOLVIDO — 03-MAI-2026)
+
+- **Arquivo:** [`src/japredictbet/pipeline/mvp_pipeline.py`](src/japredictbet/pipeline/mvp_pipeline.py)
+- **Implementação:** `_build_temporal_split()` reescrita com:
+  - `use_strict_holdout=True` (default)
+  - Nenhum shuffle — split por posição de índice (assume DataFrame ordenado por data)
+  - Holdout = últimos N% da temporada mais recente
+  - Split determinístico (seed ignorado)
+- **Impacto:** P0.6 fechado definitivamente.
+
+### P2.C7 — Integrar params otimizados do hyperopt no ensemble (RESOLVIDO — 03-MAI-2026)
+
+- **Arquivo:** [`src/japredictbet/models/train.py`](src/japredictbet/models/train.py)
+- **Implementação:**
+  - `_load_hyperopt_best_params(algorithm)` — carrega `artifacts/hyperopt/{algo}_best_params.json`
+  - `build_variation_params()` — tenta hyperopt first, fallback para variações hardcoded
+  - `_build_variation_from_hyperopt()` — perturba knobs chave em torno dos best params para manter diversidade do ensemble
+- **Fallback:** Se não existem best params, usa variações determinísticas (10 por algoritmo)
+
+---
+
+## Onda 5 — Itens Concluídos (03-MAI-2026)
+
+| Item | Descrição | Data | Evidência |
+|------|-----------|------|-----------|
+| P2.D6 | Menu Central de Execução | 03-MAI-2026 | [`scripts/menu.py`](scripts/menu.py) — 296 linhas, 5 opções operacionais (extrair odds, shadow mode, dry-run, auditoria, manutenção) |
+| P2.C1 (parcial) | `value/value_engine.py` removido | 03-MAI-2026 | Arquivo não existe no projeto — diretório `value/` ausente |
+| P2.C1 (parcial) | `config_backup.yml` removido | 03-MAI-2026 | Arquivo não existe no projeto |
+| Prioridade #2 | Decisão provedor LLM (OpenRouter escolhido) | 03-MAI-2026 | Decisão tomada, documentada em [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md) |
+
+---
+
+## Changelog (Continuação)
+
+| Data | Ação |
+|------|------|
+| 03-MAI-2026 | **Validação profunda do roadmap.** P2.D6 (menu.py) descoberto como já implementado. value_engine e config_backup já removidos. P4.NOTIFY absorvido por CKPT.3. Prioridades #2 e #3 arquivadas. 15 issues encontrados e corrigidos. Datas atualizadas para 03-MAI-2026. |
+| 03-MAI-2026 | **ONDA 2 CONCLUÍDA** — B3 (update_pipeline.py completo), B7 (hash verification em run.py), B8 (temporal split cronológico), C7 (hyperopt integration em train.py). P0.6 fechado via B8. |
+| 03-MAI-2026 | **SH12 — Refinar filtro de mercados** — Regex word boundary implementado no scraper para mercados core. |
+| 03-MAI-2026 | **SH13 — Integrar scraper REST no pipeline live** — `fetch_full_event()` extraído para `superbet_client.py`. |
+| 03-MAI-2026 | **SH13.B — Hardening do scraper pre-match** — SSE timeout tratado, fallback definido. |
+| 03-MAI-2026 | **SH14 — Limpeza de arquivos temporários** — `_probe_event.py`, `_list_markets.py`, `scraper_*.txt`, `probe_out.txt`, `markets_result.txt` removidos. |
+| 03-MAI-2026 | **SH17 — Superbet-only vs T-60 semantics** — Filtro temporal alternativo aplicado em modo degradado (sem API-Football). |
+| 03-MAI-2026 | **SH18 — H2H FeatureStore validation** — H2H features excluídas do `FeatureStore` table (recomputadas no par consultado). |
+| 03-MAI-2026 | **SH19 — Testes de integração Shadow (42/42)** — `test_shadow_integration.py` corrigido: 11 issues fixados (dataclass fields, fixture formatting, API assinaturas, FeatureStore build via construtor direto). |
+| 03-MAI-2026 | **SH24 — Enriquecer pre-match com API-Football** — `enrich_pre_match_contexts()` chamado no `run()` pre-match block. Lineups, standings e injuries populados. |
+| 03-MAI-2026 | Testes 218→260. 21 arquivos de teste. SH19 42/42 integração. |

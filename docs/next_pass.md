@@ -1,65 +1,27 @@
-# JA PREDICT BET — ROADMAP (REVISÃO 13-APR-2026)
+# JA PREDICT BET — ROADMAP (REVISÃO 03-MAI-2026)
 
-**Data da Revisão:** 13 de Abril, 2026
-**Status Geral:** P0 ✅ | P0-FIX ✅ | P1 ✅ | Onda 1 ✅ | Onda 4 parcial | P3-ARCH ✅ — 218/218 testes (21 arquivos). 106 features. 30 modelos.
+**Data da Revisão:** 03 de Maio, 2026
+**Status Geral:** P0 ✅ | P0-FIX ✅ | P1 ✅ | Onda 1 ✅ | Onda 2 ✅ | Onda 4 parcial | P3-ARCH ✅ — **260/260 testes** (21 arquivos). 106 features. 30 modelos.
 **Histórico Completo:** [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md)
-**Itens pendentes:** 29 (P2) + 4 (P3) + 2 (P4) + 5 (R&D) = 40 total
+**Itens pendentes:** 20 (Onda 3) + 4 (CKPT) + 3 (R&D) + 2 (Stretch) = 29 total
 
-> Este documento contém **apenas itens em aberto**. Itens concluídos são registados em [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md).
+> Este documento contém **apenas itens em aberto**. Itens concluídos são registrados em [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md).
 
 ---
 
 ## Prioridades Imediatas
 
 1. **Treinar ensemble** — `artifacts/models/` não existe no estado atual → `python run.py --config config.yml`
-2. **⏳ DECISÃO AMANHÃ (13-APR-2026) — Provedor LLM gratuito:**
-  - **Opção A — OpenRouter** (`meta-llama/llama-3.3-70b-instruct:free`): recomendado, gratuito, sem limite regional, API OpenAI-compatible já suportada.
-  - **Opção B — Groq** (`llama-3.3-70b-versatile`): 100k tokens/dia, reset meia-noite UTC.
-  - **Opção C — Gemini Flash** (`gemini-2.0-flash`): Google AI Studio, NÃO disponível no Brasil (limit: 0).
-  - **Ação:** Criar chave em https://openrouter.ai/settings/keys, atualizar `.env` com:
-    ```
-    LLM_API_KEY="sk-or-..."
-    LLM_BASE_URL="https://openrouter.ai/api/v1"
-    LLM_MODEL="meta-llama/llama-3.3-70b-instruct:free"
-    ```
-    Rodar `python scripts/shadow_observe.py --pre-match hoje` para validar.
-3. **Confirmar tournament IDs** — ✅ RESOLVIDO (Bundesliga=245, Premier League=106)
-4. **Onda 2 residual** — B3, B7, B8, C7 (pipeline integrity)
-5. **Onda 4 residual** — SH4, SH12-SH14, SH17-SH19, SH24 (shadow pipeline completion)
-6. **P3.ENG** — Execução assíncrona T-60 (próximo grande salto de performance)
+2. **Onda 4 residual** — SH4 pendente (mapeamento manual), demais itens concluídos
+3. **P3.ENG** — Execução assíncrona T-60 (próximo grande salto de performance)
 
 ---
 
-## Observações LLM (13-APR-2026)
+## Observações LLM (03-MAI-2026)
 
 - O Analyst só é chamado quando o Gatekeeper retorna GO, reduzindo o consumo de tokens em até 50%.
 - Nenhum agente executa apostas reais — Shadow Mode é 100% observacional.
 - Gemini AI Studio não está disponível no Brasil (limit: 0). Use OpenRouter ou Groq.
-
----
-
-## Onda 2 — Infraestrutura & Pipeline (4 itens)
-
-**Objetivo:** Corrigir paridade de features, verificar integridade de artefatos, integrar hyperopt.
-
-- [ ] **P2.B3 - Reescrever `update_pipeline.py` (Non-Functional)**
-  - **Bug 1:** ~~`PipelineConfig(**config_dict)` — crash~~ CORRIGIDO via P2.B6.
-  - **Bug 2:** Feature engineering ausente — portar pipeline completo (rolling, STD, EMA, ELO, matchup, H2H, drop redundant).
-  - **Bug 3:** `algorithms` hardcoded sem Ridge/ElasticNet.
-  - **Referência:** `run.py` (config loading) e `mvp_pipeline.py` (feature pipeline completo).
-
-- [ ] **P2.B7 - Verificar integridade de pickle antes de deserializar**
-  - `run.py` linha 88: `pickle.load()` sem verificação de hash. O projeto já tem `_compute_artifact_hash`.
-  - **Fix:** SHA256 do `.pkl` vs hash no JSON metadata antes de `pickle.load()`.
-
-- [ ] **P2.B8 - Corrigir holdout temporal para ser realmente cronológico**
-  - `_build_temporal_split()` documenta "últimos 3 meses", mas embaralha linhas da temporada mais recente.
-  - **Risco:** Validação otimista e falsa sensação de rigor temporal.
-  - **Fix:** Split por data real (`date`) com corte cronológico explícito.
-
-- [ ] **P2.C7 - Integrar params otimizados do hyperopt no ensemble**
-  - `hyperopt_search.py` é READ-ONLY — melhores params não são aplicados automaticamente.
-  - **Fix:** Atualizar `_build_variation_params()` em `train.py` para usar `artifacts/hyperopt/*_best_params.json`.
 
 ---
 
@@ -70,7 +32,7 @@
 ### Bloco 3A — Cobertura de Testes (7 itens)
 
 - [ ] **P2.A1 - Testes para `features/`** (elo, rolling, matchup, team_identity)
-  - 1/4 módulos com cobertura parcial. Faltam: NaN handling em ELO, edge cases rolling, divisão por zero em matchup, data leakage via train_mask.
+  - NaN handling em ELO, edge cases rolling, divisão por zero em matchup, data leakage via train_mask.
 
 - [ ] **P2.A2 - Testes para `data/ingestion.py`**
   - Parquet loading, CSV malformado, dataset vazio, colunas ausentes, NaN em data.
@@ -93,8 +55,8 @@
 ### Bloco 3B — Limpeza & Consistência (3 itens)
 
 - [ ] **P2.C1 - Remover código morto**
-  - `value/value_engine.py` (217 linhas) — duplicada, com bugs próprios.
-  - `config_backup.yml` — usar git history.
+  - ~~`value/value_engine.py` (217 linhas) — duplicada, com bugs próprios.~~ ✅ Já removido.
+  - ~~`config_backup.yml` — usar git history.~~ ✅ Já removido.
   - Verificar se `rolling.py::add_rolling_features()` é usada pelo pipeline principal ou apenas testes.
 
 - [ ] **P2.C2 - Resolver boundary `probability/` vs `betting/engine.py`**
@@ -105,53 +67,20 @@
 
 ---
 
-## Onda 4 — Shadow Pipeline Residual (8 itens)
+## Onda 4 — Shadow Pipeline Residual (1 item pendente — 7 concluídos)
 
 **Objetivo:** Completar integração do shadow pipeline com scraper REST, refinar filtros, cobertura de integração.
-**Dependências:** P2.D4 (Telegram bot) depende desta trilha.
-**Itens concluídos:** SH1-SH11, SH15-SH16, SH20-SH23 — ver [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md).
+**Dependências:** CKPT.3 (Cockpit Telegram) depende desta trilha (absorveu P2.D4).
+**Itens concluídos:** SH1-SH24 (SH4 parcial) — ver [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md).
 
-- [ ] **SH4 - Mapeamento Superbet → IDs internos**
+- [~] **SH4 - Mapeamento Superbet → IDs internos** (parcial — apenas Brasileirão preenchido)
   - `data/mapping/superbet_teams.json` (template criado, preenchimento manual por liga).
   - `superbet_client.py` já aceita `team_mapping` — equipes sem mapeamento geram WARNING e skip.
-
-- [ ] **SH12 - Refinar filtro de mercados no scraper**
-  - Combos de jogador passam no filtro por substring match.
-  - **Fix:** Match mais estrito (regex com word boundary) para mercados core.
-
-- [ ] **SH13 - Integrar scraper REST no pipeline live**
-  - Scraper é standalone. Pipeline live usa `SuperbetCollector` (SSE only, 3 mercados).
-  - **Fix:** Extrair lógica REST para `superbet_client.py` (`fetch_full_event(event_id)`).
-
-- [ ] **SH13.B - Hardening do scraper pre-match**
-  - Tratar casos em que o endpoint SSE responde `200 OK`, mas não entrega eventos dentro do timeout.
-  - Definir fallback oficial quando a página web tem jogos visíveis e o SSE/REST falha.
-  - Objetivo: estabilizar a geração de snapshots pre-match para `hoje` e `amanhã`.
-
-- [ ] **SH14 - Limpeza de arquivos temporários**
-  - Remover: `_probe_event.py`, `_list_markets.py`, `scraper_*.txt`, `probe_out.txt`, `markets_result.txt`.
-
-- [ ] **SH17 - Separar semântica de `Superbet-only` vs T-60**
-  - `context_collector.py` retorna todos os snapshots quando `API_FOOTBALL_KEY` ausente, sem filtro de kickoff.
-  - **Fix:** Aplicar filtro temporal alternativo ou segregar modo degradado.
-
-- [ ] **SH18 - Validar H2H no `FeatureStore` para inferência ao vivo**
-  - O store reduz para "última linha por time" — pode carregar H2H do último adversário, não do par futuro.
-  - **Fix:** Recomputar H2H para o par consultado ou excluir H2H do `FeatureStore`.
-
-- [ ] **SH24 - Enriquecer pre-match com API-Football (lineups, standings, injuries)**
-  - Modo pre-match (`load_pre_match_contexts`) retorna `MatchContext` apenas com odds — sem escalações, classificação ou lesões.
-  - Gatekeeper + Analyst decidem com contexto limitado vs Live T-60 que tem enriquecimento completo.
-  - **Fix:** Após `load_pre_match_contexts()`, chamar `ApiFootballClient` para buscar `get_lineups()`, `get_injuries()`, `get_standings()` e popular os campos de cada `MatchContext`.
-  - **Módulos:** `pipeline/gatekeeper_live_pipeline.py` (método `run()` bloco pre-match), `data/context_collector.py` (reutilizar lógica de enriquecimento).
-  - **Dep:** `API_FOOTBALL_KEY` configurada no `.env`.
-
-- [ ] **SH19 - Criar testes de integração da trilha Shadow**
-  - Faltam testes para `gatekeeper_live_pipeline`, `ContextCollector`, `FeatureStore`, `pre-match` e `dry-run`.
+  - **Pendente:** preencher mapeamento para as demais 9 ligas (Serie A, La Liga, Ligue 1, Eredivisie, Primeira Liga, MLS, Bundesliga, Premier League, Jupiler Pro League)
 
 ---
 
-## Onda 5 — CI, Produto & Polish (8 itens)
+## Onda 5 — CI, Produto & Polish (13 itens)
 
 **Objetivo:** Automatizar qualidade, melhorar observabilidade e experiência final.
 
@@ -165,39 +94,73 @@
   - `python -m pytest -q` falha por coletar `test_output.txt` na raiz.
   - **Fix:** Definir `testpaths`/`python_files` no `pyproject.toml`.
 
-### Bloco 5B — Produto (3 itens)
+### Bloco 5B — Produto (8 itens)
 
 - [ ] **P2.D1 - Tratamento de Erros Robusto** — `try-except` em `fetch_odds` e pontos críticos.
 - [ ] **P2.D2 - Dashboard de Saúde do Modelo** — Volume, hit rate, ROI, CLV, calibração por período.
-- [ ] **P2.D4 - Bot de Alertas (Telegram)** — Notificação de oportunidades. **Dep:** Onda 4.
+- [x] **P2.D4 - Bot de Alertas (Telegram)** ✅ *(Absorvido por CKPT.3)* — Escopo coberto pelo Cockpit via Telegram.
 - [ ] **P2.D5 - Pipeline de Mercados Gerais via LLM**
   - **Escopo:** Criar pipeline pre-match para mercados gerais: buscar jogos via scraping da Superbet, buscar odds de outros mercados, enriquecer contexto, rodar análise LLM e gerar relatório final com apostas simples e compostas recomendadas conforme as regras do prompt.
   - **Fluxo:** `superbet_scraper.py` → snapshot JSON → `pre_match_odds.py` / `MatchContext` → enriquecimento contextual → análise LLM → relatório final.
   - **Saída esperada:** Relatório com picks simples, combinações sugeridas, justificativas, red flags e classificação final por entrada.
   - **Dependências:** SH13, SH17, SH24.
-- [ ] **P2.D6 - Menu Central de Execução**
-  - **Escopo:** Criar um menu/CLI central para operações principais do projeto, reduzindo dependência de comandos soltos e padronizando o fluxo operacional.
-  - **Opções iniciais:**
-    1. Atualizar planilha
-    2. Treinar e atualizar parâmetros, pesos e calibrações necessárias
-    3. Executar previsões
-    4. Executar apenas escanteios
-    5. Executar odds em geral
-    6. Listar mais funções existentes
-  - **Objetivo:** Unificar treino, atualização de artefatos e execução analítica em um ponto de entrada único.
-  - **Módulos:** novo `scripts/menu.py` ou `run.py` expandido com modo interativo.
-  - **Dependências:** P2.B3, P2.C7, P2.D5.
+- [x] **P2.D6 - Menu Central de Execução** ✅ — Ver [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md#onda-5--itens-concluídos-03-mai-2026).
 - [ ] **P2.D6.B - Bootstrap Operacional do Menu**
   - **Escopo:** Garantir que todas as opções do menu tenham pré-checagens e mensagens claras de prontidão operacional.
   - **Checklist mínima:** snapshot disponível, `artifacts/models` treinados, `feature_store.parquet` disponível, chaves LLM configuradas quando aplicável.
-  - **Objetivo:** Separar claramente "menu pronto" de "pipeline pronto", evitando que o utilizador execute fluxos incompletos sem diagnóstico amigável.
+  - **Objetivo:** Separar claramente "menu pronto" de "pipeline pronto", evitando que o usuário execute fluxos incompletos sem diagnóstico amigável.
   - **Dependências:** P2.D6, SH13.B, SH24.
+
+- [ ] **P2.D7 - Dashboard de Sessão (Saldo do Dia)**
+  - **Tipo:** Produto / Observabilidade.
+  - **Escopo:** Ler o shadow log (`shadow_log.jsonl`), agregar métricas de sessão do dia corrente e exibir no menu.
+  - **Métricas:** saldo do dia (u), yield (ROI), entradas aprovadas vs rejeitadas, sequência atual (greens vs reds), total de entradas no dia.
+  - **Origem:** Integração do SNIPER V25 — Controle de Sessão era o único gap real após análise cruzada.
+  - **Saída esperada:** Painel no terminal (`scripts/menu.py` opção 6 ou sub-menu) com resumo executivo do dia.
+  - **Módulos:** `scripts/menu.py`, novo `scripts/session_dashboard.py` (leitor do shadow log).
+  - **Dependências:** Shadow log operacional (já implementado em `gatekeeper_live_pipeline.py:_write_shadow_log`).
+
+- [ ] **P2.D8 - Auto-Healing de Nomes de Equipas**
+  - **Tipo:** Melhoria de Dados. *(Movido de P4.HEAL)*
+  - **Escopo:** Script de fim do dia que recolhe equipas "órfãs" (nome Superbet sem match na API-Football) e usa LLM barato para deduzir o match correto.
+  - **Objetivo:** Eliminar manutenção manual do `data/mapping/superbet_teams.json`.
+  - **Módulos:** Novo `scripts/auto_heal_teams.py`, `data/mapping/superbet_teams.json`.
+  - **Workflow:** Cron diário → recolhe orphans do shadow log → LLM resolve → append automático.
+
+---
+
+## Onda 6 — Arquitetura do Cockpit & Agentes V2 (4 Pilares)
+
+**Objetivo:** Implementar os 4 pilares estratégicos para otimização de tokens, memória de longo prazo, operação remota e contexto externo.
+
+- [ ] **CKPT.1 - Otimização de Tokens: Filtro de Relevância (The Bouncer V2)**
+  - **Escopo:** Expandir a lógica de pré-filtro no Python para poupar tokens. Em vez de passar o JSON bruto de odds para o LLM, o módulo `pre_match_odds.py` deve aplicar a função `get_interesting_lines()`.
+  - **Critérios:**
+    - **Zonagem:** Apenas odds entre 1.25 e 2.20 (Zonas Alvo + Composição). Odds > 2.20 entram na Zona de Variância com stake cortado.
+    - **Correlação:** Se o algoritmo indicou valor em um mercado (ex: Escanteios > 70%), passar apenas as linhas desse mercado para validação contextual.
+    - **Exclusão:** Cortar mercados de handicap ou linhas extremamente "esticadas" (ex: Over 0.5 a 1.05).
+
+- [ ] **CKPT.2 - Base Interna: Memória de Longo Prazo (Knowledge Store)**
+  - **Escopo:** Reduzir latência e custos de API com uma base leve (SQLite ou TinyDB) integrada ao `FeatureStore`.
+  - **Armazenamento:**
+    - **Cache de Contexto:** Escalações, desfalques e histórico de confrontos dos últimos 7 dias.
+    - **Histórico de Veredictos:** Armazenar por que o Gatekeeper rejeitou um jogo, evitando reprocessamento idêntico.
+    - **Shadow Performance:** Base para `consensus_accuracy_report.py` ler rapidamente o ROI por liga e modelo.
+
+- [ ] **CKPT.3 - Cockpit via Telegram: Operação Remota**
+  - **Escopo:** Transformar o sistema num serviço de sinais pessoais através de um bot de Telegram. *(Absorve P2.D4 e P4.NOTIFY)*
+  - **Implementação:** Novo módulo `src/japredictbet/interfaces/telegram_bot.py` via `python-telegram-bot`.
+  - **Fluxo e Comandos:** O pipeline roda no T-60; jogos `APPROVED` enviam cards com botões de Acompanhar/Ignorar. Comandos suportados: `/resumo` (jogos mapeados para hoje), `/odds [time]` (consulta rápida de odds via Superbet), e `/stats` (relatório de performance mensal).
+
+- [ ] **CKPT.4 - Agente de Pesquisa (The Scout): Contexto Externo**
+  - **Escopo:** Evoluir o Analyst Agent para um "Scout" ativo focado em leitura de contexto de fontes externas (ex: notícias, desfalques de última hora).
+  - **Fluxo:** Ao identificar jogo de alto interesse, o agente pesquisa na web ("desfalques", "provável escalação"), resume as 3 notícias mais relevantes e injeta o resultado no Prompt Mestre V25 no campo `[EXTERNAL_RESEARCH]`.
 
 ---
 
 ## P3 — Performance, Otimização e Arquitetura (4 itens)
 
-- [x] **P3-ARCH - Divergência Positiva (12-APR-2026)** ✅
+- ~~**P3-ARCH - Divergência Positiva (12-APR-2026)** ✅~~ *(Movido para [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md))*
   - Motor de Valor Cego (ML): 30-model ensemble opera apenas escanteios, gera `[SUGESTÕES ALGORITMO]`.
   - Motor de Contexto (LLM): Gatekeeper analisa contexto + odds sem ML, gera `[SUGESTÕES GATEKEEPER]`.
   - Ensemble output NUNCA é injetado no prompt LLM — motores paralelos independentes.
@@ -206,8 +169,6 @@
   - `min_odd` alterado de 1.60 → 1.25 para permitir pernas de composição.
 
 - [ ] **P3.1 - Otimizar loop de consensus sweep** — `O(rows × thresholds × 30 models)`. Vectorizar ou paralelizar.
-
-- [ ] **P3.2 - Cache de computações caras** — Rolling stats recalculadas a cada execução. Cache com invalidação por data.
 
 - [ ] **P3.ENG - Execução Assíncrona no T-60**
   - **Tipo:** Melhoria de Engenharia.
@@ -232,28 +193,17 @@
 
 ---
 
-## P4 — Automação e Operações (2 itens)
+## R&D — Pesquisa e Desenvolvimento (3 itens)
 
-- [ ] **P4.HEAL - Auto-Healing de Nomes de Equipas**
-  - **Tipo:** Melhoria de Dados.
-  - **Escopo:** Script de fim do dia que recolhe equipas “órfãs” (nome Superbet sem match na API-Football) e usa LLM barato para deduzir o match correto.
-  - **Objetivo:** Eliminar manutenção manual do `data/mapping/superbet_teams.json`.
-  - **Módulos:** Novo `scripts/auto_heal_teams.py`, `data/mapping/superbet_teams.json`.
-  - **Workflow:** Cron diário → recolhe orphans do shadow log → LLM resolve → append automático.
-
-- [ ] **P4.NOTIFY - Desacoplamento da Decisão via Telegram**
-  - **Tipo:** Melhoria Operacional.
-  - **Escopo:** Criar `notifier.py` para disparar entradas APPROVED para Telegram.
-  - **Objetivo:** Eliminar necessidade de ler logs no terminal para operar.
-  - **Módulos:** Novo `pipeline/notifier.py`, `pipeline/gatekeeper_live_pipeline.py`.
-  - **Payload:** Jogo, Odd, Stake, Classificação (Zona), Justificativa, Red Flags.
+- [ ] **Stacking Meta-Modelo** — Ponderação aprendida dos membros do ensemble.
+- [ ] **Game State / Live Variables** — Impacto de estado de jogo em cantos.
+- [ ] **Favourite-Longshot Bias** — Ajustes para vieses sistemáticos do mercado.
 
 ---
 
-## R&D — Pesquisa e Desenvolvimento (5 itens)
+## Stretch Goals — Fora do Roadmap Ativo (2 itens)
+
+> Itens de pesquisa acadêmica ou engenharia avançada, sem prazo ou prioridade definidos. Mantidos para referência futura.
 
 - [ ] **Binomial Negativa Bivariada** — Migração de Poisson para modelos com sobredispersão.
-- [ ] **Stacking Meta-Modelo** — Ponderação aprendida dos membros do ensemble.
-- [ ] **Game State / Live Variables** — Impacto de estado de jogo em cantos.
 - [ ] **GNN Tático** — Modelagem estrutural de interações entre jogadores.
-- [ ] **Favourite-Longshot Bias** — Ajustes para vieses sistemáticos do mercado.

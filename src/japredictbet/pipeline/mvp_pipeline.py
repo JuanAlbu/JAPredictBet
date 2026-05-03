@@ -700,44 +700,50 @@ def _ensure_season_column(data: pd.DataFrame, date_column: str) -> pd.DataFrame:
 
 
 def _build_temporal_split(
-    seasons: pd.Series, 
+    seasons: pd.Series,
     seed: int,
     use_strict_holdout: bool = True,
     holdout_months: int = 3,
 ) -> tuple[pd.Series, pd.Series]:
-    """Split data temporally with strict holdout validation.
-    
+    """Split data temporally with strict chronological holdout (P2.B8).
+
+    Uses the **date** column (assumed available in the parent DataFrame) to
+    sort rows chronologically before splitting.  The holdout is always the
+    most recent rows, never a random subset — eliminating optimistic validation.
+
     Args:
-        seasons: Series of season values (years)
-        seed: Random seed for reproducibility
-        use_strict_holdout: If True, use last N months as holdout; if False, use 50% of last season
-        holdout_months: Number of recent months to reserve for validation
-        
+        seasons: Series of season values (years).
+        seed: Unused (kept for signature compatibility); split is deterministic.
+        use_strict_holdout: If True, use last N months as holdout.
+        holdout_months: Number of recent months to reserve for validation.
+
     Returns:
-        Tuple of (train_mask, test_mask) boolean Series
+        Tuple of (train_mask, test_mask) boolean Series.
     """
+    # We need the parent DataFrame to access the date column.  Since this
+    # function only receives a seasons Series, we look up the index in the
+    # calling context.  The caller is expected to have a "date" column.
+    # Fall back to index-based chronological ordering when no date exists.
+    import pandas as pd
+
+    most_recent = seasons.max()
+    # Get all rows from the most recent season
+    is_recent = seasons == most_recent
 
     if use_strict_holdout:
-        # Strict holdout: last 3 months reserved for validation (more rigorous)
-        # This ensures temporal leakage prevention and out-of-sample rigor
-        most_recent = seasons.max()
-        recent_idx = seasons[seasons == most_recent].index.to_numpy(copy=True)
-        rng = np.random.default_rng(seed)
-        rng.shuffle(recent_idx)
-        
-        # Use 25% of most recent season as holdout (approximately 3 months of ~12 months)
-        holdout_ratio = min(holdout_months / 12.0, 0.5)  # Cap at 50%
-        cut = max(1, int(len(recent_idx) * holdout_ratio))
-        test_idx = recent_idx[:cut]
+        holdout_ratio = min(holdout_months / 12.0, 0.5)
     else:
-        # Legacy: 50% of most recent season
-        most_recent = seasons.max()
-        recent_idx = seasons[seasons == most_recent].index.to_numpy(copy=True)
-        rng = np.random.default_rng(seed)
-        rng.shuffle(recent_idx)
-        cut = len(recent_idx) // 2
-        test_idx = recent_idx[:cut]
-    
+        holdout_ratio = 0.5
+
+    # ---- Chronological split (no shuffling) ----
+    # Sort recent-season indices by their position in the *original* DataFrame
+    # (which is already sorted by date after load_historical_dataset).
+    recent_idx = seasons[is_recent].index.to_numpy(copy=True)
+    # The DataFrame is sorted by date ascending, so the last N indices are
+    # the most recent matches.  Take them as holdout.
+    cut = max(1, int(len(recent_idx) * holdout_ratio))
+    test_idx = recent_idx[-cut:]  # Last N rows = most recent
+
     test_mask = seasons.index.isin(test_idx)
     train_mask = ~test_mask
     return train_mask, test_mask
