@@ -1,18 +1,18 @@
-# SUMÁRIO EXECUTIVO — ESTADO DO PROJETO (12-APR-2026)
+# SUMÁRIO EXECUTIVO — ESTADO DO PROJETO (03-MAY-2026)
 
 ## Visão Geral
 
 | Categoria | Score | Notas |
 |-----------|-------|-------|
 | Funcionalidade MVP | 100% | Ensemble 30 modelos, consenso, backtest, CLI — tudo funcional |
-| Shadow Pipeline | 90% | Dual-agent (Gatekeeper + Analyst), Feature Store, Pre-match + Live modes |
-| Conformidade AGENTS.md | 95% | Estrutura, código, constraints OK |
+| Shadow Pipeline | 100% | Single-agent (Gatekeeper V26 all markets), Feature Store, Pre-match + Live modes |
+| Conformidade AGENTS.md | 100% | Estrutura, código, constraints OK, arquitetura unificada |
 | Reproducibilidade | 95% | Config-driven, seeds, requirements pinados, SHA256 |
 | Integridade Dados | 100% | Datasets e lineage validados |
-| Testes | 218/218 | 21 arquivos de teste, all passing |
-| Documentação | 90% | Revisada e sincronizada 12-APR-2026 |
+| Testes | 254/254 | 21 arquivos de teste, all passing |
+| Documentação | 95% | Revisada e sincronizada 03-MAY-2026 (14 docs atualizados) |
 
-**GERAL:** ✅ MVP Production-Ready + P0 100% + P1 100% + Shadow Pipeline Operational
+**GERAL:** ✅ MVP Production-Ready + P0 100% + P1 100% + P2 Refactoring 100%
 
 ---
 
@@ -66,16 +66,16 @@
 - SH10: Superbet Scraper CLI (SSE discovery + REST enrichment, ~800 lines)
 - SH20: Feature Store (Option C — daily pre-computed rolling features)
 - SH21: Dynamic Tournament Whitelist (auto-derive from league folders)
-- SH22: Analyst Agent (multi-market LLM — 1x2, BTTS, Over/Under)
+- SH22: Analyst Agent (multi-market LLM — 1x2, BTTS, Over/Under) *(obsoleto desde 03-MAI-2026, escopo migrado para Gatekeeper unificado)*
 - SH23: Pre-match Architecture Split (scraper JSON → pipeline)
 
-### ✅ P3-ARCH — Divergência Positiva (12-APR-2026)
-- **Motor de Valor Cego (ML):** 30-model ensemble opera apenas escanteios, gera `[SUGESTÕES ALGORITMO]`
-- **Motor de Contexto (LLM):** Gatekeeper analisa contexto + odds via PROMPT_MESTRE, gera `[SUGESTÕES GATEKEEPER]`
-- **Separação estrita:** Ensemble output NUNCA é injetado no prompt do LLM — motores paralelos independentes
-- **Handicap excluído:** Mercado removido de TODOS os motores (ML e LLM) — não faz parte do perfil operacional
-- **Matriz de Zonas de Odd:** 4 faixas (Morta < 1.25, Builder 1.25–1.59, Alvo 1.60–2.20, Variância > 2.20)
-- **min_odd:** Alterado de 1.60 → 1.25 para permitir pernas de composição (Builder zone)
+### ✅ P3-ARCH — Divergência Positiva (12-APR-2026) *(Superseded by P2 Refactoring 03-MAI-2026)*
+- ~~Motor de Valor Cego (ML): 30-model ensemble opera apenas escanteios~~ → Ensemble agora exclusivo do Mode 1 (Backtest)
+- ~~Motor de Contexto (LLM): Gatekeeper analisa contexto + odds~~ → Gatekeeper unificado (Prompt Mestre V26) avalia TODOS os mercados
+- **Mantido:** Ensemble output NUNCA é injetado no prompt do LLM
+- **Mantido:** Handicap excluído de todos os motores
+- **Mantido:** Matriz de Zonas de Odd: 4 faixas (Morta < 1.25, Builder 1.25–1.59, Alvo 1.60–2.20, Variância > 2.20)
+- **Mantido:** `min_odd` = 1.25 para permitir pernas de composição (Builder zone)
 
 ---
 
@@ -109,14 +109,14 @@
 - **Escopo:** Refatorar `gatekeeper.py`, `context_collector.py` e `gatekeeper_live_pipeline.py` usando `asyncio` e `httpx` assíncrono.
 - **Objetivo:** Processar dezenas de jogos em paralelo na janela T-60, reduzindo tempo de varredura de minutos para segundos.
 - **Justificativa:** Proteger contra esmagamento da linha de fecho — a latência atual é sequencial (1 jogo por vez).
-- **Módulos afetados:** `data/context_collector.py`, `agents/gatekeeper.py`, `agents/analyst.py`, `pipeline/gatekeeper_live_pipeline.py`
+- **Módulos afetados:** `data/context_collector.py`, `agents/gatekeeper.py`, `pipeline/gatekeeper_live_pipeline.py`
 
-### P3.ANCHOR — Ancoragem Quantitativa para o Analyst Agent
+### P3.ANCHOR — Ancoragem Quantitativa para o Gatekeeper Agent
 - **Tipo:** Melhoria Analítica
 - **Escopo:** Adicionar modelo estatístico base (Distribuição de Poisson via Expected Goals — xG) para Match Odds (1x2) e BTTS.
-- **Objetivo:** Impedir que o Analyst LLM aprove apostas baseado apenas em narrativa de texto, obrigando-o a cruzar avaliação qualitativa com um "just price" matemático.
-- **Módulos afetados:** `agents/analyst.py`, novo módulo `probability/xg_anchor.py`, `docs/PROMPT_ANALYST.md`
-- **Nota:** O modelo xG funciona como "âncora" — se a divergência entre o preço justo e a odd do bookmaker for negativa, o Analyst deve justificar explicitamente o porquê de prosseguir.
+- **Objetivo:** Impedir que o Gatekeeper LLM aprove apostas baseado apenas em narrativa de texto, obrigando-o a cruzar avaliação qualitativa com um "just price" matemático.
+- **Módulos afetados:** `agents/gatekeeper.py`, novo módulo `probability/xg_anchor.py`, `docs/PROMPT_MESTRE.md`
+- **Nota:** O modelo xG funciona como "âncora" — se a divergência entre o preço justo e a odd do bookmaker for negativa, o Gatekeeper deve justificar explicitamente o porquê de prosseguir.
 
 ### P4.HEAL — Auto-Healing de Nomes de Equipas
 - **Tipo:** Melhoria de Dados

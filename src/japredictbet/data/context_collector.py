@@ -8,7 +8,9 @@ minutes before kick-off:
    league standings via ``api-sports.io`` (v3).
 
 The combined payload is serialised as a typed :class:`MatchContext` ready
-to be consumed by the Gatekeeper LLM agent.
+to be consumed by the Gatekeeper LLM agent, which evaluates ALL markets
+(corners, 1x2, BTTS, Over/Under Gols) in a single call using
+Prompt Mestre V26.
 
 Security note
 ─────────────

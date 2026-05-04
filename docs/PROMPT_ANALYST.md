@@ -1,4 +1,10 @@
-🎯 PROMPT ANALYST — ANALISTA DE MERCADOS COMPLEMENTARES (V1)
+> ⚠️ **OBSOLETO** (03-MAI-2026)
+> Este prompt foi incorporado ao [PROMPT_MESTRE.md](PROMPT_MESTRE.md) V26.
+> O Gatekeeper agora avalia TODOS os mercados (escanteios, 1x2, BTTS, Over/Under Gols, 1º Tempo) em uma única chamada LLM.
+> Este arquivo é mantido apenas para referência histórica.
+> **NÃO USE** este prompt em novos desenvolvimentos.
+
+🎯 PROMPT ANALYST — ANALISTA DE MERCADOS COMPLEMENTARES (V1 — OBSOLETO)
 
 ━━━━━━━━━━━━━━━━━━━━━━━
 IDENTIDADE

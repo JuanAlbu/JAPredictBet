@@ -1,1 +1,1 @@
-"""Agents subpackage — Gatekeeper (corners) + Analyst (other markets)."""
+"""Agents subpackage — Gatekeeper (all markets)."""

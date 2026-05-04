@@ -81,7 +81,7 @@ models → training and inference
 probability → calibration metrics (Brier, ECE)  
 betting → odds comparison, Poisson probability, consensus, risk management  
 odds → Superbet SSE feed collection, market extraction  
-agents → LLM-based decision agents (Gatekeeper for corners, Analyst for 1x2/BTTS/others), base framework  
+agents → LLM-based decision agent (Gatekeeper evaluates ALL markets), base framework
 pipeline → orchestration (MVP pipeline + Gatekeeper Live Pipeline + pre-match mode)
 
 ---
@@ -129,7 +129,7 @@ The system is strictly an **analytics tool**.
 
 ---
 
-## Current Project Status (Updated 12-APR-2026)
+## Current Project Status (Updated 03-MAY-2026)
 
 ### P0 Completion ✅
 - **Status:** 100% COMPLETE
@@ -172,6 +172,14 @@ The system is strictly an **analytics tool**.
 - Confirm Bundesliga + Premier League tournament IDs in SSE feed
 - 39 itens pendentes — ver [`docs/next_pass.md`](docs/next_pass.md)
 
+### P2 Refactoring — Unified Architecture (03-MAY-2026) ✅
+- Gatekeeper + Analyst merged → single GatekeeperAgent (all markets via Prompt Mestre V26)
+- Shadow Pipeline simplified to single LLM motor (30-model ensemble = Mode 1 only)
+- Scraper pre-filter added (min_odd + market whitelist)
+- `analyst.py` removed; `PROMPT_ANALYST.md` marked obsolete
+- Tests: 254/254 passing (27 test_gatekeeper + 40 test_shadow_integration)
+- Ver [`docs/COMPLETION_HISTORY.md`](docs/COMPLETION_HISTORY.md#p2-refactoring--unified-architecture-03-mai-2026)
+
 ### Important Notes for Agents
 1. **Do NOT modify model assumptions** (Poisson objective, two-model architecture) without documentation updates
 2. **Reproduce P0 tests** if making changes to core pipeline (`scripts/consensus_accuracy_report.py`)
@@ -180,7 +188,7 @@ The system is strictly an **analytics tool**.
 5. **Update documentation** when implementing roadmap items
 6. **Reference test artifacts** in log-test/ directory for validation
 7. **Feature set:** 106+ features (rolling mean + STD + EMA + matchup + result + ELO + H2H - redundant)
-8. **Ensemble composition:** 11 XGBoost + 10 LightGBM + 5 Ridge + 4 ElasticNet = 30 models
+8. **Ensemble composition:** 11 XGBoost + 10 LightGBM + 5 Ridge + 4 ElasticNet = 30 models (Mode 1 only)
 9. **Source modules by subpackage:**
    - `data/` — `ingestion.py`, `context_collector.py`, `feature_store.py`
    - `features/` — `rolling.py`, `elo.py`, `matchup.py`, `team_identity.py`
@@ -188,10 +196,12 @@ The system is strictly an **analytics tool**.
    - `betting/` — `engine.py`, `risk.py`
    - `probability/` — `calibration.py`
    - `odds/` — `collector.py`, `superbet_client.py`, `pre_match_odds.py`
-   - `agents/` — `base.py`, `registry.py`, `gatekeeper.py`, `analyst.py`
+   - `agents/` — `base.py`, `registry.py`, `gatekeeper.py` (all markets)
    - `pipeline/` — `mvp_pipeline.py`, `gatekeeper_live_pipeline.py`
 10. **Key scripts:** `run.py`, `consensus_accuracy_report.py`, `hyperopt_search.py`, `shadow_observe.py`, `superbet_scraper.py`, `refresh_features.py`
-11. **Dois modos operacionais:** Pre-match (scraper JSON → pipeline) e Live T-60 (SSE + API-Football → pipeline)
+11. **Dois modos operacionais:**
+    - **Mode 1 (Backtest):** Historical data → 30-model ensemble → Consensus → Report
+    - **Mode 2 (Shadow Live):** Superbet scraper → Context Collect → Single Gatekeeper LLM (all markets)
 12. **Agent Safety (reforço):** O sistema é estritamente analytics. Nenhum módulo executa aposta real. Shadow mode é observacional.
 13. **Deps:** `openai>=1.14.0`, `python-dotenv>=1.0.1`, `httpx>=0.28.0` — API keys via env vars (`.env` no `.gitignore`)
 14. **CLI commands validated:**

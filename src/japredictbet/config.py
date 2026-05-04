@@ -87,7 +87,6 @@ class GatekeeperConfig:
     min_odd: float = 1.60
     max_entries_per_day: int = 5
     shadow_log_path: str = "logs/shadow_bets.log"
-    feature_store_path: str = "artifacts/feature_store.parquet"
 
 
 @dataclass(frozen=True)

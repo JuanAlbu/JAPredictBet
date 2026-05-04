@@ -11,7 +11,7 @@ Architecture
 ────────────
   superbet_scraper.py  →  data/odds/pre_match/YYYY-MM-DD.json  (pré-jogo)
   superbet_client.py   →  live SSE stream                       (in-play)
-  pre_match_odds.py    →  reads the JSON → pipeline / agents
+  pre_match_odds.py    →  reads the JSON → Gatekeeper evaluation
 """
 
 from __future__ import annotations

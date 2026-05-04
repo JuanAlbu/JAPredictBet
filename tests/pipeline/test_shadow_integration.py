@@ -5,8 +5,12 @@ Covers:
 - FeatureStore: build/load roundtrip, H2H exclusion, fuzzy matching
 - load_pre_match_contexts: odds extraction from mock snapshots
 - GatekeeperLivePipeline: from_config factory, pre-match run, dry-run,
-  consensus evaluation, gatekeeper/analyst LLM calls
+  Gatekeeper LLM call (single motor — V26 multi-market)
 - ApiFootballClient: fixture queries by date
+
+Post-refactoring (May-2026): The Shadow pipeline uses a SINGLE LLM motor
+(GatekeeperAgent evaluating ALL markets). The 30-model ensemble and
+AnalystAgent are exclusive to Mode 1 (Backtest).
 """
 
 from __future__ import annotations
@@ -208,7 +212,6 @@ def _minimal_gk_pipeline_config(
             min_odd=1.5,
             max_entries_per_day=5,
             shadow_log_path="logs/test_shadow.log",
-            feature_store_path="artifacts/test_feature_store.pkl",
         ),
         api_keys=ApiKeysConfig(
             llm_api_key=llm_api_key,
@@ -609,48 +612,36 @@ class TestLoadPreMatchContexts:
 class TestGatekeeperLivePipelineFactory:
     """Tests for GatekeeperLivePipeline.from_config()."""
 
-    @patch("japredictbet.pipeline.gatekeeper_live_pipeline._load_ensemble")
     @patch(
         "japredictbet.pipeline.gatekeeper_live_pipeline"
         ".ContextCollector.from_configs"
     )
-    @patch(
-        "japredictbet.pipeline.gatekeeper_live_pipeline.FeatureStore.load"
-    )
     def test_from_config_minimal(
         self,
-        mock_fs_load: MagicMock,
         mock_collector_cls: MagicMock,
-        mock_load_ensemble: MagicMock,
     ):
-        """from_config creates a pipeline with all components."""
-        mock_fs_load.return_value = None
+        """from_config creates a pipeline with single Gatekeeper LLM motor."""
         mock_collector_cls.return_value = MagicMock(spec=ContextCollector)
-        mock_load_ensemble.return_value = []
 
         config = _minimal_gk_pipeline_config(llm_api_key="test-key")
 
         pipeline = GatekeeperLivePipeline.from_config(
-            config, models_dir="artifacts/models"
+            config,
         )
         assert pipeline._config is not None
         assert pipeline._collector is not None
-        assert pipeline._gatekeeper is not None  # Not dry-run
-        assert pipeline._models == []
+        assert pipeline._gatekeeper is not None  # Gatekeeper created with API key
 
-    @patch("japredictbet.pipeline.gatekeeper_live_pipeline._load_ensemble")
     @patch(
         "japredictbet.pipeline.gatekeeper_live_pipeline"
         ".ContextCollector.from_configs"
     )
-    def test_dry_run_skips_llm_agents(
+    def test_dry_run_skips_gatekeeper_llm(
         self,
         mock_collector_cls: MagicMock,
-        mock_load_ensemble: MagicMock,
     ):
-        """In dry-run, Gatekeeper and Analyst agents are None."""
+        """In dry-run, Gatekeeper agent is None (LLM calls skipped)."""
         mock_collector_cls.return_value = MagicMock(spec=ContextCollector)
-        mock_load_ensemble.return_value = []
 
         config = _minimal_gk_pipeline_config(llm_api_key="")
 
@@ -658,7 +649,6 @@ class TestGatekeeperLivePipelineFactory:
             config, dry_run=True
         )
         assert pipeline._gatekeeper is None
-        assert pipeline._analyst is None
 
 
 # =========================================================================
@@ -673,15 +663,11 @@ class TestGatekeeperLivePipelinePreMatch:
         "japredictbet.pipeline.gatekeeper_live_pipeline"
         ".load_pre_match_contexts"
     )
-    @patch("japredictbet.pipeline.gatekeeper_live_pipeline._load_ensemble")
     def test_run_pre_match_collects_matches(
         self,
-        mock_load_ensemble: MagicMock,
         mock_load_ctx: MagicMock,
     ):
         """run() with pre_match_date calls load_pre_match_contexts."""
-        mock_load_ensemble.return_value = []
-
         mock_ctx_1 = MatchContext(
             event_id="ev001",
             home_team="Team A",
@@ -713,8 +699,6 @@ class TestGatekeeperLivePipelinePreMatch:
             config=config,
             context_collector=mock_collector,
             gatekeeper=None,
-            models=[],
-            consensus_engine=MagicMock(),
         )
 
         result = pipeline.run(pre_match_date="2026-05-10", dry_run=True)
@@ -729,14 +713,11 @@ class TestGatekeeperLivePipelinePreMatch:
         "japredictbet.pipeline.gatekeeper_live_pipeline"
         ".load_pre_match_contexts"
     )
-    @patch("japredictbet.pipeline.gatekeeper_live_pipeline._load_ensemble")
     def test_run_pre_match_empty_returns_early(
         self,
-        mock_load_ensemble: MagicMock,
         mock_load_ctx: MagicMock,
     ):
         """run() returns early when no matches are collected."""
-        mock_load_ensemble.return_value = []
         mock_load_ctx.return_value = []
 
         config = _minimal_gk_pipeline_config()
@@ -748,8 +729,6 @@ class TestGatekeeperLivePipelinePreMatch:
             config=config,
             context_collector=mock_collector,
             gatekeeper=None,
-            models=[],
-            consensus_engine=MagicMock(),
         )
 
         result = pipeline.run(pre_match_date="2026-05-10", dry_run=True)
@@ -758,143 +737,59 @@ class TestGatekeeperLivePipelinePreMatch:
 
 
 # =========================================================================
-# GatekeeperLivePipeline — consensus evaluation
-# =========================================================================
-
-
-class TestGatekeeperLivePipelineConsensus:
-    """Tests for consensus evaluation in the pipeline."""
-
-    @patch(
-        "japredictbet.pipeline.gatekeeper_live_pipeline"
-        ".predict_expected_corners"
-    )
-    def test_run_consensus_returns_output(
-        self,
-        mock_predict: MagicMock,
-    ):
-        """_run_consensus returns dict with ensemble metrics."""
-        from japredictbet.betting.engine import ConsensusEngine
-        from japredictbet.models.train import TrainedModels
-
-        mock_predict.return_value = (pd.Series([7.0]), pd.Series([4.0]))
-
-        table = pd.DataFrame(
-            {
-                "total_corners_avg_last10": [5.5, 4.8],
-                "total_corners_std_last10": [1.2, 1.1],
-            },
-            index=pd.Index(["team a", "team b"], name="team"),
-        )
-        fs = FeatureStore(table=table, built_at="2026-05-10T12:00:00")
-
-        config = _minimal_gk_pipeline_config()
-
-        pipeline = GatekeeperLivePipeline(
-            config=config,
-            context_collector=MagicMock(spec=ContextCollector),
-            gatekeeper=None,
-            models=[MagicMock(spec=TrainedModels)],
-            consensus_engine=ConsensusEngine(
-                edge_threshold=0.01,
-                use_dynamic_margin=True,
-                tight_margin_threshold=0.5,
-                tight_margin_consensus=0.8,
-            ),
-            feature_store=fs,
-        )
-
-        match_ctx = MatchContext(
-            event_id="1",
-            home_team="Team A",
-            away_team="Team B",
-            odds=OddsContext(
-                corner_line=9.5,
-                corner_over_odds=1.85,
-                corner_under_odds=1.95,
-            ),
-        )
-
-        result = pipeline._run_consensus(match_ctx)
-        assert result is not None
-        assert "ensemble_mean_lambda" in result
-        assert "agreement" in result
-        assert "votes_positive" in result
-        assert "total_models" in result
-
-    def test_run_consensus_no_models_returns_none(self):
-        """Without models, _run_consensus returns None."""
-        config = _minimal_gk_pipeline_config()
-
-        pipeline = GatekeeperLivePipeline(
-            config=config,
-            context_collector=MagicMock(spec=ContextCollector),
-            gatekeeper=None,
-            models=[],
-            consensus_engine=MagicMock(),
-        )
-
-        ctx = MatchContext(
-            event_id="1",
-            home_team="A",
-            away_team="B",
-            odds=OddsContext(
-                corner_line=9.5, corner_over_odds=1.85
-            ),
-        )
-        assert pipeline._run_consensus(ctx) is None
-
-    def test_run_consensus_no_corner_line_returns_none(self):
-        """Without corner line/odds, _run_consensus returns None."""
-        config = _minimal_gk_pipeline_config()
-
-        pipeline = GatekeeperLivePipeline(
-            config=config,
-            context_collector=MagicMock(spec=ContextCollector),
-            gatekeeper=None,
-            models=[MagicMock()],
-            consensus_engine=MagicMock(),
-        )
-
-        ctx = MatchContext(
-            event_id="1",
-            home_team="A",
-            away_team="B",
-            odds=OddsContext(),  # No corner line
-        )
-        assert pipeline._run_consensus(ctx) is None
-
-
-# =========================================================================
-# GatekeeperLivePipeline — LLM agent calls
+# GatekeeperLivePipeline — Gatekeeper LLM call (single motor, V26)
 # =========================================================================
 
 
 class TestGatekeeperLivePipelineLLM:
-    """Tests for Gatekeeper/Analyst LLM calls in the pipeline."""
+    """Tests for the single Gatekeeper LLM call (all markets)."""
 
     @patch(
         "japredictbet.pipeline.gatekeeper_live_pipeline.GatekeeperAgent"
     )
-    @patch("japredictbet.pipeline.gatekeeper_live_pipeline._load_ensemble")
     def test_call_gatekeeper_returns_result(
         self,
-        mock_load_ensemble: MagicMock,
         mock_gk_cls: MagicMock,
     ):
-        """_call_gatekeeper returns a parsed GatekeeperResult."""
+        """_call_gatekeeper returns a GatekeeperResult with V26 multi-market fields."""
         from japredictbet.agents.gatekeeper import GatekeeperResult
 
-        mock_load_ensemble.return_value = []
         mock_gk_instance = MagicMock()
+        # V26 response: markets array + best_pick
         mock_gk_instance.run.return_value = {
-            "status": "GO",
-            "stake": 2.0,
-            "market": "Total Cantos Mais de 9.5",
-            "odd": 1.85,
-            "edge": "0.12",
-            "justification": "Team A dominates corners at home.",
-            "red_flags": [],
+            "status": "APPROVED",
+            "markets": [
+                {
+                    "market": "Escanteios Over 9.5",
+                    "status": "APPROVED",
+                    "stake": 1.0,
+                    "odd": 1.85,
+                    "edge": "Médio",
+                    "classification": "APOSTA SIMPLES",
+                    "justification": "Team A dominates corners at home.",
+                    "red_flags": [],
+                },
+                {
+                    "market": "1x2 HOME",
+                    "status": "NO BET",
+                    "stake": None,
+                    "odd": 2.10,
+                    "edge": None,
+                    "classification": None,
+                    "justification": "Inconsistent.",
+                    "red_flags": ["escalação incerta"],
+                },
+            ],
+            "best_pick": {
+                "market": "Escanteios Over 9.5",
+                "status": "APPROVED",
+                "stake": 1.0,
+                "odd": 1.85,
+                "edge": "Médio",
+                "classification": "APOSTA SIMPLES",
+                "justification": "Melhor entrada",
+                "red_flags": [],
+            },
         }
         mock_gk_cls.return_value = mock_gk_instance
 
@@ -904,8 +799,6 @@ class TestGatekeeperLivePipelineLLM:
             config=config,
             context_collector=MagicMock(spec=ContextCollector),
             gatekeeper=mock_gk_instance,
-            models=[],
-            consensus_engine=MagicMock(),
         )
 
         ctx = MatchContext(
@@ -919,57 +812,48 @@ class TestGatekeeperLivePipelineLLM:
 
         result = pipeline._call_gatekeeper(ctx)
         assert isinstance(result, GatekeeperResult)
-        assert result.status == "GO"
-        assert result.stake == 2.0
+        assert result.status == "APPROVED"
+        assert result.stake == 1.0
+        assert result.market == "Escanteios Over 9.5"
+        assert result.markets_evaluated == 2
+        assert result.markets_approved == 1
+        assert result.best_pick is not None
+        assert result.best_pick.market == "Escanteios Over 9.5"
 
     @patch(
-        "japredictbet.pipeline.gatekeeper_live_pipeline.AnalystAgent"
+        "japredictbet.pipeline.gatekeeper_live_pipeline.GatekeeperAgent"
     )
-    @patch("japredictbet.pipeline.gatekeeper_live_pipeline._load_ensemble")
-    def test_call_analyst_returns_result(
+    def test_call_gatekeeper_all_no_bet(
         self,
-        mock_load_ensemble: MagicMock,
-        mock_analyst_cls: MagicMock,
+        mock_gk_cls: MagicMock,
     ):
-        """_call_analyst returns an AnalystResult with markets."""
-        from japredictbet.agents.analyst import AnalystResult
+        """_call_gatekeeper returns NO BET when all markets are NO BET."""
+        from japredictbet.agents.gatekeeper import GatekeeperResult
 
-        mock_load_ensemble.return_value = []
-        mock_analyst_instance = MagicMock()
-        mock_analyst_instance.run.return_value = {
-            "status": "APPROVED",
+        mock_gk_instance = MagicMock()
+        mock_gk_instance.run.return_value = {
+            "status": "NO BET",
             "markets": [
                 {
-                    "market": "1x2 - Casa",
-                    "status": "APPROVED",
-                    "stake": 1.5,
-                    "odd": 2.10,
-                    "edge": "0.08",
-                    "justification": "Home team strong.",
-                    "red_flags": [],
-                },
+                    "market": "Escanteios Over 9.5",
+                    "status": "NO BET",
+                    "stake": None,
+                    "odd": 1.85,
+                    "edge": None,
+                    "justification": "No pressure.",
+                    "red_flags": ["linha esticada"],
+                }
             ],
-            "best_pick": {
-                "market": "1x2 - Casa",
-                "status": "APPROVED",
-                "stake": 1.5,
-                "odd": 2.10,
-                "edge": "0.08",
-                "justification": "Home team strong.",
-                "red_flags": [],
-            },
+            "best_pick": None,
         }
-        mock_analyst_cls.return_value = mock_analyst_instance
+        mock_gk_cls.return_value = mock_gk_instance
 
         config = _minimal_gk_pipeline_config()
 
         pipeline = GatekeeperLivePipeline(
             config=config,
             context_collector=MagicMock(spec=ContextCollector),
-            gatekeeper=MagicMock(),
-            models=[],
-            consensus_engine=MagicMock(),
-            analyst=mock_analyst_instance,
+            gatekeeper=mock_gk_instance,
         )
 
         ctx = MatchContext(
@@ -981,11 +865,46 @@ class TestGatekeeperLivePipelineLLM:
             ),
         )
 
-        result = pipeline._call_analyst(ctx)
-        assert isinstance(result, AnalystResult)
-        assert result.status == "APPROVED"
-        assert result.best_pick is not None
-        assert result.best_pick.market == "1x2 - Casa"
+        result = pipeline._call_gatekeeper(ctx)
+        assert isinstance(result, GatekeeperResult)
+        assert result.status == "NO BET"
+        assert result.markets_approved == 0
+        assert result.best_pick is None
+
+    @patch(
+        "japredictbet.pipeline.gatekeeper_live_pipeline.GatekeeperAgent"
+    )
+    def test_call_gatekeeper_handles_exception(
+        self,
+        mock_gk_cls: MagicMock,
+    ):
+        """_call_gatekeeper returns ERROR GatekeeperResult on exception."""
+        from japredictbet.agents.gatekeeper import GatekeeperResult
+
+        mock_gk_instance = MagicMock()
+        mock_gk_instance.run.side_effect = RuntimeError("LLM timeout")
+        mock_gk_cls.return_value = mock_gk_instance
+
+        config = _minimal_gk_pipeline_config()
+
+        pipeline = GatekeeperLivePipeline(
+            config=config,
+            context_collector=MagicMock(spec=ContextCollector),
+            gatekeeper=mock_gk_instance,
+        )
+
+        ctx = MatchContext(
+            event_id="ev001",
+            home_team="Team A",
+            away_team="Team B",
+            odds=OddsContext(
+                corner_line=9.5, corner_over_odds=1.85
+            ),
+        )
+
+        result = pipeline._call_gatekeeper(ctx)
+        assert isinstance(result, GatekeeperResult)
+        assert result.status == "ERROR"
 
 
 # =========================================================================

@@ -227,11 +227,9 @@ LLM_MODEL="meta-llama/llama-3.3-70b-instruct:free"
 - Gemini: indisponível no Brasil (limit: 0)
 - OpenRouter: modelos gratuitos, cota generosa
 
-**O Analyst só é chamado quando o Gatekeeper retorna GO.**
-
 Nenhum agente executa apostas reais — Shadow Mode é 100% observacional.
 
-P2 introduces the **Gatekeeper Live Pipeline**, an observational (Shadow Mode) system that collects real-time odds and match context, runs the existing ensemble, and evaluates entries via an LLM-based decision agent — without placing real bets.
+P2 introduces the **Gatekeeper Live Pipeline**, an observational (Shadow Mode) system that collects real-time odds and match context, and evaluates ALL markets via a single LLM-based decision agent — without placing real bets. The 30-model ensemble is exclusive to Mode 1 (Backtest).
 
 ## Pipeline Flow
 
@@ -251,21 +249,16 @@ ContextCollector           (data/context_collector.py)
   └─ collect_upcoming()  →  List[MatchContext]
        │
        ▼
-Pre-filter (min_odd ≥ 1.60)
+Pre-filter (min_odd ≥ 1.25)
        │
        ▼
-Ensemble Prediction        (existing 30-model consensus)
+GatekeeperAgent (single LLM motor — ALL markets)
+(agents/gatekeeper.py)
+  ├─ Corners + 1x2 + BTTS + Over/Under + 1º Tempo
+  ├─ Prompt Mestre V26
+  └─ MarketEvaluations + best_pick
        │
-       ├─────────────────────────┐
-       ▼                         ▼
-GatekeeperAgent            AnalystAgent
-(agents/gatekeeper.py)     (agents/analyst.py)
-  ├─ Corners analysis        ├─ 1x2, BTTS, Over/Under
-  ├─ Prompt Mestre V25       ├─ PROMPT_ANALYST.md
-  └─ GO / NO-GO              └─ MarketEvaluations
-       │                         │
-       └─────────┬───────────────┘
-                 ▼
+       ▼
 Shadow Log                 (observational only)
 ```
 
@@ -341,17 +334,8 @@ SuperbetCollector (SSE) + API-Football → ContextCollector → List[MatchContex
 - **Pricing Zones:** Applies the 4-zone classification (Dead / Builder / Single / Variance).
 - **Output:** `GatekeeperResult(status, stake, market, odd, edge, classification, justification, red_flags)`.
 - **Status values:** APPROVED | NO BET | FILTERED | ERROR.
-
-### Analyst Agent (`agents/analyst.py`)
-
-- **Purpose:** LLM-based evaluation of non-corner markets (1x2, BTTS, Over/Under Goals).
-- **System Prompt:** `docs/PROMPT_ANALYST.md`.
-- **Input:** `MatchContext` JSON (no ensemble support — LLM-only analysis).
-- **Pre-filter:** Rejects if no non-corner odds ≥ `min_odd`.
-- **Market exclusions:** Escanteios (covered by ML engine) and Handicap (not part of operational profile).
-- **Output:** `AnalystResult` with `List[MarketEvaluation]` + `best_pick`.
-- **Market types:** Match Result (1x2), Both Teams To Score, Over/Under Goals.
-- **Note:** The Analyst operates without ensemble support because the 30-model consensus is corners-specific.
+- **Multi-market output (V26):** Returns `markets[]` array with individual `MarketEvaluation` per market type + optional `best_pick`. Legacy single-market format maintained for backward compatibility.
+- **Note:** The 30-model ensemble (Mode 1 Backtest) is NEVER injected into the Gatekeeper prompt. Gatekeeper operates as a pure context engine.
 
 ### Feature Store (`data/feature_store.py`)
 

@@ -17,8 +17,8 @@ Usage
     # Live T-60 mode (fallback)
     python scripts/shadow_observe.py
 
-    # Custom config + models dir
-    python scripts/shadow_observe.py --config config.yml --models-dir artifacts/models
+    # Custom config
+    python scripts/shadow_observe.py --config config.yml
 
 Safety: This script is strictly observational.
         It never places real bets.
@@ -49,7 +49,7 @@ logger = logging.getLogger("shadow_observe")
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Gatekeeper Shadow-mode observation — collects odds, "
-        "runs consensus, and evaluates via LLM (no real bets).",
+        "evaluates via LLM across all markets (no real bets).",
     )
     parser.add_argument(
         "--config",
@@ -58,15 +58,9 @@ def _parse_args() -> argparse.Namespace:
         help="Path to the pipeline config YAML (default: config.yml).",
     )
     parser.add_argument(
-        "--models-dir",
-        type=Path,
-        default=Path("artifacts/models"),
-        help="Directory containing trained .pkl model artifacts.",
-    )
-    parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Collect context and run consensus only — skip LLM calls.",
+        help="Collect context only — skip LLM calls.",
     )
     parser.add_argument(
         "--pre-match",
@@ -132,14 +126,6 @@ def main() -> None:
             "Lineups, injuries and standings will not be fetched."
         )
 
-    if not any(args.models_dir.glob("*.pkl")):
-        logger.warning(
-            "No trained model artifacts found in '%s'. "
-            "Consensus will be skipped. "
-            "Run 'python run.py --config config.yml' to train the ensemble first.",
-            args.models_dir,
-        )
-
     # ── Config ───────────────────────────────────────────────────────
     config_path = args.config
     if not config_path.exists():
@@ -153,7 +139,6 @@ def main() -> None:
     try:
         pipeline = GatekeeperLivePipeline.from_config(
             config=config,
-            models_dir=args.models_dir,
             dry_run=args.dry_run,
         )
     except ValueError as exc:
@@ -178,10 +163,9 @@ def main() -> None:
     # ── Run ──────────────────────────────────────────────────────────
     mode = "pre-match" if pre_match_date else "live T-60"
     logger.info(
-        "Starting shadow observation (mode=%s, dry_run=%s, models_dir=%s)...",
+        "Starting shadow observation (mode=%s, dry_run=%s)...",
         mode,
         args.dry_run,
-        args.models_dir,
     )
 
     result = pipeline.run(pre_match_date=pre_match_date, dry_run=args.dry_run)
@@ -204,45 +188,36 @@ def main() -> None:
             "FILTERED": "[SKIP]",
             "CAPPED": "[CAP]",
             "ERROR": "[ERR]",
+            "DRY_RUN": "[DRY]",
         }.get(entry.gatekeeper_status or "", "[?]")
 
         print(
             f"  {status_icon} {entry.home_team} vs {entry.away_team}"
             f"  | {entry.gatekeeper_status}"
             f"  | stake={entry.gatekeeper_stake}"
-            f"  | consensus={entry.consensus_pct:.0%}"
-            if entry.consensus_pct is not None
-            else f"  {status_icon} {entry.home_team} vs {entry.away_team}"
-            f"  | {entry.gatekeeper_status}"
-            f"  | stake={entry.gatekeeper_stake}"
         )
         if entry.gatekeeper_justification:
             print(f"        -> {entry.gatekeeper_justification}")
 
-        # Analyst results (non-corner markets)
-        if entry.analyst_status and entry.analyst_status != "FILTERED":
-            analyst_icon = {
-                "APPROVED": "[OK]",
-                "NO BET": "[NO]",
-                "FILTERED": "[SKIP]",
-                "ERROR": "[ERR]",
-            }.get(entry.analyst_status, "[?]")
+        # Gatekeeper multi-market results
+        if entry.gatekeeper_markets:
             print(
-                f"        Analyst: {analyst_icon} {entry.analyst_status}"
-                f"  | {entry.analyst_markets_approved}/{entry.analyst_markets_evaluated} mercados"
+                f"        Mercados: {entry.gatekeeper_markets_approved}/"
+                f"{entry.gatekeeper_markets_evaluated} aprovados"
             )
-            if entry.analyst_best_market:
-                print(
-                    f"        Best pick: {entry.analyst_best_market}"
-                    f"  @ {entry.analyst_best_odd}"
-                    f"  | stake={entry.analyst_best_stake}"
-                    f"  | edge={entry.analyst_best_edge}"
-                )
-                if entry.analyst_best_justification:
-                    print(f"        -> {entry.analyst_best_justification}")
+            for m in entry.gatekeeper_markets:
+                if m.get("status") == "APPROVED":
+                    print(
+                        f"          [OK] {m.get('market')}"
+                        f"  @ {m.get('odd')}"
+                        f"  | stake={m.get('stake')}"
+                        f"  | {m.get('classification', '')}"
+                    )
+                    if m.get("justification"):
+                        print(f"               -> {m.get('justification')}")
 
     if not result.entries:
-        print("  (nenhum jogo coletado dentro da janela T-60)")
+        print("  (nenhum jogo coletado dentro da janela)")
 
     print("=" * 60)
     shadow_path = (

@@ -1,7 +1,7 @@
-# Project Context (Atualizado 11-APR-2026)
+# Project Context (Atualizado 03-MAY-2026)
 
 
-## LLM Providers (Atualização 13-APR-2026)
+## LLM Providers (Atualização 03-MAY-2026)
 
 O sistema suporta múltiplos provedores LLM gratuitos via API OpenAI-compatible:
 
@@ -16,7 +16,7 @@ LLM_BASE_URL="https://openrouter.ai/api/v1"
 LLM_MODEL="meta-llama/llama-3.3-70b-instruct:free"
 ```
 
-**Importante:** O Analyst só é chamado quando o Gatekeeper retorna GO, reduzindo o consumo de tokens em até 50%.
+**Arquitetura unificada (03-MAY-2026):** O Shadow Pipeline usa um **único agente LLM** (Gatekeeper expandido) que avalia TODOS os mercados (escanteios, 1x2, BTTS, Over/Under Gols, 1º Tempo) via Prompt Mestre V26. O ensemble de 30 modelos é exclusivo do Modo 1 (Backtest).
 
 Nenhum agente executa apostas reais — Shadow Mode é 100% observacional.
 
@@ -58,14 +58,14 @@ Nenhum agente executa apostas reais — Shadow Mode é 100% observacional.
   - D3: Kelly/Risk — `betting/risk.py` (Quarter Kelly, Monte Carlo, slippage)
 - **Consensus script:** Synced with all P1 features (H2H + 106 rolling features)
 
-### P2 Shadow Pipeline (Onda 4 — 11-APR-2026)
-- **Status:** PARCIAL — Core operational, pending: SH4, SH11-SH19
-- **Gatekeeper Agent:** LLM-based corners evaluation (PROMPT_MESTRE V25)
-- **Analyst Agent:** LLM-based multi-market evaluation (1x2, BTTS, Over/Under)
-- **Feature Store:** Pre-computed rolling features via `feature_store.py` (Option C)
+### P2 Shadow Pipeline (03-MAY-2026)
+- **Status:** ✅ COMPLETO — Unified architecture, 254/254 testes
+- **Gatekeeper Agent:** LLM-based evaluation of ALL markets (PROMPT_MESTRE V26)
+- **Feature Store:** Pre-computed rolling features via `feature_store.py`
 - **Pre-match Mode:** Scraper JSON → `pre_match_odds.py` → pipeline
 - **Live Mode:** SSE + API-Football → `context_collector.py` → pipeline
 - **Shadow Log:** JSONL (observational only — no real bets)
+- **Ver:** [`docs/COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md#p2-refactoring--unified-architecture-03-mai-2026)
 
 ### Next Priority
 - Train ensemble models (`artifacts/models/` is empty)
@@ -194,10 +194,10 @@ Operational note - Current State (11-APR-2026):
 Testing & Validation (11-APR-2026):
 - Tested with 101 matches from full season data (dynamic, fixed, random lines)
 - Tested with 50 recent matches + 180 days historical context
-- 218 unit/integration tests passing across 21 test files
+- 254 unit/integration tests passing across 21 test files
 - Consensus script synchronized with pipeline (106 features, STD+EMA+drop_redundant+H2H)
 - All tests runnable and producing valid reports in log-test/
-- Gatekeeper + Analyst agents with 51 combined tests
+- Gatekeeper agent (all markets, Prompt Mestre V26) with 27 tests
 - Feature Store with daily pre-computation (Parquet)
 - Pre-match pipeline with scraper JSON loader
 

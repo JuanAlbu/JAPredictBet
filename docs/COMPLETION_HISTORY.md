@@ -1,7 +1,24 @@
 # JA PREDICT BET — HISTÓRICO DE ITENS CONCLUÍDOS
 
 **Criado:** 03 de Abril, 2026
+**Última atualização:** 03-MAI-2026
 **Propósito:** Registro permanente de todos os itens de roadmap concluídos, com datas, evidências e detalhes de implementação. Itens são movidos do roadmap ativo (`next_pass.md`) para cá ao serem fechados.
+
+---
+
+## P2 Refactoring — Unified Architecture (03-MAI-2026)
+
+> **Status:** ✅ COMPLETO — 254/254 testes passando. 7 fases executadas entre 03-04 MAI 2026.
+
+| Item | Descrição | Data |
+|------|-----------|------|
+| P2-ARCH-1 | Gatekeeper + Analyst merge → single GatekeeperAgent (all markets via Prompt Mestre V26) | 03-MAI-2026 |
+| P2-ARCH-2 | Shadow Pipeline simplified: single LLM motor (30-model ensemble = Mode 1 only) | 03-MAI-2026 |
+| P2-ARCH-3 | Scraper pre-filter added (--min-odd + --markets whitelist) | 03-MAI-2026 |
+| P2-ARCH-4 | `analyst.py` removed; `PROMPT_ANALYST.md` marked obsolete | 03-MAI-2026 |
+| P2-ARCH-5 | `config.yml` / `config.py` — removed `feature_store_path` | 03-MAI-2026 |
+| P2-ARCH-6 | 14 documentation files updated to reflect unified architecture | 03-MAI-2026 |
+| P2-ARCH-7 | Test suite: 254/254 passing (27 gatekeeper + 40 shadow integration tests) | 03-MAI-2026 |
 
 ---
 
@@ -184,7 +201,7 @@
 
 ### Bloco 4A-4D: Superbet + Gatekeeper + Scraper
 
-> Implementados entre 03-APR e 11-APR-2026. Shadow mode operacional com dual-agent.
+> Implementados entre 03-APR e 11-APR-2026. Shadow mode operacional com dual-agent (substituído por Gatekeeper unificado em 03-MAI-2026).
 
 | Item | Descrição | Data |
 |------|-----------|------|
@@ -211,7 +228,7 @@
 **Detalhes:**
 - **Feature Store:** Lê CSVs de `data/raw/leagues/`, aplica rolling + H2H + ELO + matchup, salva Parquet com uma linha por equipe. Fuzzy matching (≥0.82) para variações de nome.
 - **Dynamic Whitelist:** Elimina lista estática de tournament IDs. `get_active_tournament_ids()` escaneia pastas de leagues e faz match case-insensitive com `league_tournament_ids.json`.
-- **AnalystAgent:** Herda `BaseAgent`. Avalia mercados não-escanteios via OpenAI (PROMPT_ANALYST.md). Output: `AnalystResult` com `List[MarketEvaluation]`. Pré-filtro Python: rejeita se nenhuma odd ≥ min_odd.
+- **AnalystAgent (obsoleto desde 03-MAI-2026):** Herdava `BaseAgent`. Avaliava mercados não-escanteios via OpenAI (PROMPT_ANALYST.md). Escopo migrado para GatekeeperAgent unificado (Prompt Mestre V26).
 - **Pre-match Split:** `pre_match_odds.py` carrega JSON do scraper → `List[MatchContext]`. `shadow_observe.py --pre-match hoje` aciona modo pre-match. `ShadowEntry` expandido com campos `analyst_*`.
 
 ### SH15 — Corrigir namespace `consensus_threshold` (RESOLVIDO — 12-APR-2026)
@@ -227,7 +244,7 @@
 - **Fix (3 partes):**
   1. API key check gated: `if not os.getenv("OPENAI_API_KEY") and not args.dry_run:`
   2. `dry_run` flag threaded: `from_config()` → `run()` → `_evaluate_single_match()`
-  3. Agents opcionais: quando `dry_run=True`, gatekeeper e analyst são `None`; avaliação retorna `GatekeeperResult(status="DRY_RUN")` stub.
+  3. Agents opcionais: quando `dry_run=True`, gatekeeper é `None`; avaliação retorna `GatekeeperResult(status="DRY_RUN")` stub.
 - **Validação:** `python scripts/shadow_observe.py --pre-match hoje --dry-run` — 2 jogos processados, pipeline end-to-end sem API keys.
 - **Testes:** 218/218 passando (sem regressão).
 
@@ -267,7 +284,7 @@
 | 11-APR-2026 | **ONDA 4 PARCIAL** — P2.SH1-SH3. P2.SH5a-SH5b. P2.SH6-SH10. Superbet SSE client, Context Collector, Gatekeeper Agent, Live Pipeline, Shadow Observe, Scraper CLI. P2.A14 (ELO drift). P2.C6 (doc sync). Testes 165→201. |
 | 11-APR-2026 | **SH20 — Feature Store (Option C)** — `feature_store.py` + `refresh_features.py`. Pre-computed rolling features daily (Parquet). `get_active_tournament_ids()` para whitelist dinâmica. |
 | 11-APR-2026 | **SH21 — Dynamic Tournament Whitelist** — Ligas com dados históricos filtram automaticamente IDs do Superbet. 12 IDs mapeados (Bundesliga 1 e PL pendentes). |
-| 11-APR-2026 | **SH22 — Analyst Agent (Multi-Market LLM)** — `analyst.py` + `PROMPT_ANALYST.md` + `test_analyst.py` (17 testes). Avalia 1x2, BTTS, Over/Under Goals. |
+| 11-APR-2026 | **SH22 — Analyst Agent (Multi-Market LLM)** — `analyst.py` + `PROMPT_ANALYST.md` + `test_analyst.py` (17 testes). Avalia 1x2, BTTS, Over/Under Goals. *(Obsoleto desde 03-MAI-2026 — escopo migrado para Gatekeeper unificado V26)* |
 | 11-APR-2026 | **SH23 — Pre-match Architecture Split** — `pre_match_odds.py` (JSON loader), scraper auto-save, `--pre-match` flag no shadow_observe. Dois modos: pre-match (JSON) e live (SSE). |
 | 11-APR-2026 | Testes 201→218. 21 arquivos de teste. `ShadowEntry` expandido com campos `analyst_*`. |
 | 11-APR-2026 | Revisão completa de arquitetura: 26 módulos fonte, 10 scripts, 21 test files mapeados. Issues identificadas: `collector.py` legacy, `artifacts/models/` vazio, `update_pipeline.py` incompleto. |

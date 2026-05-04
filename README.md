@@ -80,7 +80,7 @@ Reports are saved to `log-test/` with timestamp.
 
 ### 5. Shadow Pipeline (Observational Mode)
 
-The shadow pipeline evaluates matches using dual LLM agents without placing real bets.
+The shadow pipeline evaluates matches using a single Gatekeeper LLM agent (evaluating ALL markets) without placing real bets. The 30-model ensemble is exclusive to Mode 1 (Backtest).
 
 ```bash
 # Step 1: Refresh feature store (daily)
@@ -92,7 +92,7 @@ python scripts/superbet_scraper.py hoje
 # Step 3: Run shadow evaluation (pre-match mode)
 python scripts/shadow_observe.py --pre-match hoje --config config.yml
 
-# Dry-run (skip LLM, consensus only)
+# Dry-run (skip LLM entirely)
 python scripts/shadow_observe.py --pre-match hoje --dry-run
 
 # Quick scraper (SSE only, no REST enrichment)
@@ -113,7 +113,7 @@ Requires `OPENAI_API_KEY` in `.env` (see `.env.example`). Shadow log saved to `l
   - `features/`: Feature engineering modules.
   - `models/`: Model training and prediction.
   - `odds/`: Odds collection (Superbet SSE + pre-match JSON loader).
-  - `agents/`: LLM-based decision agents (Gatekeeper for corners, Analyst for 1x2/BTTS).
+  - `agents/`: LLM-based decision agent (Gatekeeper evaluates ALL markets).
   - `pipeline/`: Pipeline orchestration (MVP training + Gatekeeper Live shadow mode).
   - `data/`: Ingestion, Feature Store, Context Collector.
   - `probability/`: Calibration metrics (Brier Score, ECE).

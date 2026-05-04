@@ -13,7 +13,7 @@ LLM_BASE_URL="https://openrouter.ai/api/v1"
 LLM_MODEL="meta-llama/llama-3.3-70b-instruct:free"
 ```
 
-O Analyst só é chamado quando o Gatekeeper retorna GO, reduzindo o consumo de tokens.
+O Gatekeeper avalia TODOS os mercados (escanteios, 1x2, BTTS, Over/Under Gols, 1º Tempo) em uma única chamada LLM via Prompt Mestre V26. Não há mais Analyst separado.
 
 Nenhum agente executa apostas reais — Shadow Mode é 100% observacional.
 
@@ -261,9 +261,15 @@ Closing Line Value (CLV)
 
 ### Validation
 
-- **Tests:** 218/218 passing across 21 test files.
+- **Tests:** 254/254 passing across 21 test files.
 - **Reproducibility:** All components, including hyperparameter search and risk simulations, are deterministic.
 - **Auditability:** Model parameters, SHAP values, calibration reports, and CLV metrics provide deep insight into system behavior.
+
+---
+
+## P2 Refactoring — Unified Architecture (03-MAY-2026) ✅
+
+Gatekeeper + Analyst merged into a single GatekeeperAgent evaluating ALL markets via Prompt Mestre V26. Shadow Pipeline simplified to single LLM motor. 30-model ensemble exclusive to Mode 1 (Backtest). Scraper pre-filter added (min_odd + market whitelist). Ver [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md#p2-refactoring--unified-architecture-03-mai-2026).
 
 ---
 
@@ -280,17 +286,18 @@ The system must:
 - support multiple market types: corners, match result (1x2), BTTS, over/under goals
 - filter by leagues with historical CSV data (dynamic tournament whitelist)
 
-### Feature 12 — LLM-based Decision Agents
+### Feature 12 — LLM-based Decision Agent (Gatekeeper Unificado)
 
 The system must:
 
-- evaluate corner markets via a Gatekeeper Agent (ensemble consensus + LLM analysis)
-- evaluate non-corner markets (1x2, BTTS, Over/Under) via an Analyst Agent (LLM-only)
-- apply hard Python pre-filters before LLM calls (min_odd threshold)
-- produce structured JSON output with status, stake, edge, and red flags
+- evaluate ALL markets (corners, 1x2, BTTS, Over/Under Gols, 1º Tempo) via a single Gatekeeper Agent (LLM-only, context-driven)
+- apply hard Python pre-filters before LLM calls (min_odd + market whitelist via scraper)
+- produce structured JSON output with markets array, best_pick, status, stake, edge, classification, and red flags
 - cap daily entries at a configurable maximum
 - log all evaluations to shadow log (JSONL format, observational only)
 - never place real bets or connect to bookmaker accounts
+
+O 30-model ensemble (21 boosters + 9 linear) é exclusivo do Mode 1 (Backtest) e NÃO é usado no Shadow Mode.
 
 ### Feature 13 — Feature Store for Live Inference
 

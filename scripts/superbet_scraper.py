@@ -809,6 +809,93 @@ def _event_to_dict(
     }
 
 
+# ── Pre-filter for JSON/snapshot ─────────────────────────────────────
+
+
+def _apply_snapshot_filter(
+    events: List[dict],
+    tid_to_league: Dict[int, str],
+    *,
+    min_odd: float = 1.25,
+    market_filter: Optional[List[str]] = None,
+) -> tuple[List[dict], int, int]:
+    """Filter events before saving to JSON/snapshot.
+
+    Parameters
+    ----------
+    events:
+        List of enriched event dicts (with ``markets`` key from
+        ``_extract_markets``).
+    tid_to_league:
+        Tournament ID → league name mapping.
+    min_odd:
+        Minimum odd threshold.  Events where the best available odd
+        across ALL markets is below this value are discarded entirely.
+    market_filter:
+        Optional list of market name substrings to KEEP.  Markets whose
+        ``name`` does not contain ANY of these substrings (case-
+        insensitive) are removed from the event's ``markets`` dict.
+        If ``None``, all markets are kept.
+
+    Returns
+    -------
+    (filtered_events, total_before, total_after)
+    """
+    total_before = len(events)
+    filtered: List[dict] = []
+
+    for ev in events:
+        markets = ev.get("markets", {})
+        if not markets:
+            continue
+
+        # ── Market name filtering (optional) ─────────────────────────
+        if market_filter:
+            filtered_markets = {}
+            for mname, mdata in markets.items():
+                mname_lower = mname.lower()
+                if any(kw in mname_lower for kw in market_filter):
+                    filtered_markets[mname] = mdata
+            markets = filtered_markets
+            if not markets:
+                continue
+
+        # ── min_odd check ────────────────────────────────────────────
+        best_odd = 0.0
+        for mdata in markets.values():
+            for sel in mdata.get("selections", []):
+                price = sel.get("price")
+                if price is not None and price > best_odd:
+                    best_odd = price
+        if best_odd < min_odd:
+            logger.debug(
+                "Snapshot filter: %s vs %s descartado — best odd %.2f < min %.2f",
+                ev.get("home_team", "?"),
+                ev.get("away_team", "?"),
+                best_odd,
+                min_odd,
+            )
+            continue
+
+        # ── Rebuild event with filtered markets ──────────────────────
+        filtered_ev = dict(ev)
+        filtered_ev["markets"] = markets
+        filtered.append(filtered_ev)
+
+    total_after = len(filtered)
+    if market_filter:
+        logger.info(
+            "Snapshot filter: %d → %d eventos (filtro mercados=%s, min_odd=%.2f)",
+            total_before, total_after, ", ".join(market_filter), min_odd,
+        )
+    else:
+        logger.info(
+            "Snapshot filter: %d → %d eventos (min_odd=%.2f)",
+            total_before, total_after, min_odd,
+        )
+    return filtered, total_before, total_after
+
+
 # ── Main ─────────────────────────────────────────────────────────────
 
 
@@ -850,6 +937,21 @@ def main() -> None:
         "--all-markets",
         action="store_true",
         help="Mostrar todos os mercados (default: apenas principais)",
+    )
+    parser.add_argument(
+        "--min-odd",
+        type=float,
+        default=1.25,
+        help="Odd mínima para incluir evento no JSON/snapshot (default: 1.25 — ZONA MORTA). "
+             "Eventos sem nenhuma odd >= min_odd são descartados do JSON salvo.",
+    )
+    parser.add_argument(
+        "--markets",
+        nargs="*",
+        default=["total de escanteios", "resultado final", "ambas as equipes marcam",
+                 "total de gols"],
+        help="Mercados para incluir no JSON/snapshot (default: corner, 1x2, BTTS, gols). "
+             "Use '--markets all' para todos os mercados.",
     )
     parser.add_argument(
         "--debug",
@@ -1003,12 +1105,12 @@ def main() -> None:
         league_name = tid_to_league.get(tid, f"tournament:{tid}")
         by_league[league_name].append(ev)
 
-    # Display
-    total = len(filtered)
+    # Display (all events before snapshot filter)
+    total_display = len(filtered)
     date_label = target_date or "todos os dias"
     print(f"\n{'=' * 70}")
     print(f"  SUPERBET — Jogos de Futebol ({date_label})")
-    print(f"  {total} jogos encontrados em {len(by_league)} ligas")
+    print(f"  {total_display} jogos encontrados em {len(by_league)} ligas")
     print(f"{'=' * 70}")
 
     for league_name in sorted(by_league.keys()):
@@ -1023,24 +1125,44 @@ def main() -> None:
                 print(ml)
             print()
 
-    # JSON export (explicit path)
+    # ── Apply snapshot filter (min_odd + market whitelist) ───────────
+    # Default: 4 mercados obrigatórios (corner, 1x2, BTTS, gols)
+    # --markets all: desabilita o filtro (todos os mercados)
+    if args.markets and len(args.markets) == 1 and args.markets[0].lower() == "all":
+        market_filter_kw = None
+    else:
+        market_filter_kw = (
+            [kw.lower() for kw in args.markets] if args.markets else None
+        )
+    snapshot_events, total_before, total_after = _apply_snapshot_filter(
+        filtered,
+        tid_to_league,
+        min_odd=args.min_odd,
+        market_filter=market_filter_kw,
+    )
+
+    # JSON export (explicit path) — applies snapshot filter
     if args.json:
-        export = [_event_to_dict(ev, tid_to_league) for ev in filtered]
+        export = [_event_to_dict(ev, tid_to_league) for ev in snapshot_events]
         out_path = Path(args.json)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(export, f, ensure_ascii=False, indent=2, default=str)
-        print(f"\n[OK] {len(export)} jogos exportados para: {out_path}")
+        print(f"\n[OK] {len(export)}/{total_before} jogos exportados para: {out_path}")
+        if market_filter_kw:
+            print(f"     Filtro mercados: {', '.join(market_filter_kw)} | min_odd: {args.min_odd:.2f}")
 
     # Auto-save daily snapshot to data/odds/pre_match/YYYY-MM-DD.json
     if not args.no_save:
-        export = [_event_to_dict(ev, tid_to_league) for ev in filtered]
+        export = [_event_to_dict(ev, tid_to_league) for ev in snapshot_events]
         save_date = target_date or datetime.now().strftime("%Y-%m-%d")
         PRE_MATCH_DIR.mkdir(parents=True, exist_ok=True)
         daily_path = PRE_MATCH_DIR / f"{save_date}.json"
         with open(daily_path, "w", encoding="utf-8") as f:
             json.dump(export, f, ensure_ascii=False, indent=2, default=str)
-        print(f"\n[OK] Snapshot salvo em: {daily_path}")
+        print(f"\n[OK] Snapshot salvo em: {daily_path} ({total_after}/{total_before} eventos)")
+        if market_filter_kw:
+            print(f"     Filtro mercados: {', '.join(market_filter_kw)} | min_odd: {args.min_odd:.2f}")
 
 
 if __name__ == "__main__":
