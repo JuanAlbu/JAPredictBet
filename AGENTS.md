@@ -1,215 +1,109 @@
-# AGENTS.md
+# AGENTS.md — JAPredictBet Core Instructions
 
-## Purpose
-
-This document defines guidelines for AI agents, assistants, or automated tools interacting with the project repository.
-
-It ensures consistency when generating code, modifying components, or extending the system.
+This document defines the strict rules, architectural boundaries, and operational behaviors for all AI agents, Copilots, and automated tools interacting with this repository. 
+**Every agent MUST read and adhere to this file before executing any task, generating code, or modifying components.**
 
 ---
 
-## Agent Responsibilities
-
-Agents may assist with:
-
-- generating code
-- improving model performance
-- implementing new features
-- refactoring modules
-- writing documentation
-
-Agents must not:
-
-- modify core model assumptions without documentation
-- introduce breaking architecture changes
-- alter dataset schema silently
+## 🗂️ 1. Project Overview
+* **Name:** JAPredictBet
+* **Goal:** A highly disciplined, risk-averse sports betting analytics pipeline. It acts as an analytical filter to identify EV+ (Expected Value) opportunities.
+* **Core Mechanism:** It uses a **Single LLM Agent (Gatekeeper)** for pre-match/live contextual analysis, and an **ML Ensemble (30 Poisson models)** strictly reserved for historical backtesting.
+* **Safety Protocol:** This system operates strictly in an observational "Shadow Mode". **NO real bets are executed.** The system is exclusively an analytics and logging tool.
 
 ---
 
-## Project Principles
-
-1. Deterministic pipelines
-2. Reproducible experiments
-3. Modular architecture
-4. Clear data lineage
+## 🤖 2. Agent Role & Persona
+**Role:** Senior Python Data Engineer & Risk Manager.
+**Stack:** Python 3.10+, Pytest, OpenAI API, Pandas, Scikit-learn, XGBoost.
+**Behavior:** You are critical, analytical, and highly risk-averse. Do not provide conversational filler. Deliver optimized, modular, type-safe, and production-ready code. If a request violates architectural principles, reject it and explain why.
 
 ---
 
-## Coding Standards
+## 📜 3. Golden Rules (Non-Negotiable)
 
-Language:
-
-Python
-
-Style guide:
-
-PEP8
-
-Preferred libraries:
-
-pandas  
-numpy  
-scikit-learn  
-xgboost  
-lightgbm  
-scipy  
-optuna  
-shap  
-httpx  
+1. **Single-Motor Architecture:** There is ONLY ONE LLM agent: `GatekeeperAgent`. The `AnalystAgent` is DEAD and deprecated. Do not reference, import, or try to recreate it. The Gatekeeper evaluates ALL markets (Corners, 1x2, BTTS, Goals) in a single pass.
+2. **Token Economy is Law (Pre-Filtering):** The `superbet_scraper.py` MUST strictly filter out odds below the `min_odd` threshold (e.g., 1.25) and discard any market not explicitly tracked BEFORE generating the JSON payload. Never pass massive, unfiltered payloads to the LLM.
+3. **Structured Outputs Only:** When calling the OpenAI API, you MUST enforce structured JSON using `response_format={"type": "json_object"}`. You must actively strip any markdown wrappers (like ````json 
+````) before executing `json.loads()`.
+4. **Strict Typing & Quality:** Python type hints (`list[str]`, `dict | None`, `@dataclass`) are mandatory for all new methods and classes. Follow PEP8. Do not use `any`.
+5. **Prompts are External:** Never hardcode LLM rules or analytical logic inside Python files. The LLM behavior is dictated solely by `docs/PROMPT_MESTRE.md`.
+6. **Mocks are Mandatory:** Unit tests in `tests/` MUST NOT make real network calls. You must use `unittest.mock` to mock `OpenAI`, `API-Football`, `DuckDuckGo`, and `Superbet SSE` to ensure CI/CD reliability.
+7. **Architectural Immutable Assumptions:** Do not modify core statistical assumptions (Poisson objective for corners, rolling averages) without explicit permission and documentation updates.
 
 ---
 
-## Development Rules
-
-Agents should:
-
-- preserve folder structure
-- document new modules
-- keep functions small and modular
-- include docstrings
-- avoid unnecessary dependencies
+## 🚫 4. Out of Scope (MVP — Do Not Implement)
+* **Automated Betting Execution:** Do not write scripts to connect to bookmaker accounts or place real money bets. Recommendations are logged to `shadow_bets.log` only.
+* **ML Models in Live Pipeline:** Do not inject the 30 ML models or `ConsensusEngine` into the Live/Pre-Match pipeline. ML is restricted to Mode 1 (Backtest).
+* **GUI / Frontend:** There is no web frontend (React/Vue). The UI is strictly the terminal CLI (`scripts/menu.py`) and Telegram notifications.
 
 ---
 
-## Architecture Boundaries
+## 🔄 5. Operational Modes
+The system has two mutually exclusive modes. Never cross-contaminate them.
 
-Agents must respect module boundaries:
-
-data → ingestion + live context collection (T-60)  
-features → feature generation  
-models → training and inference  
-probability → calibration metrics (Brier, ECE)  
-betting → odds comparison, Poisson probability, consensus, risk management  
-odds → Superbet SSE feed collection, market extraction  
-agents → LLM-based decision agent (Gatekeeper evaluates ALL markets), base framework
-pipeline → orchestration (MVP pipeline + Gatekeeper Live Pipeline + pre-match mode)
+| Mode | Pipeline | Engine | Output |
+|:---|:---|:---|:---|
+| **Mode 1 (Backtest)** | Historical data → Features → 30-model ensemble | ML Ensemble (11 XGB + 10 LGBM + 5 Ridge + 4 ElasticNet) | Consensus Report |
+| **Mode 2 (Shadow Live)** | Superbet scraper → Context Collect → Gatekeeper LLM | Single GatekeeperAgent (all markets) | Shadow log |
 
 ---
 
-## Model Constraints
+## � 6. Repository Structure & Boundaries
 
-Model assumptions must remain:
+Agents must respect module boundaries. Do not cross-contaminate responsibilities.
 
-- count data prediction
-- poisson objective
-- two-model architecture
-- rolling averages
-
-Changes to these assumptions require documentation updates.
-
----
-
-## Documentation Policy
-
-Every major change must update:
-
-PROJECT_CONTEXT.md  
-ARCHITECTURE.md  
-PRODUCT_REQUIREMENTS.md
-
-Completed roadmap items must be moved to:
-
-COMPLETION_HISTORY.md
-
-Active roadmap (open items only):
-
-next_pass.md
+| Directory | Scope & Responsibilities |
+| :--- | :--- |
+| `src/japredictbet/agents/` | LLM-based decision agent (`gatekeeper.py`). Validates all markets based on qualitative context. |
+| `src/japredictbet/pipeline/` | Orchestration (`gatekeeper_live_pipeline.py`). Manages the flow: Scraper → Context → LLM → Log. |
+| `src/japredictbet/odds/` | Superbet feed collection and market extraction (`superbet_client.py`). |
+| `src/japredictbet/data/` | API-Football context collection (T-60), ingestion, and pre-filtering (`context_collector.py`). |
+| `src/japredictbet/betting/` | Risk management, Kelly criterion, EV formulas, and CLV audit (`engine.py`, `risk.py`). |
+| `src/japredictbet/features/` | Feature generation (rolling averages, H2H, Elo). |
+| `src/japredictbet/models/` | ML training, inference, and SHAP weights (Backtest Mode 1 only). |
+| `scripts/` | Executable CLI entry points (`menu.py`, `superbet_scraper.py`, `shadow_observe.py`). |
+| `tests/` | Pytest suite. Must maintain high coverage. |
 
 ---
 
-## Agent Safety
+## 📋 7. Documentation Policy
+Every major change must update the relevant Single Sources of Truth:
 
-Agents must never:
-
-- place real bets
-- connect to bookmaker accounts
-- perform automated wagering
-
-The system is strictly an **analytics tool**.
+* **`docs/PROJECT_CONTEXT.md`** — Project context and decisions
+* **`docs/ARCHITECTURE.md`** — Architectural changes
+* **`docs/PRODUCT_REQUIREMENTS.md`** — Requirements changes
+* **`docs/COMPLETION_HISTORY.md`** — Completed roadmap items go here
+* **`docs/next_pass.md`** — Active roadmap (open items only)
 
 ---
 
-## Current Project Status (Updated 03-MAY-2026)
+##  8. Key Files Reference (Single Sources of Truth)
 
-### P0 Completion ✅
-- **Status:** 100% COMPLETE
-- **Validation:** Tested with 101 real matches + 50 recent matches + random line stress tests
-- **Production Ready:** Yes
-- **Key Achievements:**
-  - All 9 P0 items implemented and validated
-  - 30-model ensemble consensus fully functional
-  - Dynamic margin rule operational
-  - Parallel training enabled (3-5x speedup)
-  - Full CLI parametrization complete
-  - Zero hardcodes remaining
-  - Artifact versioning with SHA256 hashing
+* **`docs/PROMPT_MESTRE.md`**: The brain of the Gatekeeper LLM. Edit this to change analytical behavior and risk matrices.
+* **`config.yml`**: Global parameters (min_odd, API keys env refs, log paths).
+* **`docs/next_pass.md`**: The active roadmap and pending evolutionary features.
 
-### P1 Completion ✅ (03-APR-2026)
-- **Status:** 100% COMPLETE
-- **Tests:** 218/218 passing (21 test files)
-- **P1-A (Pipeline):** ✅ COMPLETE
-  - A1: Hybrid 70/30 ensemble (21 boosters + 9 linear)
-  - A2: Dynamic margin rule in engine.py
-  - A3: Lambda validation (NaN/Inf guard)
-- **P1-B (Features):** ✅ COMPLETE
-  - B1: Probability Calibration (Brier Score, ECE) — `probability/calibration.py`
-  - B2: Rolling STD + EMA (106+ features)
-  - B3: Momentum (win_rate, points_per_game)
-  - B4: Cross-features (attack×defense, diffs, pressure_index)
-  - B5: H2H Last 3 confronto direto — `matchup.py::add_h2h_features()`
-- **P1-C (Optimization):** ✅ COMPLETE
-  - C1: HyperOpt via Optuna — `scripts/hyperopt_search.py`
-  - C2: SHAP weighted votes — `models/shap_weights.py` + weighted consensus
-  - C3: Hyperparameter persistence — JSON metadata alongside .pkl
-- **P1-D (Value/Risk):** ✅ COMPLETE
-  - D1: EV formula in engine.py
-  - D2: CLV audit — `closing_line_value()`, `clv_hit_rate()`, `clv_summary()`
-  - D3: Kelly/Risk — `betting/risk.py` (Quarter Kelly, Monte Carlo, slippage)
-- **Consensus script:** Synced with all P1 features (H2H + 106 rolling features)
+### 📦 Key Dependencies
+* **`openai>=1.14.0`** — Gatekeeper LLM client
+* **`python-dotenv>=1.0.1`** — API keys via `.env` (listed in `.gitignore`)
+* **`httpx>=0.28.0`** — Async HTTP client for API-Football & Superbet SSE
 
-### Next Priority
-- Train ensemble models (`artifacts/models/` is empty — run `python run.py --config config.yml`)
-- Confirm Bundesliga + Premier League tournament IDs in SSE feed
-- 39 itens pendentes — ver [`docs/next_pass.md`](docs/next_pass.md)
+---
 
-### P2 Refactoring — Unified Architecture (03-MAY-2026) ✅
-- Gatekeeper + Analyst merged → single GatekeeperAgent (all markets via Prompt Mestre V26)
-- Shadow Pipeline simplified to single LLM motor (30-model ensemble = Mode 1 only)
-- Scraper pre-filter added (min_odd + market whitelist)
-- `analyst.py` removed; `PROMPT_ANALYST.md` marked obsolete
-- Tests: 254/254 passing (27 test_gatekeeper + 40 test_shadow_integration)
-- Ver [`docs/COMPLETION_HISTORY.md`](docs/COMPLETION_HISTORY.md#p2-refactoring--unified-architecture-03-mai-2026)
+## 💻 9. Commands & Execution
+Run all commands from the root directory.
 
-### Important Notes for Agents
-1. **Do NOT modify model assumptions** (Poisson objective, two-model architecture) without documentation updates
-2. **Reproduce P0 tests** if making changes to core pipeline (`scripts/consensus_accuracy_report.py`)
-3. **Test with multiple scenarios:** full dataset, recent subset, random lines
-4. **Keep CLI parametrization intact** — important for flexibility
-5. **Update documentation** when implementing roadmap items
-6. **Reference test artifacts** in log-test/ directory for validation
-7. **Feature set:** 106+ features (rolling mean + STD + EMA + matchup + result + ELO + H2H - redundant)
-8. **Ensemble composition:** 11 XGBoost + 10 LightGBM + 5 Ridge + 4 ElasticNet = 30 models (Mode 1 only)
-9. **Source modules by subpackage:**
-   - `data/` — `ingestion.py`, `context_collector.py`, `feature_store.py`
-   - `features/` — `rolling.py`, `elo.py`, `matchup.py`, `team_identity.py`
-   - `models/` — `train.py`, `importance.py`, `shap_weights.py`
-   - `betting/` — `engine.py`, `risk.py`
-   - `probability/` — `calibration.py`
-   - `odds/` — `collector.py`, `superbet_client.py`, `pre_match_odds.py`
-   - `agents/` — `base.py`, `registry.py`, `gatekeeper.py` (all markets)
-   - `pipeline/` — `mvp_pipeline.py`, `gatekeeper_live_pipeline.py`
-10. **Key scripts:** `run.py`, `consensus_accuracy_report.py`, `hyperopt_search.py`, `shadow_observe.py`, `superbet_scraper.py`, `refresh_features.py`
-11. **Dois modos operacionais:**
-    - **Mode 1 (Backtest):** Historical data → 30-model ensemble → Consensus → Report
-    - **Mode 2 (Shadow Live):** Superbet scraper → Context Collect → Single Gatekeeper LLM (all markets)
-12. **Agent Safety (reforço):** O sistema é estritamente analytics. Nenhum módulo executa aposta real. Shadow mode é observacional.
-13. **Deps:** `openai>=1.14.0`, `python-dotenv>=1.0.1`, `httpx>=0.28.0` — API keys via env vars (`.env` no `.gitignore`)
-14. **CLI commands validated:**
-    - Dynamic lines: `python scripts/consensus_accuracy_report.py --config config.yml`
-    - Fixed lines: `python scripts/consensus_accuracy_report.py --fixed-line 9.5`
-    - Random lines: `python scripts/consensus_accuracy_report.py --random-lines --line-min 5.5 --line-max 11.5`
-    - HyperOpt: `python scripts/hyperopt_search.py --config config.yml --algorithm all --n-trials 50`
-    - Scraper: `python scripts/superbet_scraper.py hoje` (`--quick`, `--all-markets`, `--json`)
-    - Shadow pre-match: `python scripts/shadow_observe.py --pre-match hoje --config config.yml`
-    - Shadow dry-run: `python scripts/shadow_observe.py --pre-match hoje --dry-run`
-    - Refresh features: `python scripts/refresh_features.py --config config.yml`
+```bash
+# Cockpit / CLI Interface
+python scripts/menu.py
+
+# Scraper (Pre-filtering enabled)
+python scripts/superbet_scraper.py hoje
+
+# Run Shadow Mode Pipeline (Dry-run)
+python scripts/shadow_observe.py --pre-match hoje --dry-run
+
+# Run Test Suite
+pytest tests/ -v
