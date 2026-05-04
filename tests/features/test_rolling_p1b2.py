@@ -3,7 +3,7 @@
 import pandas as pd
 import pytest
 
-from src.japredictbet.features.rolling import (
+from japredictbet.features.rolling import (
     add_rolling_ema,
     add_rolling_std,
 )

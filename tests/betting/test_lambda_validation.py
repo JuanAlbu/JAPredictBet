@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.japredictbet.betting.engine import (
+from japredictbet.betting.engine import (
     ConsensusEngine,
     _extract_lambda_total,
     _validate_lambda,

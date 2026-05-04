@@ -8,8 +8,8 @@ Demonstrates that:
 3. Dynamic margin threshold adjustment works as configured
 """
 
-from src.japredictbet.betting.engine import ConsensusEngine
-from src.japredictbet.config import (
+from japredictbet.betting.engine import ConsensusEngine
+from japredictbet.config import (
     DataConfig,
     FeatureConfig,
     ModelConfig,

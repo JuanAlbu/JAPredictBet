@@ -6,7 +6,7 @@ import math
 
 import pandas as pd
 
-from src.japredictbet.features.rolling import (
+from japredictbet.features.rolling import (
     add_result_rolling,
     add_rolling_features,
     add_rolling_std,

@@ -6,7 +6,7 @@ Demonstrates that the validation catches invalid lambdas before they corrupt res
 
 import sys
 
-from src.japredictbet.betting.engine import ConsensusEngine, report_consensus
+from japredictbet.betting.engine import ConsensusEngine, report_consensus
 
 
 def test_scenario_1_all_valid():

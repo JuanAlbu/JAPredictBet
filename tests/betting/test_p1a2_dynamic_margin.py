@@ -1,7 +1,7 @@
 """Test P1.A2: Dynamic margin parameters in config and ConsensusEngine integration."""
 
-from src.japredictbet.betting.engine import ConsensusEngine
-from src.japredictbet.config import ValueConfig
+from japredictbet.betting.engine import ConsensusEngine
+from japredictbet.config import ValueConfig
 
 
 def test_value_config_defaults():
