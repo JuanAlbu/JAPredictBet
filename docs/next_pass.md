@@ -267,13 +267,14 @@
 
 ## P3 — Performance, Otimização e Arquitetura (4 itens)
 
-- ~~**P3-ARCH - Divergência Positiva (12-APR-2026)** ✅~~ *(Movido para [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md))*
+- ~~**P2-UNIFY — Arquitetura Unificada (03-MAI-2026)** ✅~~ *(Movido para [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md))*
   - Motor de Valor Cego (ML): 30-model ensemble opera apenas escanteios, gera `[SUGESTÕES ALGORITMO]`.
   - Motor de Contexto (LLM): Gatekeeper analisa contexto + odds sem ML, gera `[SUGESTÕES GATEKEEPER]`.
   - Ensemble output NUNCA é injetado no prompt LLM — motores paralelos independentes.
   - Handicap excluído de TODOS os motores (ML e LLM).
   - Matriz de Zonas de Odd: 4 faixas (Morta < 1.25, Builder 1.25–1.59, Alvo 1.60–2.20, Variância > 2.20).
   - `min_odd` alterado de 1.60 → 1.25 para permitir pernas de composição.
+  - *(antes chamado "P3-ARCH / Divergência Positiva" — renomeado para refletir a arquitetura unificada real)*
 
 - [ ] **P3.1 - Otimizar loop de consensus sweep** — `O(rows × thresholds × 30 models)`. Vectorizar ou paralelizar.
 
@@ -283,6 +284,7 @@
   - **Objetivo:** Processar dezenas de jogos em paralelo na janela T-60, reduzindo tempo de varredura de minutos para segundos.
   - **Justificativa:** Proteger contra esmagamento da linha de fecho.
   - **Módulos:** `data/context_collector.py`, `agents/gatekeeper.py`, `pipeline/gatekeeper_live_pipeline.py`.
+  - **Quick-win (04-MAI-2026):** `concurrent.futures.ThreadPoolExecutor(max_workers=8)` no loop de `_evaluate_single_match()` em [`gatekeeper_live_pipeline.py:253`](src/japredictbet/pipeline/gatekeeper_live_pipeline.py:253). Esforço ~30min, reduz latência de ~150s para ~20s (30 jogos). Migração asyncio completa na sequência.
 
 - [ ] **P3.ANCHOR - Ancoragem Quantitativa para o Gatekeeper Agent**
   - **Tipo:** Melhoria Analítica.
@@ -297,7 +299,7 @@
   - **Regra base proposta:** cada modelo analisa o mesmo `MatchContext`; a resposta final só aprova entrada quando houver convergência mínima configurável entre os dois agentes.
   - **Saída esperada:** parecer consolidado com status final, justificativa comum, divergências relevantes e recomendação final única.
   - **Módulos:** `agents/gatekeeper.py`, novo `agents/llm_consensus.py`, `pipeline/gatekeeper_live_pipeline.py`.
-  - **Nota pós-refactor:** Prompt único via `PROMPT_MESTRE.md` V26 (multi-mercado). Não há mais `PROMPT_ANALYST.md`.
+  - **Nota pós-refactor:** Prompt único via `PROMPT_MESTRE.md` V26 (multi-mercado). Módulo Analyst removido — escopo unificado no Gatekeeper.
 
 - [ ] **P3.LLM-AUDITOR - Auditor LLM para Backtest (Modo 1)**
   - **Tipo:** Melhoria Analítica.

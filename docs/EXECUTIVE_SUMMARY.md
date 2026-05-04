@@ -69,9 +69,9 @@
 - SH22: Analyst Agent (multi-market LLM — 1x2, BTTS, Over/Under) *(obsoleto desde 03-MAI-2026, escopo migrado para Gatekeeper unificado)*
 - SH23: Pre-match Architecture Split (scraper JSON → pipeline)
 
-### ✅ P3-ARCH — Divergência Positiva (12-APR-2026) *(Superseded by P2 Refactoring 03-MAI-2026)*
+### ✅ P2-UNIFY — Arquitetura Unificada (03-MAI-2026)
 - ~~Motor de Valor Cego (ML): 30-model ensemble opera apenas escanteios~~ → Ensemble agora exclusivo do Mode 1 (Backtest)
-- ~~Motor de Contexto (LLM): Gatekeeper analisa contexto + odds~~ → Gatekeeper unificado (Prompt Mestre V26) avalia TODOS os mercados
+- ~~Motor de Contexto (LLM): Gatekeeper analisa contexto + odds~~ → Gatekeeper unificado (Prompt Mestre V26) avalia TODOS os mercados (antes chamado "Divergência Positiva" / P3-ARCH)
 - **Mantido:** Ensemble output NUNCA é injetado no prompt do LLM
 - **Mantido:** Handicap excluído de todos os motores
 - **Mantido:** Matriz de Zonas de Odd: 4 faixas (Morta < 1.25, Builder 1.25–1.59, Alvo 1.60–2.20, Variância > 2.20)
@@ -110,6 +110,7 @@
 - **Objetivo:** Processar dezenas de jogos em paralelo na janela T-60, reduzindo tempo de varredura de minutos para segundos.
 - **Justificativa:** Proteger contra esmagamento da linha de fecho — a latência atual é sequencial (1 jogo por vez).
 - **Módulos afetados:** `data/context_collector.py`, `agents/gatekeeper.py`, `pipeline/gatekeeper_live_pipeline.py`
+- **Quick-win (04-MAI-2026):** Adicionar `concurrent.futures.ThreadPoolExecutor(max_workers=8)` no loop de `_evaluate_single_match()` em [`gatekeeper_live_pipeline.py:253`](src/japredictbet/pipeline/gatekeeper_live_pipeline.py:253). Esforço: ~30min. Impacto: reduz latência de ~150s para ~20s em dias cheios (30 jogos). Migração completa para `asyncio` + `httpx.AsyncClient` virá na sequência.
 
 ### P3.ANCHOR — Ancoragem Quantitativa para o Gatekeeper Agent
 - **Tipo:** Melhoria Analítica
