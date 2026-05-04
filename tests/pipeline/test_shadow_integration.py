@@ -16,13 +16,10 @@ AnalystAgent are exclusive to Mode 1 (Backtest).
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 from unittest.mock import MagicMock, patch
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -58,16 +55,15 @@ from japredictbet.odds.pre_match_odds import load_pre_match_contexts
 from japredictbet.odds.superbet_client import SuperbetOdds, SuperbetSnapshot
 from japredictbet.pipeline.gatekeeper_live_pipeline import GatekeeperLivePipeline
 
-
 # =========================================================================
 # Fixtures
 # =========================================================================
 
 
 @pytest.fixture
-def sample_snapshots() -> Dict[str, SuperbetSnapshot]:
+def sample_snapshots() -> dict[str, SuperbetSnapshot]:
     """Build a dict of SuperbetSnapshots simulating SSE output."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     kickoff_ts = int((now + timedelta(minutes=30)).timestamp() * 1000)
 
     return {
@@ -134,9 +130,7 @@ def sample_feature_dataframe() -> pd.DataFrame:
         {
             "home_team": ["Team A", "Team A", "Team B", "Team B"],
             "away_team": ["Team C", "Team D", "Team C", "Team D"],
-            "date": pd.to_datetime(
-                ["2026-04-01", "2026-04-08", "2026-04-01", "2026-04-08"]
-            ),
+            "date": pd.to_datetime(["2026-04-01", "2026-04-08", "2026-04-01", "2026-04-08"]),
             "season": [2026, 2026, 2026, 2026],
             "total_corners_avg_last10": [5.2, 5.5, 4.8, 5.0],
             "total_corners_std_last10": [1.2, 1.3, 1.1, 1.0],
@@ -178,9 +172,7 @@ def mock_pre_match_snapshot(tmp_path: Path) -> Path:
             "date": "2026-05-10",
             "kickoff": "18:30",
             "league": "Campeonato Brasileiro Série A",
-            "markets": {
-                "corners": {"line": 10.5, "over": 1.90, "under": 1.90}
-            },
+            "markets": {"corners": {"line": 10.5, "over": 1.90, "under": 1.90}},
         },
     ]
 
@@ -296,7 +288,7 @@ class TestExtractKickoffFromSnapshot:
 
     def test_unix_date_millis(self):
         """unixDateMillis is parsed correctly."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         ts_ms = int(now.timestamp() * 1000)
         snap = SuperbetSnapshot(
             event_id="1",
@@ -411,12 +403,8 @@ class TestFindStanding:
 
     def test_exact_match(self):
         standings = [
-            StandingsEntry(
-                rank=1, team="Team A", points=30, played=10, goal_diff=15
-            ),
-            StandingsEntry(
-                rank=2, team="Team B", points=25, played=10, goal_diff=10
-            ),
+            StandingsEntry(rank=1, team="Team A", points=30, played=10, goal_diff=15),
+            StandingsEntry(rank=2, team="Team B", points=25, played=10, goal_diff=10),
         ]
         result = _find_standing(standings, "Team A")
         assert result is not None
@@ -424,9 +412,7 @@ class TestFindStanding:
 
     def test_partial_match(self):
         standings = [
-            StandingsEntry(
-                rank=3, team="Flamengo RJ", points=20, played=10, goal_diff=5
-            ),
+            StandingsEntry(rank=3, team="Flamengo RJ", points=20, played=10, goal_diff=5),
         ]
         result = _find_standing(standings, "Flamengo")
         assert result is not None
@@ -434,9 +420,7 @@ class TestFindStanding:
 
     def test_no_match_returns_none(self):
         standings = [
-            StandingsEntry(
-                rank=1, team="Team A", points=30, played=10, goal_diff=15
-            ),
+            StandingsEntry(rank=1, team="Team A", points=30, played=10, goal_diff=15),
         ]
         result = _find_standing(standings, "Team Z")
         assert result is None
@@ -454,9 +438,7 @@ class TestFeatureStoreH2HExclusion:
         """_extract_latest_per_team excludes H2H columns."""
         result = _extract_latest_per_team(sample_feature_dataframe)
         for col in result.columns:
-            assert not col.startswith("total_corners_h2h_last"), (
-                f"Column '{col}' should have been excluded"
-            )
+            assert not col.startswith("total_corners_h2h_last"), f"Column '{col}' should have been excluded"
             assert not col.startswith("total_goals_h2h_last")
             assert not col.startswith("total_shots_h2h_last")
 
@@ -478,9 +460,7 @@ class TestFeatureStoreH2HExclusion:
 
     def test_prefix_row_creates_side_prefixed_dict(self):
         """_prefix_row keeps columns as-is, only filters opposite side."""
-        series = pd.Series(
-            {"total_corners_avg_last10": 5.2, "win_rate_last10": 0.6}
-        )
+        series = pd.Series({"total_corners_avg_last10": 5.2, "win_rate_last10": 0.6})
         result = _prefix_row(series, "home")
         # Columns without prefix are kept as-is (no prefix added)
         assert result["total_corners_avg_last10"] == 5.2
@@ -501,9 +481,7 @@ class TestFeatureStoreH2HExclusion:
 class TestFeatureStoreBuildLoad:
     """FeatureStore build/load roundtrip."""
 
-    def test_build_and_save_load(
-        self, sample_feature_dataframe, tmp_path: Path
-    ):
+    def test_build_and_save_load(self, sample_feature_dataframe, tmp_path: Path):
         """Build from DataFrame, save, and load back."""
         # Use _extract_latest_per_team to build the table, then construct
         table = _extract_latest_per_team(sample_feature_dataframe)
@@ -518,18 +496,14 @@ class TestFeatureStoreBuildLoad:
         # _prefix_row keeps columns as-is (no home_ prefix added)
         assert "total_corners_avg_last10" in features.columns
 
-    def test_get_match_features_missing_team(
-        self, sample_feature_dataframe
-    ):
+    def test_get_match_features_missing_team(self, sample_feature_dataframe):
         """get_match_features returns None when a team is not found."""
         table = _extract_latest_per_team(sample_feature_dataframe)
         store = FeatureStore(table=table, built_at="2026-05-10T12:00:00")
         features = store.get_match_features("Unknown Team", "Team B")
         assert features is None
 
-    def test_get_match_features_returns_dataframe(
-        self, sample_feature_dataframe
-    ):
+    def test_get_match_features_returns_dataframe(self, sample_feature_dataframe):
         """get_match_features returns a single-row DataFrame."""
         table = _extract_latest_per_team(sample_feature_dataframe)
         store = FeatureStore(table=table, built_at="2026-05-10T12:00:00")
@@ -549,20 +523,14 @@ class TestFeatureStoreBuildLoad:
 class TestLoadPreMatchContexts:
     """Tests for load_pre_match_contexts using mock JSON snapshots."""
 
-    def test_loads_correct_number_of_matches(
-        self, mock_pre_match_snapshot: Path
-    ):
+    def test_loads_correct_number_of_matches(self, mock_pre_match_snapshot: Path):
         """Two events in snapshot → two MatchContexts."""
-        contexts = load_pre_match_contexts(
-            date="2026-05-10", directory=mock_pre_match_snapshot
-        )
+        contexts = load_pre_match_contexts(date="2026-05-10", directory=mock_pre_match_snapshot)
         assert len(contexts) == 2
 
     def test_odds_context_populated(self, mock_pre_match_snapshot: Path):
         """Corner, match_odds, and BTTS are extracted."""
-        contexts = load_pre_match_contexts(
-            date="2026-05-10", directory=mock_pre_match_snapshot
-        )
+        contexts = load_pre_match_contexts(date="2026-05-10", directory=mock_pre_match_snapshot)
         ctx = contexts[0]
         assert ctx.odds.corner_line == 9.5
         assert ctx.odds.corner_over_odds == 1.85
@@ -575,31 +543,23 @@ class TestLoadPreMatchContexts:
 
     def test_kickoff_utc_built(self, mock_pre_match_snapshot: Path):
         """Kickoff is built from date + kickoff fields."""
-        contexts = load_pre_match_contexts(
-            date="2026-05-10", directory=mock_pre_match_snapshot
-        )
+        contexts = load_pre_match_contexts(date="2026-05-10", directory=mock_pre_match_snapshot)
         assert contexts[0].kickoff_utc == "2026-05-10T16:00:00"
 
     def test_team_names_populated(self, mock_pre_match_snapshot: Path):
         """Home and away teams are set."""
-        contexts = load_pre_match_contexts(
-            date="2026-05-10", directory=mock_pre_match_snapshot
-        )
+        contexts = load_pre_match_contexts(date="2026-05-10", directory=mock_pre_match_snapshot)
         assert contexts[0].home_team == "Flamengo"
         assert contexts[0].away_team == "Palmeiras"
 
     def test_league_populated(self, mock_pre_match_snapshot: Path):
         """League name is set from snapshot."""
-        contexts = load_pre_match_contexts(
-            date="2026-05-10", directory=mock_pre_match_snapshot
-        )
+        contexts = load_pre_match_contexts(date="2026-05-10", directory=mock_pre_match_snapshot)
         assert contexts[0].league == "Campeonato Brasileiro Série A"
 
     def test_no_lineup_by_default(self, mock_pre_match_snapshot: Path):
         """Pre-match contexts start without lineup enrichment."""
-        contexts = load_pre_match_contexts(
-            date="2026-05-10", directory=mock_pre_match_snapshot
-        )
+        contexts = load_pre_match_contexts(date="2026-05-10", directory=mock_pre_match_snapshot)
         assert contexts[0].home_lineup is None
         assert contexts[0].away_lineup is None
 
@@ -612,10 +572,7 @@ class TestLoadPreMatchContexts:
 class TestGatekeeperLivePipelineFactory:
     """Tests for GatekeeperLivePipeline.from_config()."""
 
-    @patch(
-        "japredictbet.pipeline.gatekeeper_live_pipeline"
-        ".ContextCollector.from_configs"
-    )
+    @patch("japredictbet.pipeline.gatekeeper_live_pipeline.ContextCollector.from_configs")
     def test_from_config_minimal(
         self,
         mock_collector_cls: MagicMock,
@@ -632,10 +589,7 @@ class TestGatekeeperLivePipelineFactory:
         assert pipeline._collector is not None
         assert pipeline._gatekeeper is not None  # Gatekeeper created with API key
 
-    @patch(
-        "japredictbet.pipeline.gatekeeper_live_pipeline"
-        ".ContextCollector.from_configs"
-    )
+    @patch("japredictbet.pipeline.gatekeeper_live_pipeline.ContextCollector.from_configs")
     def test_dry_run_skips_gatekeeper_llm(
         self,
         mock_collector_cls: MagicMock,
@@ -645,9 +599,7 @@ class TestGatekeeperLivePipelineFactory:
 
         config = _minimal_gk_pipeline_config(llm_api_key="")
 
-        pipeline = GatekeeperLivePipeline.from_config(
-            config, dry_run=True
-        )
+        pipeline = GatekeeperLivePipeline.from_config(config, dry_run=True)
         assert pipeline._gatekeeper is None
 
 
@@ -659,10 +611,7 @@ class TestGatekeeperLivePipelineFactory:
 class TestGatekeeperLivePipelinePreMatch:
     """Tests for GatekeeperLivePipeline.run() in pre-match mode."""
 
-    @patch(
-        "japredictbet.pipeline.gatekeeper_live_pipeline"
-        ".load_pre_match_contexts"
-    )
+    @patch("japredictbet.pipeline.gatekeeper_live_pipeline.load_pre_match_contexts")
     def test_run_pre_match_collects_matches(
         self,
         mock_load_ctx: MagicMock,
@@ -705,14 +654,9 @@ class TestGatekeeperLivePipelinePreMatch:
 
         assert result.matches_collected == 2
         assert result.matches_evaluated == 2
-        mock_collector.enrich_pre_match_contexts.assert_called_once_with(
-            [mock_ctx_1, mock_ctx_2], date="2026-05-10"
-        )
+        mock_collector.enrich_pre_match_contexts.assert_called_once_with([mock_ctx_1, mock_ctx_2], date="2026-05-10")
 
-    @patch(
-        "japredictbet.pipeline.gatekeeper_live_pipeline"
-        ".load_pre_match_contexts"
-    )
+    @patch("japredictbet.pipeline.gatekeeper_live_pipeline.load_pre_match_contexts")
     def test_run_pre_match_empty_returns_early(
         self,
         mock_load_ctx: MagicMock,
@@ -744,9 +688,7 @@ class TestGatekeeperLivePipelinePreMatch:
 class TestGatekeeperLivePipelineLLM:
     """Tests for the single Gatekeeper LLM call (all markets)."""
 
-    @patch(
-        "japredictbet.pipeline.gatekeeper_live_pipeline.GatekeeperAgent"
-    )
+    @patch("japredictbet.pipeline.gatekeeper_live_pipeline.GatekeeperAgent")
     def test_call_gatekeeper_returns_result(
         self,
         mock_gk_cls: MagicMock,
@@ -805,9 +747,7 @@ class TestGatekeeperLivePipelineLLM:
             event_id="ev001",
             home_team="Team A",
             away_team="Team B",
-            odds=OddsContext(
-                corner_line=9.5, corner_over_odds=1.85
-            ),
+            odds=OddsContext(corner_line=9.5, corner_over_odds=1.85),
         )
 
         result = pipeline._call_gatekeeper(ctx)
@@ -820,9 +760,7 @@ class TestGatekeeperLivePipelineLLM:
         assert result.best_pick is not None
         assert result.best_pick.market == "Escanteios Over 9.5"
 
-    @patch(
-        "japredictbet.pipeline.gatekeeper_live_pipeline.GatekeeperAgent"
-    )
+    @patch("japredictbet.pipeline.gatekeeper_live_pipeline.GatekeeperAgent")
     def test_call_gatekeeper_all_no_bet(
         self,
         mock_gk_cls: MagicMock,
@@ -860,9 +798,7 @@ class TestGatekeeperLivePipelineLLM:
             event_id="ev001",
             home_team="Team A",
             away_team="Team B",
-            odds=OddsContext(
-                corner_line=9.5, corner_over_odds=1.85
-            ),
+            odds=OddsContext(corner_line=9.5, corner_over_odds=1.85),
         )
 
         result = pipeline._call_gatekeeper(ctx)
@@ -871,9 +807,7 @@ class TestGatekeeperLivePipelineLLM:
         assert result.markets_approved == 0
         assert result.best_pick is None
 
-    @patch(
-        "japredictbet.pipeline.gatekeeper_live_pipeline.GatekeeperAgent"
-    )
+    @patch("japredictbet.pipeline.gatekeeper_live_pipeline.GatekeeperAgent")
     def test_call_gatekeeper_handles_exception(
         self,
         mock_gk_cls: MagicMock,
@@ -897,9 +831,7 @@ class TestGatekeeperLivePipelineLLM:
             event_id="ev001",
             home_team="Team A",
             away_team="Team B",
-            odds=OddsContext(
-                corner_line=9.5, corner_over_odds=1.85
-            ),
+            odds=OddsContext(corner_line=9.5, corner_over_odds=1.85),
         )
 
         result = pipeline._call_gatekeeper(ctx)
@@ -916,16 +848,12 @@ class TestApiFootballClientFixtures:
     """Tests for ApiFootballClient fixture queries."""
 
     @patch("japredictbet.data.context_collector.httpx.Client")
-    def test_get_fixtures_by_date_passes_correct_params(
-        self, mock_httpx_client: MagicMock
-    ):
+    def test_get_fixtures_by_date_passes_correct_params(self, mock_httpx_client: MagicMock):
         """get_fixtures_by_date sends the date param to the API."""
         mock_response = MagicMock()
         mock_response.json.return_value = {"response": []}
         mock_httpx_instance = MagicMock()
-        mock_httpx_instance.__enter__.return_value.get.return_value = (
-            mock_response
-        )
+        mock_httpx_instance.__enter__.return_value.get.return_value = mock_response
         mock_httpx_client.return_value = mock_httpx_instance
 
         client = ApiFootballClient(
@@ -935,24 +863,16 @@ class TestApiFootballClientFixtures:
         result = client.get_fixtures_by_date("2026-05-10")
         assert result == []
 
-        _, kwargs = (
-            mock_httpx_instance.__enter__.return_value.get.call_args
-        )
+        _, kwargs = mock_httpx_instance.__enter__.return_value.get.call_args
         assert kwargs["params"] == {"date": "2026-05-10"}
 
     @patch("japredictbet.data.context_collector.httpx.Client")
-    def test_get_fixtures_today_uses_current_date(
-        self, mock_httpx_client: MagicMock
-    ):
+    def test_get_fixtures_today_uses_current_date(self, mock_httpx_client: MagicMock):
         """get_fixtures_today wraps get_fixtures_by_date with today's date."""
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "response": [{"fixture": {"id": 1}}]
-        }
+        mock_response.json.return_value = {"response": [{"fixture": {"id": 1}}]}
         mock_httpx_instance = MagicMock()
-        mock_httpx_instance.__enter__.return_value.get.return_value = (
-            mock_response
-        )
+        mock_httpx_instance.__enter__.return_value.get.return_value = mock_response
         mock_httpx_client.return_value = mock_httpx_instance
 
         client = ApiFootballClient(
@@ -964,16 +884,12 @@ class TestApiFootballClientFixtures:
         assert result[0]["fixture"]["id"] == 1
 
     @patch("japredictbet.data.context_collector.httpx.Client")
-    def test_get_fixtures_by_date_with_league_filter(
-        self, mock_httpx_client: MagicMock
-    ):
+    def test_get_fixtures_by_date_with_league_filter(self, mock_httpx_client: MagicMock):
         """get_fixtures_by_date passes league_id when provided."""
         mock_response = MagicMock()
         mock_response.json.return_value = {"response": []}
         mock_httpx_instance = MagicMock()
-        mock_httpx_instance.__enter__.return_value.get.return_value = (
-            mock_response
-        )
+        mock_httpx_instance.__enter__.return_value.get.return_value = mock_response
         mock_httpx_client.return_value = mock_httpx_instance
 
         client = ApiFootballClient(
@@ -982,7 +898,5 @@ class TestApiFootballClientFixtures:
         )
         client.get_fixtures_by_date("2026-05-10", league_id=71)
 
-        _, kwargs = (
-            mock_httpx_instance.__enter__.return_value.get.call_args
-        )
+        _, kwargs = mock_httpx_instance.__enter__.return_value.get.call_args
         assert kwargs["params"] == {"date": "2026-05-10", "league": 71}

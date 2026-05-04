@@ -11,7 +11,7 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 import pandas as pd
@@ -126,19 +126,21 @@ def compute_ensemble_feature_importance(
             away_shap = compute_shap_importance(models.away_model, x_model)
             combined = (home_shap + away_shap) / 2.0
 
-            for feat, val in zip(model_features, combined):
+            for feat, val in zip(model_features, combined, strict=False):
                 all_importances.setdefault(feat, []).append(float(val))
         except Exception:
             continue
 
     rows = []
     for feat, values in all_importances.items():
-        rows.append({
-            "feature": feat,
-            "mean_shap": float(np.mean(values)),
-            "std_shap": float(np.std(values)),
-            "n_models": len(values),
-        })
+        rows.append(
+            {
+                "feature": feat,
+                "mean_shap": float(np.mean(values)),
+                "std_shap": float(np.std(values)),
+                "n_models": len(values),
+            }
+        )
 
     df = pd.DataFrame(rows)
     if not df.empty:

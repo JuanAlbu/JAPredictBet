@@ -18,7 +18,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from openai import OpenAI, RateLimitError
 
@@ -41,13 +41,13 @@ _DEFAULT_MODEL = "gpt-4o-mini"
 
 # ── Pricing Zones ────────────────────────────────────────────────────
 
-_ZONE_DEAD = "ZONA MORTA"           # < 1.25
+_ZONE_DEAD = "ZONA MORTA"  # < 1.25
 _ZONE_BUILDER = "PERNA DE COMPOSIÇÃO"  # 1.25–1.59
-_ZONE_SINGLE = "APOSTA SIMPLES"       # 1.60–2.20
+_ZONE_SINGLE = "APOSTA SIMPLES"  # 1.60–2.20
 _ZONE_VARIANCE = "APOSTA SIMPLES — VARIÂNCIA"  # > 2.20
 
 
-def classify_odd(odd: Optional[float]) -> Optional[str]:
+def classify_odd(odd: float | None) -> str | None:
     """Return the pricing-zone tag for a given odd value."""
     if odd is None:
         return None
@@ -92,12 +92,12 @@ class MarketEvaluation:
 
     market: str
     status: str  # APPROVED | NO BET
-    stake: Optional[float] = None
-    odd: Optional[float] = None
-    edge: Optional[str] = None  # Alto | Médio | Baixo
-    classification: Optional[str] = None  # Pricing zone tag
-    justification: Optional[str] = None
-    red_flags: List[str] = field(default_factory=list)
+    stake: float | None = None
+    odd: float | None = None
+    edge: str | None = None  # Alto | Médio | Baixo
+    classification: str | None = None  # Pricing zone tag
+    justification: str | None = None
+    red_flags: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -109,22 +109,22 @@ class GatekeeperResult:
     """
 
     status: str  # APPROVED | NO BET | FILTERED | ERROR
-    stake: Optional[float] = None  # in units (0.5, 1.0, 2.0) — from best_pick
-    market: Optional[str] = None   # from best_pick
-    odd: Optional[float] = None    # from best_pick
-    edge: Optional[str] = None     # Alto | Médio | Baixo — from best_pick
-    classification: Optional[str] = None  # Pricing zone tag — from best_pick
-    justification: Optional[str] = None   # from best_pick
-    red_flags: List[str] = field(default_factory=list)
+    stake: float | None = None  # in units (0.5, 1.0, 2.0) — from best_pick
+    market: str | None = None  # from best_pick
+    odd: float | None = None  # from best_pick
+    edge: str | None = None  # Alto | Médio | Baixo — from best_pick
+    classification: str | None = None  # Pricing zone tag — from best_pick
+    justification: str | None = None  # from best_pick
+    red_flags: list[str] = field(default_factory=list)
 
     # ── Multi-market fields (V26) ────────────────────────────────────
-    markets: List[MarketEvaluation] = field(default_factory=list)
+    markets: list[MarketEvaluation] = field(default_factory=list)
     """All individual market evaluations returned by the LLM."""
 
-    best_pick: Optional[MarketEvaluation] = None
+    best_pick: MarketEvaluation | None = None
     """The single best approved market, or None if nothing is valid."""
 
-    raw_llm_response: Optional[str] = None
+    raw_llm_response: str | None = None
 
     @property
     def markets_evaluated(self) -> int:
@@ -164,16 +164,15 @@ class GatekeeperAgent(BaseAgent):
         gatekeeper_cfg: GatekeeperConfig,
         *,
         model: str = _DEFAULT_MODEL,
-        api_key: Optional[str] = None,
-        base_url: Optional[str] = None,
+        api_key: str | None = None,
+        base_url: str | None = None,
     ) -> None:
         self._cfg = gatekeeper_cfg
         self._model = model or _DEFAULT_MODEL
         resolved_key = api_key or os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY", "")
         if not resolved_key:
             raise ValueError(
-                "LLM API key not provided.  "
-                "Set LLM_API_KEY (or OPENAI_API_KEY) environment variable or pass api_key=."
+                "LLM API key not provided.  Set LLM_API_KEY (or OPENAI_API_KEY) environment variable or pass api_key=."
             )
         resolved_base_url = base_url or os.environ.get("LLM_BASE_URL") or None
         self._client = OpenAI(api_key=resolved_key, base_url=resolved_base_url)
@@ -182,12 +181,8 @@ class GatekeeperAgent(BaseAgent):
         fallback_key = os.environ.get("LLM_FALLBACK_API_KEY") or ""
         if fallback_key:
             fallback_base_url = os.environ.get("LLM_FALLBACK_BASE_URL") or None
-            self._fallback_client: Optional[OpenAI] = OpenAI(
-                api_key=fallback_key, base_url=fallback_base_url
-            )
-            self._fallback_model: Optional[str] = (
-                os.environ.get("LLM_FALLBACK_MODEL") or _DEFAULT_MODEL
-            )
+            self._fallback_client: OpenAI | None = OpenAI(api_key=fallback_key, base_url=fallback_base_url)
+            self._fallback_model: str | None = os.environ.get("LLM_FALLBACK_MODEL") or _DEFAULT_MODEL
             logger.info(
                 "Gatekeeper: fallback LLM provider configured (model=%s).",
                 self._fallback_model,
@@ -200,7 +195,7 @@ class GatekeeperAgent(BaseAgent):
 
     # ── BaseAgent contract ───────────────────────────────────────────
 
-    def run(self, context: AgentContext) -> Dict[str, Any]:
+    def run(self, context: AgentContext) -> dict[str, Any]:
         """Evaluate a single match from *context.payload*.
 
         Expected payload keys
@@ -227,7 +222,7 @@ class GatekeeperAgent(BaseAgent):
         }
 
     @staticmethod
-    def _serialize_market(m: MarketEvaluation) -> Dict[str, Any]:
+    def _serialize_market(m: MarketEvaluation) -> dict[str, Any]:
         """Convert a MarketEvaluation to a plain dict for serialisation."""
         return {
             "market": m.market,
@@ -281,9 +276,7 @@ class GatekeeperAgent(BaseAgent):
         """Load Prompt Mestre V26 from docs/PROMPT_MESTRE.md."""
         if _PROMPT_PATH.exists():
             return _PROMPT_PATH.read_text(encoding="utf-8")
-        logger.warning(
-            "PROMPT_MESTRE.md not found at %s — using fallback.", _PROMPT_PATH
-        )
+        logger.warning("PROMPT_MESTRE.md not found at %s — using fallback.", _PROMPT_PATH)
         return (
             "Você é um Analista Sênior de Performance e Gestor de Risco. "
             "Avalie o cenário e responda em JSON com os campos: markets, "
@@ -291,9 +284,7 @@ class GatekeeperAgent(BaseAgent):
             "justification, red_flags."
         )
 
-    def _apply_pre_filter(
-        self, match_context_json: str
-    ) -> Optional[GatekeeperResult]:
+    def _apply_pre_filter(self, match_context_json: str) -> GatekeeperResult | None:
         """Return a FILTERED result if no odds meet min_odd, else None."""
         try:
             ctx = json.loads(match_context_json)
@@ -339,8 +330,7 @@ class GatekeeperAgent(BaseAgent):
             return GatekeeperResult(
                 status=_STATUS_FILTERED,
                 justification=(
-                    f"Melhor odd disponível ({best_odd:.2f}) abaixo do "
-                    f"mínimo operacional ({self._cfg.min_odd:.2f})."
+                    f"Melhor odd disponível ({best_odd:.2f}) abaixo do mínimo operacional ({self._cfg.min_odd:.2f})."
                 ),
             )
         return None
@@ -368,8 +358,7 @@ class GatekeeperAgent(BaseAgent):
             '      "stake": 0.5 | 1.0 | 2.0 | null,',
             '      "odd": <number ou null>,',
             '      "edge": "Alto" | "Médio" | "Baixo" | null,',
-            '      "classification": "PERNA DE COMPOSIÇÃO" | '
-            '"APOSTA SIMPLES" | "APOSTA SIMPLES — VARIÂNCIA" | null,',
+            '      "classification": "PERNA DE COMPOSIÇÃO" | "APOSTA SIMPLES" | "APOSTA SIMPLES — VARIÂNCIA" | null,',
             '      "justification": "<string — breve>",',
             '      "red_flags": ["<string>", ...]',
             "    },",
@@ -381,49 +370,38 @@ class GatekeeperAgent(BaseAgent):
             "",
             "REGRAS DE ZONA:",
             "- Odd < 1.25 → REJEITAR (ZONA MORTA)",
-            "- Odd 1.25–1.59 → classification=\"PERNA DE COMPOSIÇÃO\" "
-            "(proibido como aposta simples)",
-            "- Odd 1.60–2.20 → classification=\"APOSTA SIMPLES\"",
-            "- Odd > 2.20 → classification=\"APOSTA SIMPLES — VARIÂNCIA\" "
-            "(stake máx 0.5u)",
+            '- Odd 1.25–1.59 → classification="PERNA DE COMPOSIÇÃO" (proibido como aposta simples)',
+            '- Odd 1.60–2.20 → classification="APOSTA SIMPLES"',
+            '- Odd > 2.20 → classification="APOSTA SIMPLES — VARIÂNCIA" (stake máx 0.5u)',
             "",
             "Avalie CADA mercado disponível no contexto. "
             "Classifique cada um como APPROVED ou NO BET. "
             "Selecione o melhor (best_pick) entre os aprovados, "
             "ou null se nada for válido.",
             "",
-            "IMPORTANTE: Ignore completamente o mercado de Handicap. "
-            "Handicap NÃO faz parte do perfil operacional.",
+            "IMPORTANTE: Ignore completamente o mercado de Handicap. Handicap NÃO faz parte do perfil operacional.",
             "",
             "=== CONTEXTO DO JOGO ===",
             match_context_json,
         ]
 
         parts.append(
-            "\nSe não houver NENHUM cenário favorável em nenhum mercado, "
-            'retorne: {"markets": [], "best_pick": null}.'
+            '\nSe não houver NENHUM cenário favorável em nenhum mercado, retorne: {"markets": [], "best_pick": null}.'
         )
         return "\n".join(parts)
 
-    def _call_llm(self, user_prompt: str) -> Optional[str]:
+    def _call_llm(self, user_prompt: str) -> str | None:
         """Send prompt to primary LLM; on HTTP 429 retry with fallback provider."""
         try:
-            return self._call_provider(
-                self._client, self._model, user_prompt, max_tokens=2048
-            )
+            return self._call_provider(self._client, self._model, user_prompt, max_tokens=2048)
         except RateLimitError as exc:
-            logger.warning(
-                "Gatekeeper: rate limit / cota esgotada no provedor principal — %s", exc
-            )
+            logger.warning("Gatekeeper: rate limit / cota esgotada no provedor principal — %s", exc)
             if self._fallback_client is None:
                 logger.error(
-                    "Gatekeeper: nenhum fallback configurado. "
-                    "Defina LLM_FALLBACK_API_KEY no .env para ativar fallback."
+                    "Gatekeeper: nenhum fallback configurado. Defina LLM_FALLBACK_API_KEY no .env para ativar fallback."
                 )
                 return None
-            logger.info(
-                "Gatekeeper: alternando para fallback (model=%s).", self._fallback_model
-            )
+            logger.info("Gatekeeper: alternando para fallback (model=%s).", self._fallback_model)
             try:
                 return self._call_provider(
                     self._fallback_client,
@@ -441,11 +419,11 @@ class GatekeeperAgent(BaseAgent):
     def _call_provider(
         self,
         client: OpenAI,
-        model: Optional[str],
+        model: str | None,
         user_prompt: str,
         *,
         max_tokens: int,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Execute a single chat completion request and return the content string.
 
         Uses ``response_format={"type": "json_object"}`` to enforce
@@ -483,10 +461,8 @@ class GatekeeperAgent(BaseAgent):
             text = text.strip()
         return text
 
-    ParseOk = tuple  # alias para (dict, None) | (None, str)
-
     @staticmethod
-    def _safe_json_parse(raw: str) -> ParseOk:
+    def _safe_json_parse(raw: str) -> tuple[dict | None, str | None]:
         """Try to parse raw string as JSON, with markdown-stripping fallbacks.
 
         Returns
@@ -525,13 +501,13 @@ class GatekeeperAgent(BaseAgent):
             )
 
         # ── Parse markets array ────────────────────────────────────
-        markets_data: List[Dict[str, Any]] = data.get("markets", [])
-        markets: List[MarketEvaluation] = []
+        markets_data: list[dict[str, Any]] = data.get("markets", [])
+        markets: list[MarketEvaluation] = []
         for m in markets_data:
             if not isinstance(m, dict):
                 continue
             stake_raw = m.get("stake")
-            stake: Optional[float] = None
+            stake: float | None = None
             if stake_raw is not None:
                 try:
                     stake = float(stake_raw)
@@ -541,9 +517,7 @@ class GatekeeperAgent(BaseAgent):
                     stake = None
 
             odd_val = m.get("odd")
-            classification = m.get("classification") or classify_odd(
-                float(odd_val) if odd_val is not None else None
-            )
+            classification = m.get("classification") or classify_odd(float(odd_val) if odd_val is not None else None)
 
             status = m.get("status", _STATUS_NO_BET).upper().strip()
             if status not in (_STATUS_APPROVED, _STATUS_NO_BET):
@@ -564,11 +538,11 @@ class GatekeeperAgent(BaseAgent):
 
         # ── Parse best_pick ────────────────────────────────────────
         best_data = data.get("best_pick")
-        best_pick: Optional[MarketEvaluation] = None
+        best_pick: MarketEvaluation | None = None
         if isinstance(best_data, dict):
             bp = best_data
             bp_stake_raw = bp.get("stake")
-            bp_stake: Optional[float] = None
+            bp_stake: float | None = None
             if bp_stake_raw is not None:
                 try:
                     bp_stake = float(bp_stake_raw)
@@ -578,9 +552,7 @@ class GatekeeperAgent(BaseAgent):
                     bp_stake = None
 
             bp_odd = bp.get("odd")
-            bp_classification = bp.get("classification") or classify_odd(
-                float(bp_odd) if bp_odd is not None else None
-            )
+            bp_classification = bp.get("classification") or classify_odd(float(bp_odd) if bp_odd is not None else None)
             bp_status = bp.get("status", _STATUS_NO_BET).upper().strip()
             if bp_status not in (_STATUS_APPROVED, _STATUS_NO_BET):
                 bp_status = _STATUS_NO_BET
@@ -602,7 +574,7 @@ class GatekeeperAgent(BaseAgent):
             if legacy_status not in (_STATUS_APPROVED, _STATUS_NO_BET):
                 legacy_status = _STATUS_NO_BET
             legacy_stake_raw = data.get("stake")
-            legacy_stake: Optional[float] = None
+            legacy_stake: float | None = None
             if legacy_stake_raw is not None:
                 try:
                     legacy_stake = float(legacy_stake_raw)
@@ -630,9 +602,7 @@ class GatekeeperAgent(BaseAgent):
             overall_red_flags = best_pick.red_flags
         elif any(m.status == _STATUS_APPROVED for m in markets):
             # BEST_PICK ausente mas há mercados aprovados — usa o primeiro
-            first_approved = next(
-                m for m in markets if m.status == _STATUS_APPROVED
-            )
+            first_approved = next(m for m in markets if m.status == _STATUS_APPROVED)
             overall_status = _STATUS_APPROVED
             overall_stake = first_approved.stake
             overall_market = first_approved.market

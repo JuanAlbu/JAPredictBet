@@ -16,11 +16,12 @@ Architecture
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from japredictbet.data.context_collector import MatchContext, OddsContext
 
@@ -50,7 +51,7 @@ def _is_goals_ou_market(name: str) -> bool:
     return lower in ("total de gols", "total goals", "over/under goals")
 
 
-def _extract_odds_context(markets: Dict[str, Dict[str, Any]]) -> OddsContext:
+def _extract_odds_context(markets: dict[str, dict[str, Any]]) -> OddsContext:
     """Convert a scraper markets dict into an OddsContext."""
     odds = OddsContext()
 
@@ -94,9 +95,9 @@ def _extract_odds_context(markets: Dict[str, Dict[str, Any]]) -> OddsContext:
 
 
 def load_pre_match_snapshot(
-    date: Optional[str] = None,
-    directory: Optional[Path] = None,
-) -> List[Dict[str, Any]]:
+    date: str | None = None,
+    directory: Path | None = None,
+) -> list[dict[str, Any]]:
     """Load raw pre-match data for a given date.
 
     Parameters
@@ -117,25 +118,22 @@ def load_pre_match_snapshot(
 
     if not path.exists():
         logger.warning(
-            "Pre-match snapshot not found: %s.  "
-            "Run 'python scripts/superbet_scraper.py hoje' first.",
+            "Pre-match snapshot not found: %s.  Run 'python scripts/superbet_scraper.py hoje' first.",
             path,
         )
         return []
 
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         data = json.load(f)
 
-    logger.info(
-        "Loaded %d events from pre-match snapshot: %s", len(data), path
-    )
+    logger.info("Loaded %d events from pre-match snapshot: %s", len(data), path)
     return data
 
 
 def load_pre_match_contexts(
-    date: Optional[str] = None,
-    directory: Optional[Path] = None,
-) -> List[MatchContext]:
+    date: str | None = None,
+    directory: Path | None = None,
+) -> list[MatchContext]:
     """Load pre-match data and convert to MatchContext objects.
 
     This is the main entry point for the pipeline — it reads the
@@ -154,7 +152,7 @@ def load_pre_match_contexts(
     List of ``MatchContext`` objects with odds populated.
     """
     raw = load_pre_match_snapshot(date=date, directory=directory)
-    contexts: List[MatchContext] = []
+    contexts: list[MatchContext] = []
 
     for event in raw:
         home = event.get("home_team", "")
@@ -170,10 +168,8 @@ def load_pre_match_contexts(
         ev_date = event.get("date")
         ev_time = event.get("kickoff")
         if ev_date and ev_time:
-            try:
+            with contextlib.suppress(Exception):
                 kickoff_utc = f"{ev_date}T{ev_time}:00"
-            except Exception:
-                pass
 
         ctx = MatchContext(
             event_id=event.get("event_id", ""),
@@ -182,21 +178,17 @@ def load_pre_match_contexts(
             kickoff_utc=kickoff_utc,
             league=event.get("league"),
             odds=odds_ctx,
-            collected_at=datetime.now(timezone.utc).isoformat(),
+            collected_at=datetime.now(UTC).isoformat(),
         )
         contexts.append(ctx)
 
-    logger.info(
-        "Converted %d pre-match events to MatchContext objects.", len(contexts)
-    )
+    logger.info("Converted %d pre-match events to MatchContext objects.", len(contexts))
     return contexts
 
 
-def get_available_dates(directory: Optional[Path] = None) -> List[str]:
+def get_available_dates(directory: Path | None = None) -> list[str]:
     """List all available pre-match snapshot dates."""
     base_dir = directory or _DEFAULT_DIR
     if not base_dir.exists():
         return []
-    return sorted(
-        p.stem for p in base_dir.glob("*.json") if p.stem[0].isdigit()
-    )
+    return sorted(p.stem for p in base_dir.glob("*.json") if p.stem[0].isdigit())

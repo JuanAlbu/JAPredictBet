@@ -5,11 +5,10 @@ from __future__ import annotations
 import json
 import logging
 import pickle
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
-
-logger = logging.getLogger(__name__)
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -17,10 +16,12 @@ import xgboost as xgb
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import ElasticNet, Ridge
 
+logger = logging.getLogger(__name__)
+
 try:
     import lightgbm as lgb
 except ImportError:  # pragma: no cover - optional dependency
-    lgb = None
+    lgb = None  # type: ignore[assignment]
 
 
 @dataclass(frozen=True)
@@ -60,11 +61,7 @@ def train_models(
     """
 
     if home_target not in features.columns or away_target not in features.columns:
-        missing = [
-            target
-            for target in (home_target, away_target)
-            if target not in features.columns
-        ]
+        missing = [target for target in (home_target, away_target) if target not in features.columns]
         raise ValueError(f"Missing target columns: {missing}")
 
     feature_cols = _select_feature_columns(features, exclude=(home_target, away_target))
@@ -101,18 +98,15 @@ def train_models(
         model_params=model_params,
     )
 
-    feature_fill_values = {
-        col: float(x[col].median()) if x[col].notna().any() else 0.0
-        for col in feature_cols
-    }
+    feature_fill_values = {col: float(x[col].median()) if x[col].notna().any() else 0.0 for col in feature_cols}
     x = x.fillna(feature_fill_values)
 
     if weights is not None:
-        home_model.fit(x, y_home, sample_weight=weights)
-        away_model.fit(x, y_away, sample_weight=weights)
+        home_model.fit(x, y_home, sample_weight=weights)  # type: ignore[attr-defined]
+        away_model.fit(x, y_away, sample_weight=weights)  # type: ignore[attr-defined]
     else:
-        home_model.fit(x, y_home)
-        away_model.fit(x, y_away)
+        home_model.fit(x, y_home)  # type: ignore[attr-defined]
+        away_model.fit(x, y_away)  # type: ignore[attr-defined]
 
     return TrainedModels(
         home_model=home_model,
@@ -179,6 +173,7 @@ def train_ensemble_models(
 def _compute_file_hash(filepath: Path) -> str:
     """Compute SHA256 short hash of a file."""
     import hashlib
+
     sha = hashlib.sha256()
     with open(filepath, "rb") as f:
         for chunk in iter(lambda: f.read(4096), b""):
@@ -192,7 +187,7 @@ def save_ensemble_models(
     output_dir: Path | str,
 ) -> list[Path]:
     """Persist trained ensemble members to disk with standard names.
-    
+
     Each model is saved as a .pkl file alongside a .json metadata file
     containing auditable hyperparameters (P1.C3) and artifact hash (P2.B7).
     """
@@ -204,7 +199,7 @@ def save_ensemble_models(
     out_dir.mkdir(parents=True, exist_ok=True)
     saved_paths: list[Path] = []
 
-    for model, spec in zip(models, specs):
+    for model, spec in zip(models, specs, strict=False):
         output_path = out_dir / spec.model_name
         with open(output_path, "wb") as handle:
             pickle.dump(model, handle)
@@ -313,39 +308,39 @@ def _drop_unusable_feature_columns(
 
 def _is_allowed_feature(column: str, allowed_prefixes: tuple[str, ...] | None = None) -> bool:
     """Determine if a column should be included in training (dynamic feature selection).
-    
+
     This function prevents data leakage by restricting to engineered, pre-match safe features
     that are inherently temporally valid (rolling stats, ratios, team identity, etc).
-    
+
     Args:
         column: Feature column name to validate
         allowed_prefixes: Custom tuple of allowed prefixes/keywords; if None, uses defaults
-        
+
     Returns:
         True if feature is safe to use in training, False otherwise
     """
-    
+
     # Default engineered feature keywords (expandable via parameter)
     if allowed_prefixes is None:
         allowed_prefixes = (
-            "_last",           # Rolling window features
-            "_diff",           # Difference features
-            "_team_enc",       # Team encoding features
-            "_vs_",            # Matchup features
-            "_ratio",          # Ratio features
-            "_pressure",       # Pressure metrics
-            "_total",          # Total count features
-            "elo",             # ELO ratings
-            "_rolling",        # Explicit rolling features
-            "_momentum",       # Momentum metrics
+            "_last",  # Rolling window features
+            "_diff",  # Difference features
+            "_team_enc",  # Team encoding features
+            "_vs_",  # Matchup features
+            "_ratio",  # Ratio features
+            "_pressure",  # Pressure metrics
+            "_total",  # Total count features
+            "elo",  # ELO ratings
+            "_rolling",  # Explicit rolling features
+            "_momentum",  # Momentum metrics
         )
-    
+
     # Direct features always allowed (static, non-leaking)
     direct_features = {"home_advantage", "is_home"}
-    
+
     if column in direct_features:
         return True
-    
+
     return any(key in column for key in allowed_prefixes)
 
 
@@ -416,9 +411,7 @@ def _build_regressor(
 
     if algo == "lightgbm":
         if lgb is None:
-            raise ValueError(
-                "Algorithm 'lightgbm' was requested but lightgbm is not installed."
-            )
+            raise ValueError("Algorithm 'lightgbm' was requested but lightgbm is not installed.")
         params = {
             "objective": "poisson",
             "n_estimators": 450,
@@ -431,11 +424,10 @@ def _build_regressor(
             "verbosity": -1,
         }
         params.update(overrides)
-        return lgb.LGBMRegressor(**params)
+        return lgb.LGBMRegressor(**params)  # type: ignore[arg-type]
 
     raise ValueError(
-        f"Unsupported algorithm '{algorithm}'. "
-        "Expected one of: xgboost, lightgbm, randomforest, ridge, elasticnet."
+        f"Unsupported algorithm '{algorithm}'. Expected one of: xgboost, lightgbm, randomforest, ridge, elasticnet."
     )
 
 
@@ -450,7 +442,7 @@ def _normalize_algorithms(algorithms: tuple[str, ...]) -> tuple[str, ...]:
 
 def _build_ensemble_schedule(size: int, algorithms: tuple[str, ...]) -> list[str]:
     """Build deterministic and balanced algorithm schedule.
-    
+
     For 30 models with hybrid mode enabled, will build 70% boosting + 30% linear
     using only the algorithms specified in the ``algorithms`` parameter.
     Otherwise maintains legacy balanced distribution.
@@ -458,26 +450,25 @@ def _build_ensemble_schedule(size: int, algorithms: tuple[str, ...]) -> list[str
 
     if size <= 0:
         return ["xgboost"]
-    
+
     # Hybrid mode for ~30 models — only if algorithms include both boosters and linear
     if size >= 25 and size <= 35:
         boosters = [a for a in algorithms if a in ("xgboost", "lightgbm")]
         linear = [a for a in algorithms if a in ("ridge", "elasticnet")]
         if boosters and linear:
             return _build_hybrid_ensemble_schedule(size, boosters, linear)
-    
+
     algo_list = list(algorithms) if algorithms else ["xgboost"]
+    schedule: list[str] = []
 
     # Keep exact balance whenever size is divisible by algorithm count.
     if size % len(algo_list) == 0:
         per_algorithm = size // len(algo_list)
-        schedule: list[str] = []
         for _ in range(per_algorithm):
             for algorithm in algo_list:
                 schedule.append(algorithm)
         return schedule
 
-    schedule: list[str] = []
     idx = 0
     while len(schedule) < size:
         schedule.append(algo_list[idx % len(algo_list)])
@@ -491,7 +482,7 @@ def _build_hybrid_ensemble_schedule(
     linear: list[str] | None = None,
 ) -> list[str]:
     """Build 70% boosting + 30% linear hybrid schedule (e.g., 21 boosters + 9 linear for 30 models).
-    
+
     This implements the experimental consensus architecture:
     - 70% Boosting algorithms (alternating from ``boosters`` list)
     - 30% Linear models (alternating from ``linear`` list)
@@ -504,24 +495,23 @@ def _build_hybrid_ensemble_schedule(
     n_models = max(1, int(size))
     n_boosters = max(1, int(round(n_models * 0.70)))
     n_linear = n_models - n_boosters
-    
+
     # Ensure at least 1 linear if more than 1 model
     if n_linear == 0 and n_models > 1:
         n_linear = 1
         n_boosters = n_models - 1
-    
+
     schedule: list[str] = []
-    
+
     # Boosters: alternate through provided booster algorithms
     for idx in range(n_boosters):
         schedule.append(boosters[idx % len(boosters)])
-    
+
     # Linear: alternate through provided linear algorithms
     for idx in range(n_linear):
         schedule.append(linear[idx % len(linear)])
-    
-    return schedule
 
+    return schedule
 
 
 def _load_hyperopt_best_params(algorithm: str) -> dict[str, Any] | None:
@@ -535,12 +525,14 @@ def _load_hyperopt_best_params(algorithm: str) -> dict[str, Any] | None:
     if not algo_file.exists():
         return None
     try:
-        with open(algo_file, "r", encoding="utf-8") as f:
+        with open(algo_file, encoding="utf-8") as f:
             data = json.load(f)
         best = data.get("best_params")
         if isinstance(best, dict) and best:
             logger.info(
-                "Hyperopt params loaded for %s (best_value=%.4f)", algorithm, data.get("best_value", -1)
+                "Hyperopt params loaded for %s (best_value=%.4f)",
+                algorithm,
+                data.get("best_value", -1),
             )
             return best
     except (json.JSONDecodeError, OSError) as exc:
@@ -613,9 +605,7 @@ def build_variation_params(algorithm: str, variation_index: int) -> dict[str, An
     return {}
 
 
-def _build_variation_from_hyperopt(
-    algo: str, best: dict[str, Any], idx: int
-) -> dict[str, Any]:
+def _build_variation_from_hyperopt(algo: str, best: dict[str, Any], idx: int) -> dict[str, Any]:
     """Build a variation around hyperopt best params for ensemble diversity.
 
     The best params are used as the base; a few key knobs are slightly
@@ -653,7 +643,10 @@ def _build_variation_from_hyperopt(
         base_alpha = best.get("alpha", 0.1)
         base_l1 = best.get("l1_ratio", 0.5)
         params["alpha"] = base_alpha * [0.8, 0.9, 1.0, 1.1, 1.2, 0.85, 1.05, 1.15, 0.95, 1.25][idx]
-        params["l1_ratio"] = min(1.0, max(0.0, base_l1 + [-0.1, -0.05, 0.0, 0.05, 0.1, -0.08, 0.08, -0.03, 0.03, 0.0][idx]))
+        params["l1_ratio"] = min(
+            1.0,
+            max(0.0, base_l1 + [-0.1, -0.05, 0.0, 0.05, 0.1, -0.08, 0.08, -0.03, 0.03, 0.0][idx]),
+        )
         params.setdefault("max_iter", 20000)
 
     return params

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Tuple
-
 import numpy as np
 import pandas as pd
 
@@ -13,7 +11,7 @@ from .train import TrainedModels
 def predict_expected_corners(
     models: TrainedModels,
     features: pd.DataFrame,
-) -> Tuple[pd.Series, pd.Series]:
+) -> tuple[pd.Series, pd.Series]:
     """Predict expected home and away corners.
 
     Uses the feature columns captured during training to align inputs.
@@ -29,8 +27,8 @@ def predict_expected_corners(
     x = features[list(models.feature_columns)].copy()
     if models.feature_fill_values:
         x = x.fillna(models.feature_fill_values)
-    home_pred = models.home_model.predict(x)
-    away_pred = models.away_model.predict(x)
+        home_pred = models.home_model.predict(x)  # type: ignore[attr-defined]
+        away_pred = models.away_model.predict(x)  # type: ignore[attr-defined]
 
     home_series = pd.Series(
         np.clip(home_pred, 0, None),

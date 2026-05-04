@@ -1,16 +1,15 @@
 """Tests for probability calibration metrics (P1.B1)."""
 
-import pytest
 import numpy as np
+import pytest
 
 from japredictbet.probability.calibration import (
-    brier_score,
-    expected_calibration_error,
-    calibration_report,
-    format_calibration_report,
     CalibrationResult,
+    brier_score,
+    calibration_report,
+    expected_calibration_error,
+    format_calibration_report,
 )
-
 
 # =====================
 # BRIER SCORE TESTS
@@ -46,7 +45,7 @@ class TestBrierScore:
         """Realistic case: probabilities near correct values."""
         y_true = [1, 1, 0, 0, 1]
         y_prob = [0.9, 0.8, 0.2, 0.1, 0.7]
-        expected = np.mean([(0.9-1)**2, (0.8-1)**2, (0.2-0)**2, (0.1-0)**2, (0.7-1)**2])
+        expected = np.mean([(0.9 - 1) ** 2, (0.8 - 1) ** 2, (0.2 - 0) ** 2, (0.1 - 0) ** 2, (0.7 - 1) ** 2])
         assert brier_score(y_true, y_prob) == pytest.approx(expected)
 
     def test_empty_raises(self):

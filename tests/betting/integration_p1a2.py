@@ -8,9 +8,7 @@ Demonstrates that:
 3. Dynamic margin threshold adjustment works as configured
 """
 
-import tempfile
-from pathlib import Path
-import yaml
+from src.japredictbet.betting.engine import ConsensusEngine
 from src.japredictbet.config import (
     DataConfig,
     FeatureConfig,
@@ -19,7 +17,6 @@ from src.japredictbet.config import (
     PipelineConfig,
     ValueConfig,
 )
-from src.japredictbet.betting.engine import ConsensusEngine
 
 
 def test_scenario_1_load_config_from_yaml():
@@ -75,7 +72,7 @@ def test_scenario_1_load_config_from_yaml():
         value=value_cfg,
     )
 
-    print(f"✓ Config loaded successfully")
+    print("✓ Config loaded successfully")
     print(f"  tight_margin_threshold: {config.value.tight_margin_threshold}")
     print(f"  tight_margin_consensus: {config.value.tight_margin_consensus}")
 
@@ -101,7 +98,7 @@ def test_scenario_2_engine_from_config():
         tight_margin_consensus=cfg.tight_margin_consensus,
     )
 
-    print(f"✓ ConsensusEngine initialized with config values")
+    print("✓ ConsensusEngine initialized with config values")
     print(f"  edge_threshold: {engine.edge_threshold}")
     print(f"  tight_margin_threshold: {engine.tight_margin_threshold}")
     print(f"  tight_margin_consensus: {engine.tight_margin_consensus}")
@@ -146,14 +143,10 @@ def test_scenario_3_tuning_dynamic_margin():
     line = 10.0
     base_threshold = 0.45
 
-    conservative_result = engine_conservative._compute_dynamic_threshold(
-        mean_lambda, line, base_threshold
-    )
-    aggressive_result = engine_aggressive._compute_dynamic_threshold(
-        mean_lambda, line, base_threshold
-    )
+    conservative_result = engine_conservative._compute_dynamic_threshold(mean_lambda, line, base_threshold)
+    aggressive_result = engine_aggressive._compute_dynamic_threshold(mean_lambda, line, base_threshold)
 
-    print(f"✓ Tight margin (1.0) scenario:")
+    print("✓ Tight margin (1.0) scenario:")
     print(f"  Conservative (tight_margin=0.3): threshold={conservative_result}")
     print(f"  Aggressive (tight_margin=0.8): threshold={aggressive_result}")
 
@@ -186,7 +179,7 @@ def test_scenario_4_backward_compatibility():
     assert engine_old.tight_margin_threshold == engine_new.tight_margin_threshold
     assert engine_old.tight_margin_consensus == engine_new.tight_margin_consensus
 
-    print(f"✓ Backward compatibility maintained")
+    print("✓ Backward compatibility maintained")
     print(f"  Default tight_margin_threshold: {engine_old.tight_margin_threshold}")
     print(f"  Default tight_margin_consensus: {engine_old.tight_margin_consensus}")
 

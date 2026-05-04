@@ -27,16 +27,16 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict, dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from japredictbet.agents.base import AgentContext
 from japredictbet.agents.gatekeeper import (
+    _STATUS_APPROVED,
     GatekeeperAgent,
     GatekeeperResult,
     MarketEvaluation,
-    _STATUS_APPROVED,
 )
 from japredictbet.config import PipelineConfig
 from japredictbet.data.context_collector import ContextCollector, MatchContext
@@ -56,21 +56,21 @@ class ShadowEntry:
     event_id: str
     home_team: str
     away_team: str
-    kickoff_utc: Optional[str]
+    kickoff_utc: str | None
     # Odds
-    corner_line: Optional[float] = None
-    corner_over_odds: Optional[float] = None
-    corner_under_odds: Optional[float] = None
+    corner_line: float | None = None
+    corner_over_odds: float | None = None
+    corner_under_odds: float | None = None
     # Gatekeeper LLM decision (all markets)
-    gatekeeper_status: Optional[str] = None
-    gatekeeper_stake: Optional[float] = None
-    gatekeeper_market: Optional[str] = None
-    gatekeeper_odd: Optional[float] = None
-    gatekeeper_edge: Optional[str] = None
-    gatekeeper_classification: Optional[str] = None
-    gatekeeper_justification: Optional[str] = None
-    gatekeeper_red_flags: List[str] = field(default_factory=list)
-    gatekeeper_markets: List[Dict[str, Any]] = field(default_factory=list)
+    gatekeeper_status: str | None = None
+    gatekeeper_stake: float | None = None
+    gatekeeper_market: str | None = None
+    gatekeeper_odd: float | None = None
+    gatekeeper_edge: str | None = None
+    gatekeeper_classification: str | None = None
+    gatekeeper_justification: str | None = None
+    gatekeeper_red_flags: list[str] = field(default_factory=list)
+    gatekeeper_markets: list[dict[str, Any]] = field(default_factory=list)
     gatekeeper_markets_evaluated: int = 0
     gatekeeper_markets_approved: int = 0
 
@@ -83,7 +83,7 @@ class PipelineRunResult:
     matches_collected: int
     matches_evaluated: int
     entries_approved: int
-    entries: List[ShadowEntry]
+    entries: list[ShadowEntry]
 
 
 # ── Pipeline ─────────────────────────────────────────────────────────
@@ -110,16 +110,12 @@ class GatekeeperLivePipeline:
         self,
         config: PipelineConfig,
         context_collector: ContextCollector,
-        gatekeeper: Optional[GatekeeperAgent],
+        gatekeeper: GatekeeperAgent | None,
     ) -> None:
         self._config = config
         self._collector = context_collector
         self._gatekeeper = gatekeeper
-        self._shadow_log_path = Path(
-            config.gatekeeper.shadow_log_path
-            if config.gatekeeper
-            else "logs/shadow_bets.log"
-        )
+        self._shadow_log_path = Path(config.gatekeeper.shadow_log_path if config.gatekeeper else "logs/shadow_bets.log")
 
     # ── Factory ──────────────────────────────────────────────────────
 
@@ -141,18 +137,12 @@ class GatekeeperLivePipeline:
         """
         gk_cfg = config.gatekeeper
         if gk_cfg is None:
-            raise ValueError(
-                "PipelineConfig.gatekeeper is None — "
-                "add a 'gatekeeper' block to config.yml."
-            )
+            raise ValueError("PipelineConfig.gatekeeper is None — add a 'gatekeeper' block to config.yml.")
 
         # Resolve API keys
         api_keys = config.api_keys.resolve() if config.api_keys else None
         if api_keys is None and not dry_run:
-            raise ValueError(
-                "PipelineConfig.api_keys is None — "
-                "add an 'api_keys' block to config.yml."
-            )
+            raise ValueError("PipelineConfig.api_keys is None — add an 'api_keys' block to config.yml.")
 
         # Derive tournament whitelist from league folders that actually have
         # historical CSV data.
@@ -166,12 +156,12 @@ class GatekeeperLivePipeline:
         collector = ContextCollector.from_configs(
             superbet_cfg=superbet_cfg,
             api_football_cfg=config.api_football,
-            api_football_key=api_keys.api_football_key if api_keys else None,
+            api_football_key=(api_keys.api_football_key if api_keys else None) or "",
             gatekeeper_cfg=gk_cfg,
         )
 
         # Gatekeeper agent (all markets via single LLM call)
-        gatekeeper: Optional[GatekeeperAgent] = None
+        gatekeeper: GatekeeperAgent | None = None
 
         if dry_run:
             logger.info("Dry-run mode: Gatekeeper LLM will be skipped.")
@@ -195,7 +185,7 @@ class GatekeeperLivePipeline:
 
     def run(
         self,
-        pre_match_date: Optional[str] = None,
+        pre_match_date: str | None = None,
         dry_run: bool = False,
     ) -> PipelineRunResult:
         """Execute the pipeline and return results.
@@ -212,19 +202,18 @@ class GatekeeperLivePipeline:
             without API keys.
         """
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         logger.info("=== Gatekeeper Live Pipeline — %s ===", now.isoformat())
 
         # ── 1. Collect matches ───────────────────────────────────────
         if pre_match_date:
-            logger.info(
-                "Pre-match mode: loading snapshot for %s", pre_match_date
-            )
+            logger.info("Pre-match mode: loading snapshot for %s", pre_match_date)
             matches = load_pre_match_contexts(date=pre_match_date)
 
             # Enrich with API-Football data (lineups, standings, injuries)
             matches = self._collector.enrich_pre_match_contexts(
-                matches, date=pre_match_date,
+                matches,
+                date=pre_match_date,
             )
         else:
             matches = self._collect_matches()
@@ -242,12 +231,8 @@ class GatekeeperLivePipeline:
             return result
 
         # ── 2. Evaluate each match ───────────────────────────────────
-        entries: List[ShadowEntry] = []
-        max_entries = (
-            self._config.gatekeeper.max_entries_per_day
-            if self._config.gatekeeper
-            else 5
-        )
+        entries: list[ShadowEntry] = []
+        max_entries = self._config.gatekeeper.max_entries_per_day if self._config.gatekeeper else 5
         approved_count = 0
 
         for match_ctx in matches:
@@ -259,9 +244,7 @@ class GatekeeperLivePipeline:
             if entry.gatekeeper_status == _STATUS_APPROVED:
                 if approved_count >= max_entries:
                     entry.gatekeeper_status = "CAPPED"
-                    entry.gatekeeper_justification = (
-                        f"Limite diário de {max_entries} entradas atingido."
-                    )
+                    entry.gatekeeper_justification = f"Limite diário de {max_entries} entradas atingido."
                 else:
                     approved_count += 1
 
@@ -287,7 +270,7 @@ class GatekeeperLivePipeline:
 
     # ── Internal methods ─────────────────────────────────────────────
 
-    def _collect_matches(self) -> List[MatchContext]:
+    def _collect_matches(self) -> list[MatchContext]:
         """Collect upcoming matches via the ContextCollector."""
         try:
             return self._collector.collect_upcoming()
@@ -296,8 +279,11 @@ class GatekeeperLivePipeline:
             return []
 
     def _evaluate_single_match(
-        self, match_ctx: MatchContext, *, dry_run: bool = False,
-    ) -> Optional[ShadowEntry]:
+        self,
+        match_ctx: MatchContext,
+        *,
+        dry_run: bool = False,
+    ) -> ShadowEntry | None:
         """Run Gatekeeper LLM evaluation for a single match.
 
         Forwards the match context (odds, lineups, standings,
@@ -312,9 +298,7 @@ class GatekeeperLivePipeline:
 
         # ── Gatekeeper LLM (all markets, context-only) ───────────────
         if dry_run or self._gatekeeper is None:
-            logger.info(
-                "Dry-run: skipping Gatekeeper LLM for %s vs %s.", home, away
-            )
+            logger.info("Dry-run: skipping Gatekeeper LLM for %s vs %s.", home, away)
             gk_result = GatekeeperResult(
                 status="DRY_RUN",
                 justification="Dry-run mode — LLM evaluation skipped.",
@@ -340,7 +324,7 @@ class GatekeeperLivePipeline:
         # ── Build shadow entry ───────────────────────────────────────
         odds = match_ctx.odds
         return ShadowEntry(
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             event_id=event_id,
             home_team=home,
             away_team=away,
@@ -371,6 +355,8 @@ class GatekeeperLivePipeline:
         Over/Under Gols) in a single call using Prompt Mestre V26.
         """
         try:
+            if self._gatekeeper is None:
+                raise RuntimeError("Gatekeeper agent not initialized")
             context = AgentContext(
                 payload={
                     "match_context_json": match_ctx.to_llm_context(),
@@ -407,12 +393,8 @@ class GatekeeperLivePipeline:
                     red_flags=best_data.get("red_flags", []),
                 )
 
-            has_approved = any(
-                m.status == _STATUS_APPROVED for m in markets
-            )
-            overall_status = (
-                _STATUS_APPROVED if has_approved else raw.get("status", "NO BET")
-            )
+            has_approved = any(m.status == _STATUS_APPROVED for m in markets)
+            overall_status = _STATUS_APPROVED if has_approved else raw.get("status", "NO BET")
 
             return GatekeeperResult(
                 status=overall_status,
@@ -420,16 +402,8 @@ class GatekeeperLivePipeline:
                 market=best_pick.market if best_pick else raw.get("market"),
                 odd=best_pick.odd if best_pick else raw.get("odd"),
                 edge=best_pick.edge if best_pick else raw.get("edge"),
-                classification=(
-                    best_pick.classification
-                    if best_pick
-                    else raw.get("classification")
-                ),
-                justification=(
-                    best_pick.justification
-                    if best_pick
-                    else raw.get("justification")
-                ),
+                classification=(best_pick.classification if best_pick else raw.get("classification")),
+                justification=(best_pick.justification if best_pick else raw.get("justification")),
                 red_flags=best_pick.red_flags if best_pick else raw.get("red_flags", []),
                 markets=markets,
                 best_pick=best_pick,

@@ -9,8 +9,8 @@ P1.B1 implementation.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 import numpy as np
 
@@ -51,9 +51,7 @@ def brier_score(y_true: Sequence[int], y_prob: Sequence[float]) -> float:
     if len(y_true_arr) == 0:
         raise ValueError("y_true must not be empty.")
     if len(y_true_arr) != len(y_prob_arr):
-        raise ValueError(
-            f"Length mismatch: y_true={len(y_true_arr)}, y_prob={len(y_prob_arr)}"
-        )
+        raise ValueError(f"Length mismatch: y_true={len(y_true_arr)}, y_prob={len(y_prob_arr)}")
 
     return float(np.mean((y_prob_arr - y_true_arr) ** 2))
 
@@ -87,9 +85,7 @@ def expected_calibration_error(
     if len(y_true_arr) == 0:
         raise ValueError("y_true must not be empty.")
     if len(y_true_arr) != len(y_prob_arr):
-        raise ValueError(
-            f"Length mismatch: y_true={len(y_true_arr)}, y_prob={len(y_prob_arr)}"
-        )
+        raise ValueError(f"Length mismatch: y_true={len(y_true_arr)}, y_prob={len(y_prob_arr)}")
     if n_bins < 1:
         raise ValueError(f"n_bins must be >= 1, got {n_bins}")
 
@@ -148,9 +144,7 @@ def calibration_report(
         CalibrationResult with all metrics and bin details.
     """
     bs = brier_score(y_true, y_prob)
-    ece_val, edges, accuracies, confidences, counts = expected_calibration_error(
-        y_true, y_prob, n_bins=n_bins
-    )
+    ece_val, edges, accuracies, confidences, counts = expected_calibration_error(y_true, y_prob, n_bins=n_bins)
 
     result = CalibrationResult(
         brier_score=bs,
@@ -203,16 +197,16 @@ def format_calibration_report(result: CalibrationResult) -> str:
         acc = result.bin_accuracies[i]
         conf = result.bin_confidences[i]
         gap = abs(acc - conf) if count > 0 else 0.0
-        lines.append(
-            f"[{lower:.1f}-{upper:.1f}] | {count:>5} | {acc:>8.3f} | {conf:>10.3f} | {gap:>6.3f}"
-        )
+        lines.append(f"[{lower:.1f}-{upper:.1f}] | {count:>5} | {acc:>8.3f} | {conf:>10.3f} | {gap:>6.3f}")
 
-    lines.extend([
-        "-" * 55,
-        f"Interpretation:",
-        f"  Brier < 0.20 = good    | ECE < 0.05 = well calibrated",
-        f"  Brier < 0.25 = fair    | ECE < 0.10 = acceptable",
-        "=" * 50,
-    ])
+    lines.extend(
+        [
+            "-" * 55,
+            "Interpretation:",
+            "  Brier < 0.20 = good    | ECE < 0.05 = well calibrated",
+            "  Brier < 0.25 = fair    | ECE < 0.10 = acceptable",
+            "=" * 50,
+        ]
+    )
 
     return "\n".join(lines)

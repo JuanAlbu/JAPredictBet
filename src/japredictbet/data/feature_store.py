@@ -32,21 +32,22 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Sequence
+from datetime import UTC
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
 
 from japredictbet.data.ingestion import load_historical_dataset
+from japredictbet.features.matchup import add_h2h_features
 from japredictbet.features.rolling import (
+    add_result_rolling,
     add_rolling_ema,
     add_rolling_std,
-    add_result_rolling,
     add_stat_rolling,
     drop_redundant_features,
 )
-from japredictbet.features.matchup import add_h2h_features
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +95,7 @@ class FeatureStore:
         use_std: bool = True,
         use_ema: bool = True,
         drop_redundant: bool = True,
-    ) -> "FeatureStore":
+    ) -> FeatureStore:
         """Build the feature store from all league CSVs under *leagues_dir*.
 
         Parameters
@@ -113,7 +114,7 @@ class FeatureStore:
         drop_redundant:
             Whether to drop correlated redundant features.
         """
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         leagues_dir = Path(leagues_dir)
         dfs: list[pd.DataFrame] = []
@@ -135,13 +136,9 @@ class FeatureStore:
                         axis=1,
                     )
                     dfs.append(df)
-                    logger.debug(
-                        "Loaded %d rows from %s", len(df), csv_path.relative_to(leagues_dir.parent)
-                    )
+                    logger.debug("Loaded %d rows from %s", len(df), csv_path.relative_to(leagues_dir.parent))
                 except Exception:
-                    logger.warning(
-                        "Failed to load %s — skipping.", csv_path, exc_info=True
-                    )
+                    logger.warning("Failed to load %s — skipping.", csv_path, exc_info=True)
 
         if not dfs:
             raise RuntimeError(
@@ -174,7 +171,7 @@ class FeatureStore:
 
         # Extract the most recent row per team
         table = _extract_latest_per_team(combined)
-        built_at = datetime.now(timezone.utc).isoformat()
+        built_at = datetime.now(UTC).isoformat()
         logger.info(
             "FeatureStore built: %d teams | %d feature columns | at %s",
             len(table),
@@ -193,17 +190,20 @@ class FeatureStore:
         # not model features and cause pyarrow type errors.
         numeric_table = self.table.select_dtypes(include="number")
         numeric_table.to_parquet(path, index=True)
-        logger.info("FeatureStore saved → %s  (%d teams, %d numeric cols)",
-                    path, len(numeric_table), len(numeric_table.columns))
+        logger.info(
+            "FeatureStore saved → %s  (%d teams, %d numeric cols)",
+            path,
+            len(numeric_table),
+            len(numeric_table.columns),
+        )
 
     @classmethod
-    def load(cls, path: str | Path) -> "FeatureStore":
+    def load(cls, path: str | Path) -> FeatureStore:
         """Load a previously saved feature store from Parquet."""
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(
-                f"Feature store not found at '{path}'. "
-                "Run 'python scripts/refresh_features.py' to build it."
+                f"Feature store not found at '{path}'. Run 'python scripts/refresh_features.py' to build it."
             )
         table = pd.read_parquet(path)
         built_at = str(table.attrs.get("built_at", "unknown"))
@@ -222,7 +222,7 @@ class FeatureStore:
         home_team: str,
         away_team: str,
         fuzzy: bool = True,
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """Build a single-row feature DataFrame for inference.
 
         Combines the most recent home-team row (home_* features) with
@@ -263,13 +263,13 @@ class FeatureStore:
         combined["home_advantage"] = 1.0
         return pd.DataFrame([combined])
 
-    def known_teams(self) -> List[str]:
+    def known_teams(self) -> list[str]:
         """Return the list of all team names in the store."""
         return list(self.table.index)
 
     # ── Internal helpers ─────────────────────────────────────────────
 
-    def _lookup(self, team_name: str, fuzzy: bool) -> Optional[pd.Series]:
+    def _lookup(self, team_name: str, fuzzy: bool) -> pd.Series | None:
         """Return the feature row for *team_name*, or None."""
         key = _normalise_name(team_name)
         if key in self.table.index:
@@ -278,9 +278,7 @@ class FeatureStore:
         if fuzzy:
             best_match, score = _fuzzy_match(key, list(self.table.index))
             if score >= 0.82:
-                logger.debug(
-                    "Fuzzy match: '%s' → '%s' (score=%.2f)", key, best_match, score
-                )
+                logger.debug("Fuzzy match: '%s' → '%s' (score=%.2f)", key, best_match, score)
                 return self.table.loc[best_match]
 
         return None
@@ -301,57 +299,105 @@ def _add_all_features(
     for window in rolling_windows:
         # Corners rolling mean
         df = add_stat_rolling(
-            df, "home_team", "home_corners", "away_corners",
-            window, "home", "corners",
+            df,
+            "home_team",
+            "home_corners",
+            "away_corners",
+            window,
+            "home",
+            "corners",
         )
         df = add_stat_rolling(
-            df, "away_team", "away_corners", "home_corners",
-            window, "away", "corners",
+            df,
+            "away_team",
+            "away_corners",
+            "home_corners",
+            window,
+            "away",
+            "corners",
         )
 
         # Other stats (shots, fouls, goals, cards) — only if column exists
         for home_col, away_col, stat_name in _STAT_PAIRS[1:]:  # skip corners, already done
             if home_col in df.columns and away_col in df.columns:
                 df = add_stat_rolling(
-                    df, "home_team", home_col, away_col,
-                    window, "home", stat_name,
+                    df,
+                    "home_team",
+                    home_col,
+                    away_col,
+                    window,
+                    "home",
+                    stat_name,
                 )
                 df = add_stat_rolling(
-                    df, "away_team", away_col, home_col,
-                    window, "away", stat_name,
+                    df,
+                    "away_team",
+                    away_col,
+                    home_col,
+                    window,
+                    "away",
+                    stat_name,
                 )
 
         # Results (wins, draws, losses, points)
         if "home_goals" in df.columns and "away_goals" in df.columns:
             df = add_result_rolling(
-                df, "home_team", "home_goals", "away_goals",
-                window, "home",
+                df,
+                "home_team",
+                "home_goals",
+                "away_goals",
+                window,
+                "home",
             )
             df = add_result_rolling(
-                df, "away_team", "away_goals", "home_goals",
-                window, "away",
+                df,
+                "away_team",
+                "away_goals",
+                "home_goals",
+                window,
+                "away",
             )
 
         # Rolling STD
         if use_std:
             df = add_rolling_std(
-                df, "home_team", "home_corners", "away_corners",
-                window, "home", "corners",
+                df,
+                "home_team",
+                "home_corners",
+                "away_corners",
+                window,
+                "home",
+                "corners",
             )
             df = add_rolling_std(
-                df, "away_team", "away_corners", "home_corners",
-                window, "away", "corners",
+                df,
+                "away_team",
+                "away_corners",
+                "home_corners",
+                window,
+                "away",
+                "corners",
             )
 
         # Rolling EMA
         if use_ema:
             df = add_rolling_ema(
-                df, "home_team", "home_corners", "away_corners",
-                window, "home", "corners",
+                df,
+                "home_team",
+                "home_corners",
+                "away_corners",
+                window,
+                "home",
+                "corners",
             )
             df = add_rolling_ema(
-                df, "away_team", "away_corners", "home_corners",
-                window, "away", "corners",
+                df,
+                "away_team",
+                "away_corners",
+                "home_corners",
+                window,
+                "away",
+                "corners",
             )
 
     # H2H features
@@ -376,13 +422,30 @@ def _extract_latest_per_team(df: pd.DataFrame) -> pd.DataFrame:
     Using stale H2H would corrupt inference (P2-SH18).
     """
     feature_cols = [
-        c for c in df.columns
-        if c not in ("date", "home_team", "away_team", "_league", "season",
-                     "home_goals", "away_goals", "home_corners", "away_corners",
-                     "home_shots", "away_shots", "home_fouls", "away_fouls",
-                     "home_yellow_cards", "away_yellow_cards",
-                     "home_red_cards", "away_red_cards",
-                     "home_shots_on_target", "away_shots_on_target")
+        c
+        for c in df.columns
+        if c
+        not in (
+            "date",
+            "home_team",
+            "away_team",
+            "_league",
+            "season",
+            "home_goals",
+            "away_goals",
+            "home_corners",
+            "away_corners",
+            "home_shots",
+            "away_shots",
+            "home_fouls",
+            "away_fouls",
+            "home_yellow_cards",
+            "away_yellow_cards",
+            "home_red_cards",
+            "away_red_cards",
+            "home_shots_on_target",
+            "away_shots_on_target",
+        )
         # Exclude pair-specific H2H features — they reference the last
         # opponent, not the upcoming match pair (P2-SH18).
         and not c.startswith("total_corners_h2h_last")
@@ -408,7 +471,7 @@ def _extract_latest_per_team(df: pd.DataFrame) -> pd.DataFrame:
     return latest
 
 
-def _prefix_row(row: pd.Series, side: str) -> Dict[str, float]:
+def _prefix_row(row: pd.Series, side: str) -> dict[str, float]:
     """Extract features for *side* from a combined-row Series.
 
     Columns starting with the correct side prefix are kept as-is.
@@ -416,7 +479,7 @@ def _prefix_row(row: pd.Series, side: str) -> Dict[str, float]:
     Columns with no prefix (e.g. h2h features) are included as-is.
     """
     opposite = "away" if side == "home" else "home"
-    result: Dict[str, float] = {}
+    result: dict[str, float] = {}
     for col, val in row.items():
         if isinstance(col, str):
             if col.startswith(opposite + "_"):
@@ -482,8 +545,7 @@ def get_active_tournament_ids(
 
     if not mapping_path.exists():
         logger.warning(
-            "League→tournamentId mapping not found at '%s'. "
-            "Superbet tournament filter will be disabled.",
+            "League→tournamentId mapping not found at '%s'. Superbet tournament filter will be disabled.",
             mapping_path,
         )
         return ()
@@ -491,9 +553,7 @@ def get_active_tournament_ids(
     with open(mapping_path, encoding="utf-8") as f:
         raw = json.load(f)
     # Strip comment keys (keys starting with "_")
-    mapping: dict[str, int] = {
-        k.strip().lower(): v for k, v in raw.items() if not k.startswith("_")
-    }
+    mapping: dict[str, int] = {k.strip().lower(): v for k, v in raw.items() if not k.startswith("_")}
 
     active_ids: list[int] = []
     folders_with_data: list[str] = []
@@ -523,12 +583,10 @@ def get_active_tournament_ids(
         )
 
     logger.info(
-        "Active tournament filter: %d IDs from %d league folder(s) "
-        "(%d folder(s) have no mapping yet: %s).",
+        "Active tournament filter: %d IDs from %d league folder(s) (%d folder(s) have no mapping yet: %s).",
         len(active_ids),
         len(folders_with_data),
         len(folders_no_mapping),
         folders_no_mapping or "none",
     )
     return tuple(active_ids)
-

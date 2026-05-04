@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 import pandas as pd
-
 
 REQUIRED_COLUMNS: Iterable[str] = (
     "date",
@@ -105,11 +104,7 @@ def _standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
             renamed[original] = STANDARD_COLUMN_MAP[lowered]
     if renamed:
         df = df.rename(columns=renamed)
-    drop_stats = [
-        col
-        for col in df.columns
-        if col in STAT_COLUMNS and col not in COMMON_STAT_COLUMNS
-    ]
+    drop_stats = [col for col in df.columns if col in STAT_COLUMNS and col not in COMMON_STAT_COLUMNS]
     if drop_stats:
         df = df.drop(columns=drop_stats)
     return df
@@ -137,9 +132,7 @@ def load_historical_dataset(path: Path, date_column: str = "date") -> pd.DataFra
         raise ValueError("Unsupported dataset format. Use CSV or Parquet.")
 
     df = _standardize_columns(df)
-    normalized_date_column = STANDARD_COLUMN_MAP.get(
-        date_column.strip().lower(), date_column
-    )
+    normalized_date_column = STANDARD_COLUMN_MAP.get(date_column.strip().lower(), date_column)
 
     missing = [col for col in REQUIRED_COLUMNS if col not in df.columns]
     if missing:

@@ -6,6 +6,7 @@ rolling mean, rolling STD, rolling EMA, matchup, ELO, and target encoding.
 Usage:
     python scripts/feature_correlation_analysis.py --config config.yml
 """
+
 import argparse
 import sys
 from datetime import datetime
@@ -19,23 +20,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from japredictbet.config import PipelineConfig
 from japredictbet.data.ingestion import load_historical_dataset
-from japredictbet.features.elo import add_elo_ratings, EloConfig
+from japredictbet.features.elo import EloConfig, add_elo_ratings
 from japredictbet.features.matchup import add_matchup_features
-from japredictbet.features.rolling import (
-    add_stat_rolling,
-    add_result_rolling,
-    add_rolling_std,
-    add_rolling_ema,
-)
 from japredictbet.features.team_identity import add_team_target_encoding
 from japredictbet.pipeline.mvp_pipeline import (
+    _add_rolling_ema_features,
     _add_rolling_stats,
     _add_rolling_std_features,
-    _add_rolling_ema_features,
     _add_total_corners_features,
     _add_total_goals_features,
-    _ensure_season_column,
     _build_temporal_split,
+    _ensure_season_column,
 )
 
 
@@ -60,9 +55,7 @@ def build_feature_dataframe(config) -> pd.DataFrame:
 
     data["home_advantage"] = 1.0
 
-    encoding_train_mask, _ = _build_temporal_split(
-        data["season"], config.model.random_state
-    )
+    encoding_train_mask, _ = _build_temporal_split(data["season"], config.model.random_state)
 
     data = add_elo_ratings(
         data,
@@ -75,39 +68,46 @@ def build_feature_dataframe(config) -> pd.DataFrame:
     )
 
     data = add_team_target_encoding(
-        data, team_col="home_team", target_col="home_corners",
-        train_mask=encoding_train_mask, feature_name="home_team_team_enc",
+        data,
+        team_col="home_team",
+        target_col="home_corners",
+        train_mask=encoding_train_mask,
+        feature_name="home_team_team_enc",
     )
     data = add_team_target_encoding(
-        data, team_col="away_team", target_col="away_corners",
-        train_mask=encoding_train_mask, feature_name="away_team_team_enc",
+        data,
+        team_col="away_team",
+        target_col="away_corners",
+        train_mask=encoding_train_mask,
+        feature_name="away_team_team_enc",
     )
     return data
 
 
 def select_numeric_features(data: pd.DataFrame) -> pd.DataFrame:
     """Select only engineered numeric feature columns.
-    
+
     Uses a whitelist approach: only keeps columns that match known
     engineered feature patterns (rolling, matchup, ELO, encoding, etc.).
     """
     import re
+
     numeric = data.select_dtypes(include=[np.number])
 
     # Whitelist patterns for engineered features
     feature_patterns = re.compile(
-        r'('
-        r'_for_last\d+|_against_last\d+|'
-        r'_for_std_last\d+|_against_std_last\d+|'
-        r'_for_ema_last\d+|_against_ema_last\d+|'
-        r'_wins_last\d+|_draws_last\d+|_losses_last\d+|'
-        r'_points_last\d+|_win_rate_last\d+|_points_per_game_last\d+|'
-        r'attack_vs_|pressure_index|_diff$|'
-        r'total_corners_|total_goals_|'
-        r'_elo_|elo_rating|'
-        r'_team_enc$|'
-        r'^home_advantage$'
-        r')'
+        r"("
+        r"_for_last\d+|_against_last\d+|"
+        r"_for_std_last\d+|_against_std_last\d+|"
+        r"_for_ema_last\d+|_against_ema_last\d+|"
+        r"_wins_last\d+|_draws_last\d+|_losses_last\d+|"
+        r"_points_last\d+|_win_rate_last\d+|_points_per_game_last\d+|"
+        r"attack_vs_|pressure_index|_diff$|"
+        r"total_corners_|total_goals_|"
+        r"_elo_|elo_rating|"
+        r"_team_enc$|"
+        r"^home_advantage$"
+        r")"
     )
     feature_cols = [c for c in numeric.columns if feature_patterns.search(c)]
     return numeric[feature_cols]
@@ -115,7 +115,7 @@ def select_numeric_features(data: pd.DataFrame) -> pd.DataFrame:
 
 def compute_correlation_matrix(features: pd.DataFrame) -> pd.DataFrame:
     """Compute Pearson correlation matrix on valid rows.
-    
+
     Drops columns that are all-NaN, then uses pairwise complete obs.
     """
     clean = features.dropna(axis=1, how="all")
@@ -227,9 +227,10 @@ def generate_report(
     valid_rows = features_df.dropna().shape[0]
 
     import re
+
     windows = set()
     for c in features_df.columns:
-        m = re.search(r'last(\d+)$', c)
+        m = re.search(r"last(\d+)$", c)
         if m:
             windows.add(int(m.group(1)))
     windows_str = str(sorted(windows, reverse=True)) if windows else "N/A"
@@ -238,10 +239,10 @@ def generate_report(
         "# Entradas do Modelo e Analise de Correlacao (Atualizado)",
         "",
         f"**Data da Analise:** {timestamp}",
-        f"**Versao:** Post-P1.B2 (inclui Rolling Mean + STD + EMA)",
+        "**Versao:** Post-P1.B2 (inclui Rolling Mean + STD + EMA)",
         "",
         "## Contexto",
-        f"- Pipeline de features com STD e EMA habilitados",
+        "- Pipeline de features com STD e EMA habilitados",
         f"- Rolling windows: {windows_str}",
         f"- Total de features numericas: **{len(features_df.columns)}**",
         f"- Linhas totais: {len(data)} | Linhas validas para correlacao: {valid_rows}",
@@ -268,7 +269,7 @@ def generate_report(
     lines.append("")
 
     # Top correlations
-    lines.append(f"## Top 50 Correlacoes (Pearson)")
+    lines.append("## Top 50 Correlacoes (Pearson)")
     lines.append("")
     lines.append("| # | Feature A | Feature B | Correlacao |")
     lines.append("|:-:|-----------|-----------|:---:|")
@@ -278,7 +279,7 @@ def generate_report(
     lines.append("")
 
     # High correlation pairs (danger zone)
-    lines.append(f"## Pares com Correlacao > 0.85 (Risco de Multicolinearidade)")
+    lines.append("## Pares com Correlacao > 0.85 (Risco de Multicolinearidade)")
     lines.append("")
     if high_pairs:
         lines.append(f"**Total: {len(high_pairs)} pares**")
@@ -356,18 +357,27 @@ def generate_report(
         lines.append("")
 
         # Count how many involve std/ema
-        std_ema_pairs = [p for p in high_pairs if "_std_" in p[0] or "_std_" in p[1] or "_ema_" in p[0] or "_ema_" in p[1]]
+        std_ema_pairs = [
+            p for p in high_pairs if "_std_" in p[0] or "_std_" in p[1] or "_ema_" in p[0] or "_ema_" in p[1]
+        ]
         total_pairs = [p for p in high_pairs if "total_" in p[0] or "total_" in p[1]]
 
         lines.append("### Acoes Sugeridas")
         lines.append("")
         if std_ema_pairs:
-            lines.append(f"1. **STD/EMA redundantes ({len(std_ema_pairs)} pares):** Se Mean↔EMA > 0.95, a EMA nao adiciona informacao nova. Considerar:")
+            lines.append(
+                f"1. **STD/EMA redundantes ({len(std_ema_pairs)} pares):**"
+                " Se Mean↔EMA > 0.95, a EMA nao adiciona informacao nova. Considerar:"
+            )
             lines.append("   - Desativar EMA (`rolling_use_ema: false`) e medir impacto no accuracy")
             lines.append("   - Ou manter apenas EMA e remover rolling mean (EMA subsume a media)")
             lines.append("")
         if total_pairs:
-            lines.append(f"2. **Features de totais redundantes ({len(total_pairs)} pares):** `total_corners_for` = `home_corners_for` + `away_corners_for`. Sao linearmente dependentes.")
+            lines.append(
+                f"2. **Features de totais redundantes ({len(total_pairs)} pares):**"
+                " `total_corners_for` = `home_corners_for` + `away_corners_for`."
+                " Sao linearmente dependentes."
+            )
             lines.append("   - Remover features de totais (informacao ja contida nos componentes)")
             lines.append("")
         lines.append("3. **Para modelos lineares (Ridge/ElasticNet — 30% do ensemble):**")

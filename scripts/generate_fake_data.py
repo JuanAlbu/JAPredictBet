@@ -1,9 +1,11 @@
 """Script to generate a larger, more realistic fake dataset."""
 
-import pandas as pd
-import numpy as np
 import datetime
 import itertools
+
+import numpy as np
+import pandas as pd
+
 
 def generate_fake_data(num_seasons: int, teams_per_season: int, output_path: str):
     """Generates and saves a fake football dataset."""
@@ -17,10 +19,10 @@ def generate_fake_data(num_seasons: int, teams_per_season: int, output_path: str
     for season_n in range(num_seasons):
         season_teams = team_names
         matchups = list(itertools.permutations(season_teams, 2))
-        
+
         for home_team, away_team in matchups:
             match_date = start_date + datetime.timedelta(days=(season_n * 380) + len(all_matches))
-            
+
             match_data = {
                 "date": match_date.strftime("%Y-%m-%d"),
                 "home_team": home_team,
@@ -50,8 +52,4 @@ def generate_fake_data(num_seasons: int, teams_per_season: int, output_path: str
 if __name__ == "__main__":
     # Using 20 teams for 3 seasons will give 3 * (20*19) = 1140 rows.
     # This should be enough to handle rolling windows of 10.
-    generate_fake_data(
-        num_seasons=3,
-        teams_per_season=20,
-        output_path="data/raw/dataset.csv"
-    )
+    generate_fake_data(num_seasons=3, teams_per_season=20, output_path="data/raw/dataset.csv")

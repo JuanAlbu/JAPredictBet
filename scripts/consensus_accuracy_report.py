@@ -37,6 +37,7 @@ from japredictbet.pipeline.mvp_pipeline import (
 
 try:
     import lightgbm  # noqa: F401
+
     HAS_LIGHTGBM = True
 except ImportError:  # pragma: no cover - optional dependency
     HAS_LIGHTGBM = False
@@ -57,12 +58,24 @@ def _add_rolling_std_features(data: pd.DataFrame, window: int) -> pd.DataFrame:
     for stat_name, home_col, away_col in stats:
         if home_col in df.columns and away_col in df.columns:
             df = add_rolling_std(
-                df, team_col="home_team", for_col=home_col, against_col=away_col,
-                window=window, prefix="home", stat_name=stat_name, season_col="season",
+                df,
+                team_col="home_team",
+                for_col=home_col,
+                against_col=away_col,
+                window=window,
+                prefix="home",
+                stat_name=stat_name,
+                season_col="season",
             )
             df = add_rolling_std(
-                df, team_col="away_team", for_col=away_col, against_col=home_col,
-                window=window, prefix="away", stat_name=stat_name, season_col="season",
+                df,
+                team_col="away_team",
+                for_col=away_col,
+                against_col=home_col,
+                window=window,
+                prefix="away",
+                stat_name=stat_name,
+                season_col="season",
             )
     return df
 
@@ -78,12 +91,24 @@ def _add_rolling_ema_features(data: pd.DataFrame, window: int) -> pd.DataFrame:
     for stat_name, home_col, away_col in stats:
         if home_col in df.columns and away_col in df.columns:
             df = add_rolling_ema(
-                df, team_col="home_team", for_col=home_col, against_col=away_col,
-                window=window, prefix="home", stat_name=stat_name, season_col="season",
+                df,
+                team_col="home_team",
+                for_col=home_col,
+                against_col=away_col,
+                window=window,
+                prefix="home",
+                stat_name=stat_name,
+                season_col="season",
             )
             df = add_rolling_ema(
-                df, team_col="away_team", for_col=away_col, against_col=home_col,
-                window=window, prefix="away", stat_name=stat_name, season_col="season",
+                df,
+                team_col="away_team",
+                for_col=away_col,
+                against_col=home_col,
+                window=window,
+                prefix="away",
+                stat_name=stat_name,
+                season_col="season",
             )
     return df
 
@@ -283,13 +308,12 @@ def _build_model_plan(
             else:
                 algorithm = "xgboost"
                 params = _build_diversified_xgb_params(seed)
+        elif idx % 2 == 0:
+            algorithm = "ridge"
+            params = _build_diversified_ridge_params(seed)
         else:
-            if idx % 2 == 0:
-                algorithm = "ridge"
-                params = _build_diversified_ridge_params(seed)
-            else:
-                algorithm = "elasticnet"
-                params = _build_diversified_elasticnet_params(seed)
+            algorithm = "elasticnet"
+            params = _build_diversified_elasticnet_params(seed)
         plan.append(
             {
                 "seed": seed,
@@ -306,9 +330,7 @@ def _select_mirrored_features(
 ) -> list[str]:
     """Select train features and enforce an exact mirrored set on test."""
 
-    feature_candidates = _select_feature_columns(
-        train_data, exclude=("home_corners", "away_corners")
-    )
+    feature_candidates = _select_feature_columns(train_data, exclude=("home_corners", "away_corners"))
     train_x = train_data[feature_candidates]
     train_x = train_x.loc[train_x.notna().all(axis=1)]
 
@@ -318,21 +340,14 @@ def _select_mirrored_features(
     selected_train = [col for col in feature_candidates if col not in to_drop]
 
     # Apply the same feature filter to test and enforce exact mirror of train selection.
-    test_candidates = _select_feature_columns(
-        test_data, exclude=("home_corners", "away_corners")
-    )
+    test_candidates = _select_feature_columns(test_data, exclude=("home_corners", "away_corners"))
     missing_in_test = [col for col in selected_train if col not in test_candidates]
     if missing_in_test:
-        raise ValueError(
-            "Test set is missing selected train features: "
-            f"{missing_in_test}"
-        )
+        raise ValueError(f"Test set is missing selected train features: {missing_in_test}")
 
     selected_test = [col for col in test_candidates if col in selected_train]
     if selected_test != selected_train:
-        raise ValueError(
-            "Test selected features do not mirror train selected features."
-        )
+        raise ValueError("Test selected features do not mirror train selected features.")
 
     return selected_train
 
@@ -378,11 +393,7 @@ def _select_blackout_columns_for_model(
         "offsides",
         "booking_points",
     )
-    candidates = [
-        col
-        for col in selected_features
-        if any(token in col for token in stat_tokens)
-    ]
+    candidates = [col for col in selected_features if any(token in col for token in stat_tokens)]
     if not candidates:
         return []
 
@@ -451,12 +462,9 @@ def main() -> None:
 
     cfg = _load_config(args.config)
     if args.n_models != 30:
-        print(
-            f"[info] n_models recebido={args.n_models}; padronizando para 30 "
-            "conforme arquitetura hibrida 70/30."
-        )
+        print(f"[info] n_models recebido={args.n_models}; padronizando para 30 conforme arquitetura hibrida 70/30.")
     args.n_models = 30
-    
+
     # Use args values directly (respecting CLI overrides)
     blackout_count = args.blackout_count
 
@@ -545,28 +553,20 @@ def main() -> None:
             seed=seed,
             blackout_count=blackout_count,
         )
-        selected_without_blackout = [
-            col for col in selected if col not in set(blackout_cols)
-        ]
+        selected_without_blackout = [col for col in selected if col not in set(blackout_cols)]
         model_features = _build_feature_subset_for_model(
             selected_features=selected_without_blackout,
             seed=seed,
             dropout_rate=args.feature_dropout_rate,
         )
-        model_features = [
-            col for col in model_features if train_data[col].notna().any()
-        ]
+        model_features = [col for col in model_features if train_data[col].notna().any()]
         if len(model_features) < 10:
             # Safety fallback for sparse subsets: recover features that have
             # at least one observed value in the train split.
-            fallback_features = [
-                col for col in selected if train_data[col].notna().any()
-            ]
+            fallback_features = [col for col in selected if train_data[col].notna().any()]
             model_features = fallback_features[:10]
         if not model_features:
-            raise ValueError(
-                "No usable model features in consensus script for current train split."
-            )
+            raise ValueError("No usable model features in consensus script for current train split.")
 
         train_block = train_data[model_features + ["home_corners", "away_corners"]].copy()
         test_block = test_data[model_features].copy()
@@ -624,25 +624,16 @@ def main() -> None:
     report_lines.append(f"Modelos: {args.n_models}")
     report_lines.append(f"Seeds: {seed_values[0]}..{seed_values[-1]}")
     report_lines.append(f"Edge threshold: {args.edge_threshold:.2f}")
-    report_lines.append(
-        f"Consenso minimo: {args.consensus_threshold * 100:.0f}%"
-    )
+    report_lines.append(f"Consenso minimo: {args.consensus_threshold * 100:.0f}%")
     report_lines.append(f"Odds usadas: {args.odds:.2f}")
     report_lines.append(
         "Diversificacao: mix 70/30 (boosters/ridge+elasticnet), "
         "learning_rate [0.01-0.10], colsample [0.4-0.9], subsample [0.5-0.9]"
     )
-    report_lines.append(
-        "Threshold Base: 45% | Margem Curta (<0.5): 50% | Edge: 0.01 | Dropout: 20% | Blackout: 3"
-    )
+    report_lines.append("Threshold Base: 45% | Margem Curta (<0.5): 50% | Edge: 0.01 | Dropout: 20% | Blackout: 3")
     report_lines.append("Feature blackout por modelo: 3 colunas de estatisticas ignoradas por seed")
-    report_lines.append(
-        f"Data dropout por modelo: {args.feature_dropout_rate * 100:.0f}% "
-        "(subconjunto fixo por seed)"
-    )
-    report_lines.append(
-        "Regra de margem: se |media_lambda - linha| < 0.5, consenso minimo sobe para 50%"
-    )
+    report_lines.append(f"Data dropout por modelo: {args.feature_dropout_rate * 100:.0f}% (subconjunto fixo por seed)")
+    report_lines.append("Regra de margem: se |media_lambda - linha| < 0.5, consenso minimo sobe para 50%")
     report_lines.append("")
 
     total_decisions = 0
@@ -682,9 +673,7 @@ def main() -> None:
 
         low_count = int(np.sum(lambda_values < line))
         mid1_count = int(np.sum((lambda_values >= line) & (lambda_values < line + 1.0)))
-        mid2_count = int(
-            np.sum((lambda_values >= line + 1.0) & (lambda_values < line + 2.0))
-        )
+        mid2_count = int(np.sum((lambda_values >= line + 1.0) & (lambda_values < line + 2.0)))
         high_count = int(np.sum(lambda_values >= line + 2.0))
 
         actual_total = float(row["home_corners"] + row["away_corners"])
@@ -701,29 +690,20 @@ def main() -> None:
                 if result == "Win":
                     total_wins += 1
 
+        report_lines.append(f"Jogo: {game} | Linha: Over {line:.1f} @ {args.odds:.3f}")
+        report_lines.append(f"1. Estatisticas do Ensemble ({args.n_models} Modelos)")
         report_lines.append(
-            f"Jogo: {game} | Linha: Over {line:.1f} @ {args.odds:.3f}"
-        )
-        report_lines.append(
-            f"1. Estatisticas do Ensemble ({args.n_models} Modelos)"
-        )
-        report_lines.append(
-            f"Media lambda: {mean_lambda:.2f} | Desvio Padrao (sigma): {std_lambda:.2f} ({_dispersion_label(std_lambda)})"
+            f"Media lambda: {mean_lambda:.2f} | Desvio Padrao (sigma):"
+            f" {std_lambda:.2f} ({_dispersion_label(std_lambda)})"
         )
         report_lines.append("Distribuicao por Range (lambda):")
         report_lines.append(f"< {line:.1f}: {low_count} modelos")
         report_lines.append(f"{line:.1f} - {line + 1.0:.1f}: {mid1_count} modelos")
         report_lines.append(f"{line + 1.0:.1f} - {line + 2.0:.1f}: {mid2_count} modelos")
         report_lines.append(f">= {line + 2.0:.1f}: {high_count} modelos")
-        report_lines.append(
-            f"2. Votacao de Valor (Edge >= {args.edge_threshold:.2f})"
-        )
-        report_lines.append(
-            f"Votos: {votes} / {args.n_models} ({consensus * 100:.0f}% de Consenso)"
-        )
-        report_lines.append(
-            f"Threshold: {effective_consensus_threshold * 100:.0f}% (Minimo exigido)"
-        )
+        report_lines.append(f"2. Votacao de Valor (Edge >= {args.edge_threshold:.2f})")
+        report_lines.append(f"Votos: {votes} / {args.n_models} ({consensus * 100:.0f}% de Consenso)")
+        report_lines.append(f"Threshold: {effective_consensus_threshold * 100:.0f}% (Minimo exigido)")
         report_lines.append(f"Margem media-linha: {margin:.2f}")
         report_lines.append(
             f"Decisao: {'APOSTAR' if decision else 'NAO APOSTAR'} | Resultado real: {result} (total={actual_total:.0f})"
@@ -746,15 +726,13 @@ def main() -> None:
     report_lines.append("Monitoramento de Dispersao")
     report_lines.append(f"Sigma medio por jogo: {float(np.mean(sigma_per_match)):.2f}")
     report_lines.append(f"Sigma mediano por jogo: {float(np.median(sigma_per_match)):.2f}")
-    report_lines.append(f"Sigma minimo/maximo por jogo: {float(np.min(sigma_per_match)):.2f} / {float(np.max(sigma_per_match)):.2f}")
+    report_lines.append(
+        f"Sigma minimo/maximo por jogo: {float(np.min(sigma_per_match)):.2f} / {float(np.max(sigma_per_match)):.2f}"
+    )
     report_lines.append(f"Predicoes extremas (lambda_total < 7.0): {int(np.sum(lambdas < 7.0))}")
     report_lines.append(f"Predicoes extremas (lambda_total >= 13.0): {int(np.sum(lambdas >= 13.0))}")
-    report_lines.append(
-        f"Jogos com pelo menos 1 modelo >= 13.0: {int(np.sum(np.any(lambdas >= 13.0, axis=0)))}"
-    )
-    report_lines.append(
-        f"Jogos com pelo menos 1 modelo < 7.0: {int(np.sum(np.any(lambdas < 7.0, axis=0)))}"
-    )
+    report_lines.append(f"Jogos com pelo menos 1 modelo >= 13.0: {int(np.sum(np.any(lambdas >= 13.0, axis=0)))}")
+    report_lines.append(f"Jogos com pelo menos 1 modelo < 7.0: {int(np.sum(np.any(lambdas < 7.0, axis=0)))}")
     report_lines.append("")
     report_lines.append("Resumo dos Parametros por Modelo")
     for row in model_param_rows:

@@ -20,9 +20,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from japredictbet.agents.base import AgentContext
-from japredictbet.agents.gatekeeper import GatekeeperResult, MarketEvaluation
+from japredictbet.agents.gatekeeper import MarketEvaluation
 from japredictbet.config import GatekeeperConfig
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 
@@ -147,9 +146,7 @@ class TestPreFilter:
         assert result.status == "ERROR"
 
     def test_empty_odds_returns_filtered(self, agent):
-        ctx = json.dumps(
-            {"event_id": "1", "home_team": "A", "away_team": "B", "odds": {}}
-        )
+        ctx = json.dumps({"event_id": "1", "home_team": "A", "away_team": "B", "odds": {}})
         result = agent.evaluate_match(ctx)
         assert result.status == "FILTERED"
 
@@ -208,17 +205,13 @@ class TestResponseParsing:
         assert result.status == "NO BET"
 
     def test_stake_clamped_to_valid_range(self, agent, mock_openai):
-        llm_output = json.dumps(
-            {"status": "APPROVED", "stake": 5.0, "justification": "Strong"}
-        )
+        llm_output = json.dumps({"status": "APPROVED", "stake": 5.0, "justification": "Strong"})
         _mock_llm_response(mock_openai, llm_output)
         result = agent.evaluate_match(_make_match_context())
         assert result.stake == 2.0  # clamped to max
 
     def test_stake_below_minimum(self, agent, mock_openai):
-        llm_output = json.dumps(
-            {"status": "APPROVED", "stake": 0.1, "justification": "Weak"}
-        )
+        llm_output = json.dumps({"status": "APPROVED", "stake": 0.1, "justification": "Weak"})
         _mock_llm_response(mock_openai, llm_output)
         result = agent.evaluate_match(_make_match_context())
         assert result.stake == 0.5  # clamped to min
@@ -481,9 +474,7 @@ class TestMarkdownStripping:
 
     def test_no_fences_passes_through(self, agent):
         """Plain JSON without fences parses normally."""
-        raw = json.dumps(
-            {"status": "NO BET", "justification": "plain"}
-        )
+        raw = json.dumps({"status": "NO BET", "justification": "plain"})
         result = agent._parse_response(raw)
         assert result.status == "NO BET"
         assert result.justification == "plain"
@@ -504,9 +495,7 @@ class TestLLMFailure:
     """Test graceful handling when LLM call raises an exception."""
 
     def test_llm_exception_returns_error(self, agent, mock_openai):
-        mock_openai.chat.completions.create.side_effect = RuntimeError(
-            "API down"
-        )
+        mock_openai.chat.completions.create.side_effect = RuntimeError("API down")
         result = agent.evaluate_match(_make_match_context())
         assert result.status == "ERROR"
         assert "failed" in (result.justification or "").lower()
@@ -522,13 +511,9 @@ class TestBaseAgentContract:
         assert agent.name == "gatekeeper"
 
     def test_run_method_legacy(self, agent, mock_openai):
-        llm_output = json.dumps(
-            {"status": "NO BET", "justification": "Test via run()"}
-        )
+        llm_output = json.dumps({"status": "NO BET", "justification": "Test via run()"})
         _mock_llm_response(mock_openai, llm_output)
-        context = AgentContext(
-            payload={"match_context_json": _make_match_context()}
-        )
+        context = AgentContext(payload={"match_context_json": _make_match_context()})
         result = agent.run(context)
         assert isinstance(result, dict)
         assert result["status"] == "NO BET"
@@ -560,9 +545,7 @@ class TestBaseAgentContract:
             }
         )
         _mock_llm_response(mock_openai, response)
-        context = AgentContext(
-            payload={"match_context_json": _make_match_context()}
-        )
+        context = AgentContext(payload={"match_context_json": _make_match_context()})
         result = agent.run(context)
         assert isinstance(result, dict)
         assert "status" in result
@@ -572,6 +555,7 @@ class TestBaseAgentContract:
 
 
 # ── Constructor validation ───────────────────────────────────────────
+
 
 class TestConstructor:
     """Test GatekeeperAgent constructor validation."""

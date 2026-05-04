@@ -43,12 +43,8 @@ def add_h2h_features(df: pd.DataFrame, h2h_window: int = 3) -> pd.DataFrame:
         if home_col in df.columns and away_col in df.columns:
             total = df[home_col] + df[away_col]
             # Shift by 1 to exclude current match, then rolling mean
-            df[feature_name] = (
-                total
-                .groupby(df["_h2h_pair"])
-                .transform(
-                    lambda x: x.shift(1).rolling(h2h_window, min_periods=1).mean()
-                )
+            df[feature_name] = total.groupby(df["_h2h_pair"]).transform(
+                lambda x: x.shift(1).rolling(h2h_window, min_periods=1).mean()
             )
 
     df.drop(columns=["_h2h_pair"], inplace=True)

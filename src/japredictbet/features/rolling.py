@@ -37,11 +37,9 @@ def add_rolling_features(
     else:
         group = df.groupby(team_col, sort=False)
 
-    df[f"{prefix}_corners_for_last{window}"] = (
-        group[for_col].transform(lambda x: x.shift(1).rolling(window).mean())
-    )
-    df[f"{prefix}_corners_against_last{window}"] = (
-        group[against_col].transform(lambda x: x.shift(1).rolling(window).mean())
+    df[f"{prefix}_corners_for_last{window}"] = group[for_col].transform(lambda x: x.shift(1).rolling(window).mean())
+    df[f"{prefix}_corners_against_last{window}"] = group[against_col].transform(
+        lambda x: x.shift(1).rolling(window).mean()
     )
 
     return df
@@ -65,11 +63,9 @@ def add_stat_rolling(
     else:
         group = df.groupby(team_col, sort=False)
 
-    df[f"{prefix}_{stat_name}_for_last{window}"] = (
-        group[for_col].transform(lambda x: x.shift(1).rolling(window).mean())
-    )
-    df[f"{prefix}_{stat_name}_against_last{window}"] = (
-        group[against_col].transform(lambda x: x.shift(1).rolling(window).mean())
+    df[f"{prefix}_{stat_name}_for_last{window}"] = group[for_col].transform(lambda x: x.shift(1).rolling(window).mean())
+    df[f"{prefix}_{stat_name}_against_last{window}"] = group[against_col].transform(
+        lambda x: x.shift(1).rolling(window).mean()
     )
     return df
 
@@ -100,37 +96,20 @@ def add_result_rolling(
     data["_tmp_loss"] = pd.Series(np.nan, index=data.index, dtype="float")
     data["_tmp_points"] = pd.Series(np.nan, index=data.index, dtype="float")
 
-    data.loc[has_score, "_tmp_win"] = (
-        goals_for[has_score] > goals_against[has_score]
-    ).astype(float)
-    data.loc[has_score, "_tmp_draw"] = (
-        goals_for[has_score] == goals_against[has_score]
-    ).astype(float)
-    data.loc[has_score, "_tmp_loss"] = (
-        goals_for[has_score] < goals_against[has_score]
-    ).astype(float)
-    data.loc[has_score, "_tmp_points"] = (
-        data.loc[has_score, "_tmp_win"].astype(float) * 3.0
-        + data.loc[has_score, "_tmp_draw"].astype(float)
-    )
+    data.loc[has_score, "_tmp_win"] = (goals_for[has_score] > goals_against[has_score]).astype(float)
+    data.loc[has_score, "_tmp_draw"] = (goals_for[has_score] == goals_against[has_score]).astype(float)
+    data.loc[has_score, "_tmp_loss"] = (goals_for[has_score] < goals_against[has_score]).astype(float)
+    data.loc[has_score, "_tmp_points"] = data.loc[has_score, "_tmp_win"].astype(float) * 3.0 + data.loc[
+        has_score, "_tmp_draw"
+    ].astype(float)
 
-    data[f"{prefix}_wins_last{window}"] = (
-        group["_tmp_win"].transform(lambda x: x.shift(1).rolling(window).sum())
-    )
-    data[f"{prefix}_draws_last{window}"] = (
-        group["_tmp_draw"].transform(lambda x: x.shift(1).rolling(window).sum())
-    )
-    data[f"{prefix}_losses_last{window}"] = (
-        group["_tmp_loss"].transform(lambda x: x.shift(1).rolling(window).sum())
-    )
-    data[f"{prefix}_points_last{window}"] = (
-        group["_tmp_points"].transform(lambda x: x.shift(1).rolling(window).sum())
-    )
-    data[f"{prefix}_win_rate_last{window}"] = (
-        group["_tmp_win"].transform(lambda x: x.shift(1).rolling(window).mean())
-    )
-    data[f"{prefix}_points_per_game_last{window}"] = (
-        group["_tmp_points"].transform(lambda x: x.shift(1).rolling(window).mean())
+    data[f"{prefix}_wins_last{window}"] = group["_tmp_win"].transform(lambda x: x.shift(1).rolling(window).sum())
+    data[f"{prefix}_draws_last{window}"] = group["_tmp_draw"].transform(lambda x: x.shift(1).rolling(window).sum())
+    data[f"{prefix}_losses_last{window}"] = group["_tmp_loss"].transform(lambda x: x.shift(1).rolling(window).sum())
+    data[f"{prefix}_points_last{window}"] = group["_tmp_points"].transform(lambda x: x.shift(1).rolling(window).sum())
+    data[f"{prefix}_win_rate_last{window}"] = group["_tmp_win"].transform(lambda x: x.shift(1).rolling(window).mean())
+    data[f"{prefix}_points_per_game_last{window}"] = group["_tmp_points"].transform(
+        lambda x: x.shift(1).rolling(window).mean()
     )
     return data.drop(columns=["_tmp_win", "_tmp_draw", "_tmp_loss", "_tmp_points"])
 
@@ -146,10 +125,10 @@ def add_rolling_std(
     season_col: str | None = None,
 ) -> pd.DataFrame:
     """Add rolling standard deviation features for a given stat.
-    
+
     Useful for detecting consistency/volatility in a team's performance.
     High STD indicates inconsistent performance.
-    
+
     Args:
         df: Input DataFrame
         team_col: Column with team names
@@ -159,7 +138,7 @@ def add_rolling_std(
         prefix: Prefix for generated feature columns (e.g., 'home')
         stat_name: Name of the stat (e.g., 'corners', 'goals')
         season_col: Optional season column for grouping
-        
+
     Returns:
         DataFrame with rolling std features appended
     """
@@ -170,11 +149,11 @@ def add_rolling_std(
     else:
         group = df.groupby(team_col, sort=False)
 
-    df[f"{prefix}_{stat_name}_for_std_last{window}"] = (
-        group[for_col].transform(lambda x: x.shift(1).rolling(window).std())
+    df[f"{prefix}_{stat_name}_for_std_last{window}"] = group[for_col].transform(
+        lambda x: x.shift(1).rolling(window).std()
     )
-    df[f"{prefix}_{stat_name}_against_std_last{window}"] = (
-        group[against_col].transform(lambda x: x.shift(1).rolling(window).std())
+    df[f"{prefix}_{stat_name}_against_std_last{window}"] = group[against_col].transform(
+        lambda x: x.shift(1).rolling(window).std()
     )
     return df
 
@@ -191,11 +170,11 @@ def add_rolling_ema(
     alpha: float | None = None,
 ) -> pd.DataFrame:
     """Add exponential moving average (EMA) features.
-    
+
     EMA gives more weight to recent games. Useful for capturing current form.
     By default, alpha is calculated from window: alpha = 2 / (window + 1)
     (standard EMA formula).
-    
+
     Args:
         df: Input DataFrame
         team_col: Column with team names
@@ -207,7 +186,7 @@ def add_rolling_ema(
         season_col: Optional season column for grouping
         alpha: Smoothing factor (0 < alpha <= 1). If None, calculated from window.
                Higher alpha = more weight to recent observations.
-        
+
     Returns:
         DataFrame with EMA features appended
     """
@@ -230,12 +209,8 @@ def add_rolling_ema(
         return shifted.ewm(alpha=alpha, adjust=False).mean()
 
     # EMA with automatic handling of NaN values - use transform to preserve index
-    df[f"{prefix}_{stat_name}_for_ema_last{window}"] = group[for_col].transform(
-        compute_ema
-    )
-    df[f"{prefix}_{stat_name}_against_ema_last{window}"] = group[against_col].transform(
-        compute_ema
-    )
+    df[f"{prefix}_{stat_name}_for_ema_last{window}"] = group[for_col].transform(compute_ema)
+    df[f"{prefix}_{stat_name}_against_ema_last{window}"] = group[against_col].transform(compute_ema)
     return df
 
 
@@ -270,10 +245,7 @@ def drop_redundant_features(
         smallest_window = min(rolling_windows)
         larger_windows = [w for w in rolling_windows if w != smallest_window]
         for window in larger_windows:
-            to_drop.extend(
-                col for col in df.columns
-                if "_ema_last" in col and col.endswith(f"_last{window}")
-            )
+            to_drop.extend(col for col in df.columns if "_ema_last" in col and col.endswith(f"_last{window}"))
 
     existing = [c for c in to_drop if c in df.columns]
     if existing:

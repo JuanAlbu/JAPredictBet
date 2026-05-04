@@ -1,14 +1,13 @@
 """Tests for lambda validation in betting engine (P1.A3)."""
 
-import math
 import pytest
 
 from src.japredictbet.betting.engine import (
-    _validate_lambda,
+    ConsensusEngine,
     _extract_lambda_total,
+    _validate_lambda,
     report_consensus,
 )
-from src.japredictbet.betting.engine import ConsensusEngine
 
 
 class TestLambdaValidation:
@@ -79,9 +78,7 @@ class TestExtractLambdaTotal:
         # This is a bit tricky - in practice, adding two numbers won't give NaN
         # unless one is already NaN
         with pytest.raises(ValueError, match="not finite"):
-            _extract_lambda_total(
-                {"lambda_home": float("nan"), "lambda_away": 5.0}
-            )
+            _extract_lambda_total({"lambda_home": float("nan"), "lambda_away": 5.0})
 
 
 class TestReportConsensusValidation:

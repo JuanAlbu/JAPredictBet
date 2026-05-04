@@ -1,8 +1,7 @@
 """Test P1.A2: Dynamic margin parameters in config and ConsensusEngine integration."""
 
-import pytest
-from src.japredictbet.config import ValueConfig
 from src.japredictbet.betting.engine import ConsensusEngine
+from src.japredictbet.config import ValueConfig
 
 
 def test_value_config_defaults():
@@ -52,15 +51,11 @@ def test_dynamic_threshold_uses_stored_values():
     )
 
     # When margin < threshold, should return tight_margin_consensus
-    result_tight = engine._compute_dynamic_threshold(
-        mean_lambda=9.8, line=10.0, base_threshold=0.45
-    )
+    result_tight = engine._compute_dynamic_threshold(mean_lambda=9.8, line=10.0, base_threshold=0.45)
     assert result_tight == 0.70, "Should return tight_margin_consensus when margin < threshold"
 
     # When margin >= threshold, should return base_threshold
-    result_loose = engine._compute_dynamic_threshold(
-        mean_lambda=9.0, line=10.0, base_threshold=0.45
-    )
+    result_loose = engine._compute_dynamic_threshold(mean_lambda=9.0, line=10.0, base_threshold=0.45)
     assert result_loose == 0.45, "Should return base_threshold when margin >= threshold"
 
 
@@ -74,9 +69,7 @@ def test_dynamic_threshold_disabled():
     )
 
     # Even when margin < threshold, should return base_threshold if disabled
-    result = engine._compute_dynamic_threshold(
-        mean_lambda=9.8, line=10.0, base_threshold=0.45
-    )
+    result = engine._compute_dynamic_threshold(mean_lambda=9.8, line=10.0, base_threshold=0.45)
     assert result == 0.45, "Should return base_threshold when dynamic margin is disabled"
 
 
@@ -118,13 +111,8 @@ def test_different_margin_scenarios():
     ]
 
     for mean_lambda, line, expected, description in scenarios:
-        result = engine._compute_dynamic_threshold(
-            mean_lambda=mean_lambda, line=line, base_threshold=0.45
-        )
+        result = engine._compute_dynamic_threshold(mean_lambda=mean_lambda, line=line, base_threshold=0.45)
         expected_val = 0.50 if expected == 0.50 else 0.45
         # The boundary is actually "< tight_margin_threshold", so 0.5 should trigger
-        if abs(mean_lambda - line) < 0.5:
-            expected_val = 0.50
-        else:
-            expected_val = 0.45
+        expected_val = 0.5 if abs(mean_lambda - line) < 0.5 else 0.45
         assert result == expected_val, f"Failed: {description}"

@@ -90,7 +90,7 @@ def evaluate_walk_forward(
             pred_home.loc[test_mask],
             pred_away.loc[test_mask],
         )
-        metrics["train_seasons"] = ",".join(sorted(train_seasons))
+        metrics["train_seasons"] = ",".join(sorted(train_seasons))  # type: ignore[assignment]
         metrics["test_season"] = test_season
         metrics["features_used"] = len(pruned_models.feature_columns)
         results.append(metrics)
@@ -222,7 +222,7 @@ def _build_features(data: pd.DataFrame, config: WalkForwardConfig) -> pd.DataFra
 
     # Drop redundant features (P2.A11 — sync with production pipeline)
     if config.drop_redundant:
-        df = drop_redundant_features(df, config.rolling_windows)
+        df = drop_redundant_features(df, list(config.rolling_windows))
 
     df = add_elo_ratings(
         df,
@@ -294,12 +294,7 @@ def _compute_metrics(
     pred_home: pd.Series,
     pred_away: pd.Series,
 ) -> dict[str, float]:
-    mask = (
-        actual["home_corners"].notna()
-        & actual["away_corners"].notna()
-        & pred_home.notna()
-        & pred_away.notna()
-    )
+    mask = actual["home_corners"].notna() & actual["away_corners"].notna() & pred_home.notna() & pred_away.notna()
 
     actual_home = actual.loc[mask, "home_corners"].astype(float)
     actual_away = actual.loc[mask, "away_corners"].astype(float)

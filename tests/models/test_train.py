@@ -3,18 +3,17 @@
 from __future__ import annotations
 
 import json
-import pytest
 import tempfile
 from pathlib import Path
 
 from japredictbet.models.train import (
+    EnsembleModelSpec,
+    TrainedModels,
     _build_ensemble_schedule,
     _build_hybrid_ensemble_schedule,
-    build_variation_params,
     _build_model_filename,
+    build_variation_params,
     save_ensemble_models,
-    TrainedModels,
-    EnsembleModelSpec,
 )
 
 
@@ -24,12 +23,12 @@ class TestHybridEnsembleSchedule:
     def test_hybrid_schedule_size_30(self) -> None:
         """Test that size=30 yields 21 boosters + 9 linear."""
         schedule = _build_hybrid_ensemble_schedule(30)
-        
+
         assert len(schedule) == 30, f"Expected 30 models, got {len(schedule)}"
-        
+
         boosters = [algo for algo in schedule if algo in ("xgboost", "lightgbm")]
         linear = [algo for algo in schedule if algo in ("ridge", "elasticnet")]
-        
+
         assert len(boosters) == 21, f"Expected 21 boosters, got {len(boosters)}"
         assert len(linear) == 9, f"Expected 9 linear, got {len(linear)}"
 
@@ -37,7 +36,7 @@ class TestHybridEnsembleSchedule:
         """Test that boosters alternate between xgboost and lightgbm."""
         schedule = _build_hybrid_ensemble_schedule(30)
         boosters = schedule[:21]  # First 21 are boosters
-        
+
         # Should alternate: xgb, lgb, xgb, lgb, ...
         for i, algo in enumerate(boosters):
             if i % 2 == 0:
@@ -49,7 +48,7 @@ class TestHybridEnsembleSchedule:
         """Test that linear models alternate between ridge and elasticnet."""
         schedule = _build_hybrid_ensemble_schedule(30)
         linear = schedule[21:]  # Last 9 are linear
-        
+
         # Should alternate: ridge, elastic, ridge, elastic, ...
         for i, algo in enumerate(linear):
             if i % 2 == 0:
@@ -60,21 +59,17 @@ class TestHybridEnsembleSchedule:
     def test_build_ensemble_schedule_triggers_hybrid(self) -> None:
         """Test that size 25-35 triggers hybrid mode when algorithms include linear."""
         for size in [25, 28, 30, 32, 35]:
-            schedule = _build_ensemble_schedule(
-                size, ("xgboost", "lightgbm", "ridge", "elasticnet")
-            )
-            
+            schedule = _build_ensemble_schedule(size, ("xgboost", "lightgbm", "ridge", "elasticnet"))
+
             has_ridge = "ridge" in schedule
             has_elastic = "elasticnet" in schedule
-            
-            assert has_ridge or has_elastic, (
-                f"Size {size} should trigger hybrid (have ridge or elasticnet)"
-            )
+
+            assert has_ridge or has_elastic, f"Size {size} should trigger hybrid (have ridge or elasticnet)"
 
     def test_build_ensemble_schedule_no_hybrid_without_linear(self) -> None:
         """Test that size 25-35 does NOT trigger hybrid if no linear algorithms."""
         schedule = _build_ensemble_schedule(30, ("xgboost", "lightgbm"))
-        
+
         assert "ridge" not in schedule
         assert "elasticnet" not in schedule
         assert all(a in ("xgboost", "lightgbm") for a in schedule)
@@ -88,7 +83,7 @@ class TestVariationParams:
         """Test that ridge generates valid params."""
         for var_idx in range(10):
             params = build_variation_params("ridge", var_idx)
-            
+
             assert "alpha" in params, "Ridge params must have alpha"
             assert params["alpha"] > 0, "Alpha must be positive"
             assert "max_iter" in params, "Ridge params must have max_iter"
@@ -97,7 +92,7 @@ class TestVariationParams:
         """Test that elasticnet generates valid params."""
         for var_idx in range(10):
             params = build_variation_params("elasticnet", var_idx)
-            
+
             assert "alpha" in params, "ElasticNet params must have alpha"
             assert params["alpha"] > 0, "Alpha must be positive"
             assert "l1_ratio" in params, "ElasticNet params must have l1_ratio"
@@ -107,7 +102,7 @@ class TestVariationParams:
     def test_xgboost_params(self) -> None:
         """Test xgboost params still work."""
         params = build_variation_params("xgboost", 0)
-        
+
         assert "objective" in params
         assert params["objective"] == "count:poisson"
         assert "n_estimators" in params
@@ -116,7 +111,7 @@ class TestVariationParams:
     def test_lightgbm_params(self) -> None:
         """Test lightgbm params still work."""
         params = build_variation_params("lightgbm", 0)
-        
+
         assert "objective" in params
         assert params["objective"] == "poisson"
         assert "n_estimators" in params
@@ -125,7 +120,7 @@ class TestVariationParams:
     def test_randomforest_params(self) -> None:
         """Test randomforest params still work."""
         params = build_variation_params("randomforest", 0)
-        
+
         assert "n_estimators" in params
         assert "max_depth" in params
 
@@ -155,7 +150,7 @@ class TestModelFilenames:
         """Test that filenames increment with variation index."""
         name_0 = _build_model_filename("ridge", 0)
         name_1 = _build_model_filename("ridge", 1)
-        
+
         assert "ridge_model_1" in name_0
         assert "ridge_model_2" in name_1
 
@@ -205,7 +200,7 @@ class TestHyperparameterPersistence:
             save_ensemble_models([model], [spec], tmpdir)
             json_path = (Path(tmpdir) / spec.model_name).with_suffix(".json")
 
-            with open(json_path, "r", encoding="utf-8") as f:
+            with open(json_path, encoding="utf-8") as f:
                 meta = json.load(f)
 
             assert meta["algorithm"] == "elasticnet"
@@ -240,7 +235,7 @@ class TestHyperparameterPersistence:
             save_ensemble_models([model], [spec], tmpdir)
             json_path = (Path(tmpdir) / spec.model_name).with_suffix(".json")
 
-            with open(json_path, "r", encoding="utf-8") as f:
+            with open(json_path, encoding="utf-8") as f:
                 meta = json.load(f)  # Should not raise
 
             assert isinstance(meta, dict)

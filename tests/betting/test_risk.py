@@ -101,18 +101,13 @@ class TestSimulateDrawdown:
 
     def test_certain_wins_grow_bankroll(self):
         """With p=1.0, bankroll should always grow."""
-        result = simulate_drawdown(
-            [0.99] * 50, [1.5] * 50,
-            bankroll=1000, n_simulations=100, random_state=42
-        )
+        result = simulate_drawdown([0.99] * 50, [1.5] * 50, bankroll=1000, n_simulations=100, random_state=42)
         assert result.final_bankroll_mean > 1000.0
         assert result.ruin_probability == pytest.approx(0.0)
 
     def test_drawdown_95th_gte_median(self):
         """95th percentile drawdown >= median drawdown."""
-        result = simulate_drawdown(
-            [0.55] * 100, [2.0] * 100, n_simulations=200, random_state=42
-        )
+        result = simulate_drawdown([0.55] * 100, [2.0] * 100, n_simulations=200, random_state=42)
         assert result.max_drawdown_95th >= result.max_drawdown_median
 
 

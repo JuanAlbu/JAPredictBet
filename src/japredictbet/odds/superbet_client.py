@@ -16,8 +16,9 @@ from __future__ import annotations
 import json
 import logging
 import time
+from collections.abc import Generator, Sequence
 from dataclasses import dataclass, field
-from typing import Dict, Generator, List, Optional, Sequence
+from typing import Any
 
 import httpx
 
@@ -27,16 +28,11 @@ logger = logging.getLogger(__name__)
 
 _MIDDLE_DOT = "\u00b7"
 _USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/125.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 )
 
 # REST API endpoint for full event data (700+ markets vs SSE's ~3)
-_REST_EVENT_URL = (
-    "https://production-superbet-offer-br.freetls.fastly.net"
-    "/v2/pt-BR/events/{event_id}"
-)
+_REST_EVENT_URL = "https://production-superbet-offer-br.freetls.fastly.net/v2/pt-BR/events/{event_id}"
 
 
 # ── Data models ──────────────────────────────────────────────────────
@@ -50,15 +46,15 @@ class SuperbetOdds:
     home_team: str
     away_team: str
     market_name: str
-    market_line: Optional[float]
-    over_odds: Optional[float]
-    under_odds: Optional[float]
-    home_odds: Optional[float]
-    draw_odds: Optional[float]
-    away_odds: Optional[float]
-    yes_odds: Optional[float]
-    no_odds: Optional[float]
-    raw_event: Dict  # Keep the raw dict for debugging
+    market_line: float | None
+    over_odds: float | None
+    under_odds: float | None
+    home_odds: float | None
+    draw_odds: float | None
+    away_odds: float | None
+    yes_odds: float | None
+    no_odds: float | None
+    raw_event: dict  # Keep the raw dict for debugging
 
 
 @dataclass
@@ -69,11 +65,11 @@ class SuperbetSnapshot:
     home_team: str
     away_team: str
     match_name: str = ""
-    corners: List[SuperbetOdds] = field(default_factory=list)
-    match_odds: List[SuperbetOdds] = field(default_factory=list)
-    btts: List[SuperbetOdds] = field(default_factory=list)
-    other: List[SuperbetOdds] = field(default_factory=list)
-    raw_event: Dict = field(default_factory=dict)
+    corners: list[SuperbetOdds] = field(default_factory=list)
+    match_odds: list[SuperbetOdds] = field(default_factory=list)
+    btts: list[SuperbetOdds] = field(default_factory=list)
+    other: list[SuperbetOdds] = field(default_factory=list)
+    raw_event: dict = field(default_factory=dict)
 
 
 # ── SSE line parser ──────────────────────────────────────────────────
@@ -91,8 +87,8 @@ def _iter_sse_events(raw_lines: str) -> Generator[dict, None, None]:
     Heartbeat lines (no ``data`` key or empty payload) are skipped.
     Malformed lines are logged and skipped.
     """
-    for line in raw_lines.splitlines():
-        line = line.strip()
+    for raw_line in raw_lines.splitlines():
+        line = raw_line.strip()
         if not line.startswith("data:"):
             continue
         payload = line[5:]  # strip "data:" prefix
@@ -132,9 +128,9 @@ def _is_btts_market(market_name: str) -> bool:
 
 def _extract_odds_from_selections(
     selections: Sequence[dict],
-) -> Dict[str, Optional[float]]:
+) -> dict[str, float | None]:
     """Map selection codes/names to a flat dict of odds values."""
-    result: Dict[str, Optional[float]] = {}
+    result: dict[str, float | None] = {}
     for sel in selections:
         code = str(sel.get("code", "")).lower()
         name = str(sel.get("name", "")).lower()
@@ -188,8 +184,8 @@ class SuperbetCollector:
 
     def fetch_today_odds(
         self,
-        team_mapping: Optional[Dict[str, str]] = None,
-    ) -> Dict[str, SuperbetSnapshot]:
+        team_mapping: dict[str, str] | None = None,
+    ) -> dict[str, SuperbetSnapshot]:
         """Fetch current Superbet feed and return snapshots keyed by event_id.
 
         Args:
@@ -206,14 +202,14 @@ class SuperbetCollector:
 
     def _fetch_sse_with_retry(self) -> str:
         """GET the SSE endpoint with retry + exponential backoff."""
-        last_exc: Optional[Exception] = None
+        last_exc: Exception | None = None
 
         for attempt in range(1, self._cfg.max_retries + 1):
             try:
                 return self._do_request()
             except (httpx.HTTPStatusError, httpx.TransportError) as exc:
                 last_exc = exc
-                wait = self._cfg.backoff_base_s ** attempt
+                wait = self._cfg.backoff_base_s**attempt
                 logger.warning(
                     "Superbet request failed (attempt %d/%d): %s — retrying in %.1fs",
                     attempt,
@@ -223,9 +219,7 @@ class SuperbetCollector:
                 )
                 time.sleep(wait)
 
-        raise ConnectionError(
-            f"Superbet SSE unreachable after {self._cfg.max_retries} attempts"
-        ) from last_exc
+        raise ConnectionError(f"Superbet SSE unreachable after {self._cfg.max_retries} attempts") from last_exc
 
     def _do_request(self) -> str:
         """Stream the SSE endpoint for ``stream_duration_s`` seconds and
@@ -269,10 +263,10 @@ class SuperbetCollector:
     def _parse_events(
         self,
         raw_sse: str,
-        team_mapping: Optional[Dict[str, str]],
-    ) -> Dict[str, SuperbetSnapshot]:
+        team_mapping: dict[str, str] | None,
+    ) -> dict[str, SuperbetSnapshot]:
         """Parse raw SSE text into :class:`SuperbetSnapshot` objects."""
-        snapshots: Dict[str, SuperbetSnapshot] = {}
+        snapshots: dict[str, SuperbetSnapshot] = {}
 
         for event in _iter_sse_events(raw_sse):
             try:
@@ -280,16 +274,14 @@ class SuperbetCollector:
             except Exception:
                 logger.debug("Skipping malformed event: %.200s", event, exc_info=True)
 
-        logger.info(
-            "Superbet feed parsed: %d football matches extracted.", len(snapshots)
-        )
+        logger.info("Superbet feed parsed: %d football matches extracted.", len(snapshots))
         return snapshots
 
     def _process_single_event(
         self,
         event: dict,
-        snapshots: Dict[str, SuperbetSnapshot],
-        team_mapping: Optional[Dict[str, str]],
+        snapshots: dict[str, SuperbetSnapshot],
+        team_mapping: dict[str, str] | None,
     ) -> None:
         """Process one SSE JSON payload into the snapshots dict."""
         sport_id = event.get("sportId")
@@ -313,17 +305,12 @@ class SuperbetCollector:
             return
 
         # Team mapping filter
-        if team_mapping is not None:
-            if home not in team_mapping and away not in team_mapping:
-                logger.warning(
-                    "Unmapped teams skipped: %s vs %s (event %s)", home, away, event_id
-                )
-                return
+        if team_mapping is not None and home not in team_mapping and away not in team_mapping:
+            logger.warning("Unmapped teams skipped: %s vs %s (event %s)", home, away, event_id)
+            return
 
         if event_id not in snapshots:
-            snapshots[event_id] = SuperbetSnapshot(
-                event_id=event_id, home_team=home, away_team=away
-            )
+            snapshots[event_id] = SuperbetSnapshot(event_id=event_id, home_team=home, away_team=away)
         snap = snapshots[event_id]
 
         # The Superbet feed sends a FLAT list of individual selection objects
@@ -341,7 +328,7 @@ class SuperbetCollector:
             sel_odds = _extract_odds_from_selections(selections)
 
             # Try to get the line value from showSpecialBetValue / specialBetValue
-            raw_line: Optional[float] = None
+            raw_line: float | None = None
             for sel in selections:
                 line_str = sel.get("showSpecialBetValue") or sel.get("specialBetValue")
                 if line_str and str(line_str) not in ("0", ""):
@@ -378,7 +365,7 @@ class SuperbetCollector:
 
     # ── REST API enrichment (full markets, not just SSE ~3) ──────────
 
-    def fetch_full_event(self, event_id: str) -> Optional[Dict[str, Any]]:
+    def fetch_full_event(self, event_id: str) -> dict[str, Any] | None:
         """Fetch full event data (all 700+ markets) from the REST API.
 
         Uses: GET /v2/pt-BR/events/{eventId}
@@ -400,9 +387,7 @@ class SuperbetCollector:
                 r.raise_for_status()
                 data = r.json()
                 if data.get("error"):
-                    logger.warning(
-                        "REST API error for event %s: %s", event_id, data
-                    )
+                    logger.warning("REST API error for event %s: %s", event_id, data)
                     return None
                 events = data.get("data", [])
                 if events:
@@ -415,8 +400,8 @@ class SuperbetCollector:
 
     def enrich_snapshots_with_rest(
         self,
-        snapshots: Dict[str, SuperbetSnapshot],
-    ) -> Dict[str, SuperbetSnapshot]:
+        snapshots: dict[str, SuperbetSnapshot],
+    ) -> dict[str, SuperbetSnapshot]:
         """Enrich SSE snapshots with full market data from the REST API.
 
         For each snapshot, fetches the REST ``/v2/pt-BR/events/{eventId}`` endpoint
@@ -438,7 +423,7 @@ class SuperbetCollector:
                 continue  # Keep SSE data as fallback
 
             # Parse REST odds grouped by marketName
-            markets_raw: Dict[str, list] = defaultdict(list)
+            markets_raw: dict[str, list] = defaultdict(list)
             for sel in full_event.get("odds") or []:
                 mn = sel.get("marketName", "")
                 if mn:
@@ -461,11 +446,9 @@ class SuperbetCollector:
                         sel_odds[key] = val / 100.0
 
                 # Try to get the line value
-                raw_line: Optional[float] = None
+                raw_line: float | None = None
                 for sel in selections:
-                    line_str = sel.get("showSpecialBetValue") or sel.get(
-                        "specialBetValue"
-                    )
+                    line_str = sel.get("showSpecialBetValue") or sel.get("specialBetValue")
                     if line_str and str(line_str) not in ("0", ""):
                         try:
                             raw_line = float(line_str)

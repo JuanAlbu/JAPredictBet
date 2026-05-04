@@ -1,13 +1,14 @@
 """MVP pipeline orchestration."""
 
 from __future__ import annotations
-from dataclasses import asdict
-from difflib import SequenceMatcher
+
 import hashlib
 import json
 import logging
+from collections.abc import Sequence
+from dataclasses import asdict
+from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Sequence
 
 import numpy as np
 import pandas as pd
@@ -19,9 +20,9 @@ from japredictbet.features.elo import EloConfig, add_elo_ratings
 from japredictbet.features.matchup import add_h2h_features, add_matchup_features
 from japredictbet.features.rolling import (
     add_result_rolling,
-    add_stat_rolling,
-    add_rolling_std,
     add_rolling_ema,
+    add_rolling_std,
+    add_stat_rolling,
     drop_redundant_features,
 )
 from japredictbet.features.team_identity import add_team_target_encoding
@@ -49,13 +50,11 @@ def _compute_artifact_hash(filepath: Path) -> str:
 def _create_execution_metadata(config: PipelineConfig, raw_data_path: Path) -> dict:
     """Create execution metadata with versioning information."""
     from datetime import datetime
-    
+
     exec_time = datetime.now().isoformat()
     dataset_hash = _compute_artifact_hash(raw_data_path)
-    config_hash = hashlib.sha256(
-        json.dumps(asdict(config), sort_keys=True, default=str).encode()
-    ).hexdigest()[:16]
-    
+    config_hash = hashlib.sha256(json.dumps(asdict(config), sort_keys=True, default=str).encode()).hexdigest()[:16]
+
     metadata = {
         "execution_time": exec_time,
         "dataset_version": dataset_hash,
@@ -65,14 +64,14 @@ def _create_execution_metadata(config: PipelineConfig, raw_data_path: Path) -> d
         "consensus_threshold": float(config.value.consensus_threshold),
         "edge_threshold": float(config.value.threshold),
     }
-    
+
     logger.info(
         "Execution metadata | time=%s | dataset_v=%s | config_v=%s",
         exec_time,
         dataset_hash,
         config_hash,
     )
-    
+
     return metadata
 
 
@@ -102,26 +101,26 @@ def run_mvp_pipeline(
     """
 
     _ = asdict(config)
-    
+
     # --- Execution Versioning ---
     exec_metadata = _create_execution_metadata(config, Path(config.data.raw_path))
     logger.info("Pipeline execution versioning: %s", exec_metadata)
-    
+
     data = load_historical_dataset(config.data.raw_path, config.data.date_column)
     data = _ensure_season_column(data, config.data.date_column)
 
     # --- Feature Engineering ---
     for window in config.features.rolling_windows:
         data = _add_rolling_stats(data, window, season_col="season")
-        
+
         # P1.B2: Add rolling standard deviation if enabled
         if config.features.rolling_use_std:
             data = _add_rolling_std_features(data, window, season_col="season")
-        
+
         # P1.B2: Add EMA features if enabled
         if config.features.rolling_use_ema:
             data = _add_rolling_ema_features(data, window, season_col="season")
-        
+
         data = add_matchup_features(data, window=window)
         data = _add_total_corners_features(data, window=window)
         data = _add_total_goals_features(data, window=window)
@@ -134,9 +133,7 @@ def run_mvp_pipeline(
     if config.features.drop_redundant:
         data = drop_redundant_features(data, config.features.rolling_windows)
 
-    encoding_train_mask, _ = _build_temporal_split(
-        data["season"], config.model.random_state
-    )
+    encoding_train_mask, _ = _build_temporal_split(data["season"], config.model.random_state)
 
     data = add_elo_ratings(
         data,
@@ -163,9 +160,7 @@ def run_mvp_pipeline(
         feature_name="away_team_team_enc",
     )
     data = _drop_matches_with_missing_critical_data(data)
-    train_mask, _ = _build_temporal_split(
-        data["season"], config.model.random_state
-    )
+    train_mask, _ = _build_temporal_split(data["season"], config.model.random_state)
     weights = _build_recency_weights(data["season"])
 
     # --- Model Training and Prediction ---
@@ -240,9 +235,7 @@ def run_mvp_pipeline(
             )
             stake = 1.0 if decision["bet"] else 0.0
             decision_profit = (
-                engine.compute_profit(result=bet_result, odds=decision["odds"], stake=stake)
-                if decision["bet"]
-                else 0.0
+                engine.compute_profit(result=bet_result, odds=decision["odds"], stake=stake) if decision["bet"] else 0.0
             )
             decision["match"] = row["match_key"]
             decision["realized_total"] = realized_total
@@ -305,10 +298,7 @@ def _get_or_train_ensemble_models(
     if specs:
         logger.info(
             "Ensemble composition: %s",
-            ", ".join(
-                f"{spec.algorithm}:{spec.variation_index + 1}"
-                for spec in specs
-            ),
+            ", ".join(f"{spec.algorithm}:{spec.variation_index + 1}" for spec in specs),
         )
     return trained
 
@@ -366,13 +356,13 @@ def _merge_with_normalized_match_keys(
     ambiguity_margin: float = 1.0,
 ) -> pd.DataFrame:
     """Merge dataset and odds using robust normalized team names (AUDIT POINT: Equipe + Data + Liga).
-    
+
     MATCHING STRATEGY (P0.7):
     - Primary key: Normalized match_key (Team A vs Team B)
     - Secondary fallback: Fuzzy string matching with {similarity_threshold}% threshold
     - Ambiguity rejection: Remove odds keys with multiple candidates to prevent leakage
     - Future: Add date and league columns for 3-tuple matching (Team + Date + League)
-    
+
     This design prevents data leakage while maintaining practical matching robustness.
     """
 
@@ -391,9 +381,7 @@ def _merge_with_normalized_match_keys(
             "Dropping ambiguous odds keys with multiple rows (P0.7 safety): %d",
             len(ambiguous_exact_keys),
         )
-        prepared_odds = prepared_odds[
-            ~prepared_odds["match_key_normalized"].isin(ambiguous_exact_keys)
-        ].copy()
+        prepared_odds = prepared_odds[~prepared_odds["match_key_normalized"].isin(ambiguous_exact_keys)].copy()
     if prepared_odds.empty:
         return prepared_data.assign(line=np.nan, over_odds=np.nan, under_odds=np.nan)
 
@@ -439,10 +427,7 @@ def _merge_with_normalized_match_keys(
             continue
 
         ranked_candidates = sorted(
-            (
-                (_similarity_score(source_key, candidate_key), candidate_key)
-                for candidate_key in odds_by_key
-            ),
+            ((_similarity_score(source_key, candidate_key), candidate_key) for candidate_key in odds_by_key),
             key=lambda item: item[0],
             reverse=True,
         )
@@ -465,7 +450,8 @@ def _merge_with_normalized_match_keys(
             continue
         if second_score >= 0.0 and (top_score - second_score) <= ambiguity_margin:
             logger.info(
-                "Odds match discarded | source='%s' | reason=ambiguous | best_score=%.2f | second_score=%.2f | margin=%.2f",
+                "Odds match discarded | source='%s' | reason=ambiguous |"
+                " best_score=%.2f | second_score=%.2f | margin=%.2f",
                 source_match,
                 top_score,
                 second_score,
@@ -502,16 +488,10 @@ def _merge_with_normalized_match_keys(
         if column not in merged.columns or column not in recovered.columns:
             continue
         missing_mask = merged[column].isna()
-        merged.loc[missing_mask, column] = merged.loc[missing_mask, "source_row_id"].map(
-            recovered[column]
-        )
+        merged.loc[missing_mask, column] = merged.loc[missing_mask, "source_row_id"].map(recovered[column])
     recovered_log = merged[merged["source_row_id"].isin(recovered.index)].copy()
-    recovered_log["matched_odds_match"] = recovered_log["source_row_id"].map(
-        recovered["matched_odds_match"]
-    )
-    recovered_log["match_similarity_score"] = recovered_log["source_row_id"].map(
-        recovered["match_similarity_score"]
-    )
+    recovered_log["matched_odds_match"] = recovered_log["source_row_id"].map(recovered["matched_odds_match"])
+    recovered_log["match_similarity_score"] = recovered_log["source_row_id"].map(recovered["match_similarity_score"])
     _log_match_pairing(
         recovered_log,
         method="fuzzy_safe",
@@ -527,9 +507,7 @@ def _similarity_score(left: str, right: str) -> float:
 
     left_tokens = set(left.split())
     right_tokens = set(right.split())
-    if left_tokens and right_tokens and (
-        left_tokens.issubset(right_tokens) or right_tokens.issubset(left_tokens)
-    ):
+    if left_tokens and right_tokens and (left_tokens.issubset(right_tokens) or right_tokens.issubset(left_tokens)):
         return 100.0
 
     return SequenceMatcher(None, left, right).ratio() * 100.0
@@ -558,7 +536,10 @@ def _log_match_pairing(
             else (100.0 if score is None else score)
         )
         logger.info(
-            "Odds pairing accepted | method=%s | score=%.2f | odds_home='%s' -> dataset_home='%s' | odds_away='%s' -> dataset_away='%s' | odds_match='%s' | dataset_match='%s'",
+            "Odds pairing accepted | method=%s | score=%.2f |"
+            " odds_home='%s' -> dataset_home='%s' |"
+            " odds_away='%s' -> dataset_away='%s' |"
+            " odds_match='%s' | dataset_match='%s'",
             method,
             similarity,
             odds_home,
@@ -626,8 +607,23 @@ def _normalize_team_name(team_name: str) -> str:
     tokens = [token for token in name.split() if token]
 
     stop_tokens = {
-        "fc", "cf", "sc", "ac", "cr", "cd", "club", "clube", "de", "do", "da",
-        "the", "esporte", "sport", "athletic", "atletico", "gama",
+        "fc",
+        "cf",
+        "sc",
+        "ac",
+        "cr",
+        "cd",
+        "club",
+        "clube",
+        "de",
+        "do",
+        "da",
+        "the",
+        "esporte",
+        "sport",
+        "athletic",
+        "atletico",
+        "gama",
     }
     filtered = [token for token in tokens if token not in stop_tokens]
     return " ".join(filtered) if filtered else " ".join(tokens)
@@ -646,9 +642,7 @@ def _attach_threshold_performance(decisions_df: pd.DataFrame) -> pd.DataFrame:
     ).reset_index()
 
     # Hit rate (accuracy of placed bets excluding pushes)
-    settled = decisions_df[
-        (decisions_df["stake"] > 0.0) & (decisions_df["bet_result"].notna())
-    ].copy()
+    settled = decisions_df[(decisions_df["stake"] > 0.0) & (decisions_df["bet_result"].notna())].copy()
     if settled.empty:
         hit_rate_summary = summary[["consensus_threshold"]].copy()
         hit_rate_summary["hit_rate"] = 0.0
@@ -677,10 +671,7 @@ def _attach_threshold_performance(decisions_df: pd.DataFrame) -> pd.DataFrame:
         by=["roi", "profit_total", "bets_placed", "consensus_threshold"],
         ascending=[False, False, False, True],
     ).reset_index(drop=True)
-    rank_map = {
-        float(row["consensus_threshold"]): int(idx + 1)
-        for idx, (_, row) in enumerate(ordered.iterrows())
-    }
+    rank_map = {float(row["consensus_threshold"]): int(idx + 1) for idx, (_, row) in enumerate(ordered.iterrows())}
     best_threshold = float(ordered.iloc[0]["consensus_threshold"])
     summary["threshold_rank"] = summary["consensus_threshold"].map(rank_map).astype(int)
     summary["is_best_threshold"] = summary["consensus_threshold"] == best_threshold
@@ -724,16 +715,12 @@ def _build_temporal_split(
     # function only receives a seasons Series, we look up the index in the
     # calling context.  The caller is expected to have a "date" column.
     # Fall back to index-based chronological ordering when no date exists.
-    import pandas as pd
 
     most_recent = seasons.max()
     # Get all rows from the most recent season
     is_recent = seasons == most_recent
 
-    if use_strict_holdout:
-        holdout_ratio = min(holdout_months / 12.0, 0.5)
-    else:
-        holdout_ratio = 0.5
+    holdout_ratio = min(holdout_months / 12.0, 0.5) if use_strict_holdout else 0.5
 
     # ---- Chronological split (no shuffling) ----
     # Sort recent-season indices by their position in the *original* DataFrame
@@ -755,9 +742,7 @@ def _build_recency_weights(seasons: pd.Series) -> pd.Series:
     unique = sorted(seasons.unique())
     season_rank = {season: idx for idx, season in enumerate(unique)}
     max_rank = max(season_rank.values()) if season_rank else 1
-    return seasons.map(
-        lambda season: 1.0 + (season_rank[season] / max_rank if max_rank else 0.0)
-    )
+    return seasons.map(lambda season: 1.0 + (season_rank[season] / max_rank if max_rank else 0.0))
 
 
 def _add_rolling_stats(
@@ -828,7 +813,7 @@ def _add_rolling_std_features(
     season_col: str | None = None,
 ) -> pd.DataFrame:
     """Add rolling standard deviation features (P1.B2).
-    
+
     Detects consistency/volatility in team performance.
     High STD indicates inconsistent form.
     """
@@ -870,7 +855,7 @@ def _add_rolling_ema_features(
     season_col: str | None = None,
 ) -> pd.DataFrame:
     """Add exponential moving average features (P1.B2).
-    
+
     Gives more weight to recent games for current form capture.
     Alpha = 2 / (window + 1) by default.
     """

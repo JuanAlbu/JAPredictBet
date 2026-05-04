@@ -32,8 +32,8 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT / "src"))
 
-from japredictbet.data.feature_store import FeatureStore  # noqa: E402
 from japredictbet.config import PipelineConfig  # noqa: E402
+from japredictbet.data.feature_store import FeatureStore  # noqa: E402
 
 logger = logging.getLogger("refresh_features")
 
@@ -61,7 +61,8 @@ def _parse_args() -> argparse.Namespace:
         help="Pipeline config for rolling_windows, h2h_window, etc.",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Enable DEBUG logging.",
     )
@@ -94,7 +95,10 @@ def main() -> None:
             drop_redundant = config.features.drop_redundant
             logger.info(
                 "Config loaded: windows=%s, h2h=%d, std=%s, ema=%s",
-                rolling_windows, h2h_window, use_std, use_ema,
+                rolling_windows,
+                h2h_window,
+                use_std,
+                use_ema,
             )
         except Exception:
             logger.warning("Failed to load config — using defaults.", exc_info=True)

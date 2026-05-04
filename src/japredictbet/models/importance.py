@@ -27,14 +27,14 @@ def _extract_scores(model: object, feature_columns: tuple[str, ...]) -> dict[str
     # LightGBM or tree-based ensemble
     if hasattr(model, "feature_importances_"):
         importances = np.asarray(model.feature_importances_, dtype=float)
-        return dict(zip(feature_columns, importances))
+        return dict(zip(feature_columns, importances, strict=False))
 
     # Linear models (Ridge, ElasticNet, Lasso…)
     if hasattr(model, "coef_"):
         coefs = np.asarray(model.coef_, dtype=float)
         if coefs.ndim > 1:
             coefs = coefs.mean(axis=0)
-        return dict(zip(feature_columns, np.abs(coefs)))
+        return dict(zip(feature_columns, np.abs(coefs), strict=False))
 
     raise TypeError(
         f"Model type '{model_type}' does not expose get_booster(), "

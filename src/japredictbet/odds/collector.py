@@ -58,7 +58,7 @@ def fetch_odds(provider_url: str) -> pd.DataFrame:
         api_data = response.json()
     else:
         filepath = Path(provider_url)
-        with open(filepath, "r") as f:
+        with open(filepath) as f:
             api_data = json.load(f)
 
     return _parse_api_data(api_data)

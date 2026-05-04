@@ -23,9 +23,9 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
 
@@ -47,17 +47,17 @@ class PlayerInfo:
     """Minimal lineup entry."""
 
     name: str
-    number: Optional[int] = None
-    position: Optional[str] = None
+    number: int | None = None
+    position: str | None = None
 
 
 @dataclass
 class TeamLineup:
     """Confirmed / projected lineup for one side."""
 
-    formation: Optional[str] = None
-    starting_xi: List[PlayerInfo] = field(default_factory=list)
-    missing_players: List[Dict[str, str]] = field(default_factory=list)
+    formation: str | None = None
+    starting_xi: list[PlayerInfo] = field(default_factory=list)
+    missing_players: list[dict[str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -65,9 +65,9 @@ class RefereeInfo:
     """Referee profile with relevant stats."""
 
     name: str
-    avg_fouls_per_match: Optional[float] = None
-    avg_cards_per_match: Optional[float] = None
-    avg_corners_per_match: Optional[float] = None
+    avg_fouls_per_match: float | None = None
+    avg_cards_per_match: float | None = None
+    avg_corners_per_match: float | None = None
 
 
 @dataclass
@@ -79,26 +79,26 @@ class StandingsEntry:
     points: int
     played: int
     goal_diff: int
-    form: Optional[str] = None  # e.g. "WWDLW"
+    form: str | None = None  # e.g. "WWDLW"
 
 
 @dataclass
 class OddsContext:
     """Odds snapshot carried into the LLM context."""
 
-    corner_line: Optional[float] = None
-    corner_over_odds: Optional[float] = None
-    corner_under_odds: Optional[float] = None
-    home_odds: Optional[float] = None
-    draw_odds: Optional[float] = None
-    away_odds: Optional[float] = None
-    btts_yes: Optional[float] = None
-    btts_no: Optional[float] = None
+    corner_line: float | None = None
+    corner_over_odds: float | None = None
+    corner_under_odds: float | None = None
+    home_odds: float | None = None
+    draw_odds: float | None = None
+    away_odds: float | None = None
+    btts_yes: float | None = None
+    btts_no: float | None = None
     # Over/Under goals — lines 1.5 and 2.5 (most traded)
-    goals_over_1_5: Optional[float] = None
-    goals_under_1_5: Optional[float] = None
-    goals_over_2_5: Optional[float] = None
-    goals_under_2_5: Optional[float] = None
+    goals_over_1_5: float | None = None
+    goals_under_1_5: float | None = None
+    goals_over_2_5: float | None = None
+    goals_under_2_5: float | None = None
 
 
 @dataclass
@@ -108,17 +108,15 @@ class MatchContext:
     event_id: str
     home_team: str
     away_team: str
-    kickoff_utc: Optional[str] = None
-    league: Optional[str] = None
+    kickoff_utc: str | None = None
+    league: str | None = None
     odds: OddsContext = field(default_factory=OddsContext)
-    home_lineup: Optional[TeamLineup] = None
-    away_lineup: Optional[TeamLineup] = None
-    referee: Optional[RefereeInfo] = None
-    home_standing: Optional[StandingsEntry] = None
-    away_standing: Optional[StandingsEntry] = None
-    collected_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    home_lineup: TeamLineup | None = None
+    away_lineup: TeamLineup | None = None
+    referee: RefereeInfo | None = None
+    home_standing: StandingsEntry | None = None
+    away_standing: StandingsEntry | None = None
+    collected_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def to_json(self) -> str:
         """Serialise to a JSON string (for logging / storage)."""
@@ -136,7 +134,7 @@ class MatchContext:
           already present as ``home_team`` / ``away_team``)
         """
 
-        def _slim_lineup(lineup: Optional[TeamLineup]) -> Optional[dict]:
+        def _slim_lineup(lineup: TeamLineup | None) -> dict | None:
             if lineup is None:
                 return None
             return {
@@ -144,7 +142,7 @@ class MatchContext:
                 "missing_players": lineup.missing_players,
             }
 
-        def _slim_standing(entry: Optional[StandingsEntry]) -> Optional[dict]:
+        def _slim_standing(entry: StandingsEntry | None) -> dict | None:
             if entry is None:
                 return None
             return {
@@ -196,10 +194,7 @@ class ApiFootballClient:
         cfg: ApiFootballConfig,
     ) -> None:
         if not api_key:
-            raise ValueError(
-                "API-Football key is empty. "
-                "Set the API_FOOTBALL_KEY environment variable."
-            )
+            raise ValueError("API-Football key is empty. Set the API_FOOTBALL_KEY environment variable.")
         self._api_key = api_key
         self._cfg = cfg
         self._timeout = httpx.Timeout(
@@ -209,7 +204,7 @@ class ApiFootballClient:
             pool=10.0,
         )
 
-    def _get(self, endpoint: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _get(self, endpoint: str, params: dict[str, Any]) -> dict[str, Any]:
         """Execute a GET request with authentication and error handling."""
         headers = {
             "x-apisports-key": self._api_key,
@@ -229,16 +224,12 @@ class ApiFootballClient:
 
     # ── fixtures ─────────────────────────────────────────────────────
 
-    def get_fixtures_today(
-        self, league_id: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
+    def get_fixtures_today(self, league_id: int | None = None) -> list[dict[str, Any]]:
         """Return today's fixtures, optionally filtered by league."""
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
         return self.get_fixtures_by_date(today, league_id=league_id)
 
-    def get_fixtures_by_date(
-        self, date: str, league_id: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
+    def get_fixtures_by_date(self, date: str, league_id: int | None = None) -> list[dict[str, Any]]:
         """Return fixtures for a specific date, optionally filtered by league.
 
         Parameters
@@ -248,7 +239,7 @@ class ApiFootballClient:
         league_id:
             Optional API-Football league ID to filter by.
         """
-        params: Dict[str, Any] = {"date": date}
+        params: dict[str, Any] = {"date": date}
         if league_id is not None:
             params["league"] = league_id
         data = self._get("fixtures", params)
@@ -256,14 +247,14 @@ class ApiFootballClient:
 
     # ── lineups ──────────────────────────────────────────────────────
 
-    def get_lineups(self, fixture_id: int) -> Dict[str, TeamLineup]:
+    def get_lineups(self, fixture_id: int) -> dict[str, TeamLineup]:
         """Fetch confirmed lineups for a fixture.
 
         Returns a dict ``{"home": TeamLineup, "away": TeamLineup}``.
         If lineups are not yet confirmed, fields are empty.
         """
         data = self._get("fixtures/lineups", {"fixture": fixture_id})
-        result: Dict[str, TeamLineup] = {}
+        result: dict[str, TeamLineup] = {}
 
         for idx, team_data in enumerate(data.get("response", [])):
             side = "home" if idx == 0 else "away"
@@ -282,10 +273,10 @@ class ApiFootballClient:
 
     # ── injuries / suspensions ───────────────────────────────────────
 
-    def get_injuries(self, fixture_id: int) -> List[Dict[str, str]]:
+    def get_injuries(self, fixture_id: int) -> list[dict[str, str]]:
         """Return list of injured / suspended players for a fixture."""
         data = self._get("injuries", {"fixture": fixture_id})
-        injuries: List[Dict[str, str]] = []
+        injuries: list[dict[str, str]] = []
         for entry in data.get("response", []):
             player = entry.get("player", {})
             team = entry.get("team", {})
@@ -301,14 +292,10 @@ class ApiFootballClient:
 
     # ── standings ────────────────────────────────────────────────────
 
-    def get_standings(
-        self, league_id: int, season: int
-    ) -> List[StandingsEntry]:
+    def get_standings(self, league_id: int, season: int) -> list[StandingsEntry]:
         """Fetch league standings for a given season."""
-        data = self._get(
-            "standings", {"league": league_id, "season": season}
-        )
-        entries: List[StandingsEntry] = []
+        data = self._get("standings", {"league": league_id, "season": season})
+        entries: list[StandingsEntry] = []
         for league_resp in data.get("response", []):
             for group in league_resp.get("league", {}).get("standings", []):
                 for row in group:
@@ -340,9 +327,9 @@ class ContextCollector:
     def __init__(
         self,
         superbet: SuperbetCollector,
-        api_football: Optional[ApiFootballClient],
+        api_football: ApiFootballClient | None,
         gatekeeper_cfg: GatekeeperConfig,
-        team_mapping: Optional[Dict[str, str]] = None,
+        team_mapping: dict[str, str] | None = None,
         use_rest_enrichment: bool = False,
     ) -> None:
         self._superbet = superbet
@@ -374,9 +361,7 @@ class ContextCollector:
         superbet = SuperbetCollector(superbet_cfg)
 
         if api_football_key:
-            api_client: Optional[ApiFootballClient] = ApiFootballClient(
-                api_football_key, api_football_cfg
-            )
+            api_client: ApiFootballClient | None = ApiFootballClient(api_football_key, api_football_cfg)
         else:
             logger.warning(
                 "API_FOOTBALL_KEY not set — ContextCollector running in "
@@ -399,8 +384,8 @@ class ContextCollector:
 
     def collect_upcoming(
         self,
-        minutes_before: Optional[int] = None,
-    ) -> List[MatchContext]:
+        minutes_before: int | None = None,
+    ) -> list[MatchContext]:
         """Collect context for matches kicking off within the next ``minutes_before`` minutes.
 
         1. Fetch today's Superbet odds snapshot (SSE feed).
@@ -428,26 +413,23 @@ class ContextCollector:
             )
             sb_snapshots = self._superbet.enrich_snapshots_with_rest(sb_snapshots)
 
-        contexts: List[MatchContext] = []
+        contexts: list[MatchContext] = []
 
         if self._api is None:
             # ── Superbet-only mode (with temporal filter) ────────────
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             cutoff = now + timedelta(minutes=window)
             matched = 0
 
             for snap in sb_snapshots.values():
                 kickoff = self._extract_kickoff_from_snapshot(snap)
-                if kickoff is not None:
-                    # Apply temporal window filter
-                    if not (now <= kickoff <= cutoff):
-                        continue
+                # Skip only when kickoff is available and outside window
+                if kickoff is not None and not (now <= kickoff <= cutoff):
+                    continue
 
                 # When kickoff is unavailable, include the match
                 # (better to over-include than silently drop)
-                odds_ctx = self._match_superbet_odds(
-                    snap.home_team, snap.away_team, sb_snapshots
-                )
+                odds_ctx = self._match_superbet_odds(snap.home_team, snap.away_team, sb_snapshots)
                 ctx = MatchContext(
                     event_id=snap.event_id,
                     home_team=snap.home_team,
@@ -460,8 +442,7 @@ class ContextCollector:
                 matched += 1
 
             logger.info(
-                "Superbet-only mode: %d/%d events within T-%d window "
-                "(or without kickoff data).",
+                "Superbet-only mode: %d/%d events within T-%d window (or without kickoff data).",
                 matched,
                 len(sb_snapshots),
                 window,
@@ -471,7 +452,7 @@ class ContextCollector:
             logger.info("Fetching today's fixtures from API-Football…")
             fixtures = self._api.get_fixtures_today()
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             cutoff = now + timedelta(minutes=window)
 
             for fix in fixtures:
@@ -494,22 +475,16 @@ class ContextCollector:
                 league_info = fix.get("league", {})
 
                 # ── Build odds context from Superbet snapshot ────────
-                odds_ctx = self._match_superbet_odds(
-                    home_name, away_name, sb_snapshots
-                )
+                odds_ctx = self._match_superbet_odds(home_name, away_name, sb_snapshots)
 
                 # ── Lineups ──────────────────────────────────────────
-                lineups = self._safe_call(
-                    self._api.get_lineups, fixture_id, label="lineups"
-                ) or {}
+                lineups = self._safe_call(self._api.get_lineups, fixture_id, label="lineups") or {}
 
                 home_lineup = lineups.get("home")
                 away_lineup = lineups.get("away")
 
                 # ── Injuries → merge into lineup.missing_players ─────
-                injuries = self._safe_call(
-                    self._api.get_injuries, fixture_id, label="injuries"
-                ) or []
+                injuries = self._safe_call(self._api.get_injuries, fixture_id, label="injuries") or []
                 if injuries:
                     _merge_injuries(injuries, home_name, home_lineup)
                     _merge_injuries(injuries, away_name, away_lineup)
@@ -517,27 +492,32 @@ class ContextCollector:
                 # ── Standings ────────────────────────────────────────
                 league_id: int = league_info.get("id", 0)
                 season: int = league_info.get("season", now.year)
-                standings = self._safe_call(
-                    self._api.get_standings,
-                    league_id,
-                    season,
-                    label="standings",
-                ) or []
+                standings = (
+                    self._safe_call(
+                        self._api.get_standings,
+                        league_id,
+                        season,
+                        label="standings",
+                    )
+                    or []
+                )
 
                 # Free-tier API-Football only covers up to 2024 — fall back if empty
                 if not standings and season > 2024:
                     logger.info(
-                        "Standings for league %d season %d unavailable — "
-                        "retrying with 2024 fallback.",
+                        "Standings for league %d season %d unavailable — retrying with 2024 fallback.",
                         league_id,
                         season,
                     )
-                    standings = self._safe_call(
-                        self._api.get_standings,
-                        league_id,
-                        2024,
-                        label="standings-fallback",
-                    ) or []
+                    standings = (
+                        self._safe_call(
+                            self._api.get_standings,
+                            league_id,
+                            2024,
+                            label="standings-fallback",
+                        )
+                        or []
+                    )
 
                 home_standing = _find_standing(standings, home_name)
                 away_standing = _find_standing(standings, away_name)
@@ -556,18 +536,16 @@ class ContextCollector:
                 )
                 contexts.append(ctx)
 
-        logger.info(
-            "ContextCollector: %d matches within T-%d window.", len(contexts), window
-        )
+        logger.info("ContextCollector: %d matches within T-%d window.", len(contexts), window)
         return contexts
 
     # ── pre-match enrichment ───────────────────────────────────────────
 
     def enrich_pre_match_contexts(
         self,
-        contexts: List[MatchContext],
+        contexts: list[MatchContext],
         date: str,
-    ) -> List[MatchContext]:
+    ) -> list[MatchContext]:
         """Enrich pre-match contexts with API-Football data (lineups, standings, injuries).
 
         Called by the pipeline after ``load_pre_match_contexts()`` so that
@@ -589,9 +567,7 @@ class ContextCollector:
         The same list of contexts, enriched in-place.
         """
         if self._api is None:
-            logger.info(
-                "No API-Football client — skipping pre-match enrichment."
-            )
+            logger.info("No API-Football client — skipping pre-match enrichment.")
             return contexts
 
         logger.info(
@@ -614,7 +590,7 @@ class ContextCollector:
             away = ctx.away_team
 
             # ── Fuzzy matching by team names ──────────────────────
-            match_fix: Optional[Dict[str, Any]] = None
+            match_fix: dict[str, Any] | None = None
             for fix in fixtures:
                 teams = fix.get("teams", {})
                 api_home = teams.get("home", {}).get("name", "").lower()
@@ -622,9 +598,7 @@ class ContextCollector:
                 ctx_home = home.lower()
                 ctx_away = away.lower()
 
-                if (ctx_home in api_home or api_home in ctx_home) and (
-                    ctx_away in api_away or api_away in ctx_away
-                ):
+                if (ctx_home in api_home or api_home in ctx_home) and (ctx_away in api_away or api_away in ctx_away):
                     match_fix = fix
                     break
 
@@ -638,40 +612,40 @@ class ContextCollector:
             league_info = match_fix.get("league", {})
 
             # ── Lineups ───────────────────────────────────────────
-            lineups = self._safe_call(
-                self._api.get_lineups, fixture_id, label="lineups"
-            ) or {}
+            lineups = self._safe_call(self._api.get_lineups, fixture_id, label="lineups") or {}
             home_lineup = lineups.get("home")
             away_lineup = lineups.get("away")
 
             # ── Injuries → merge into lineup.missing_players ──────
-            injuries = self._safe_call(
-                self._api.get_injuries, fixture_id, label="injuries"
-            ) or []
+            injuries = self._safe_call(self._api.get_injuries, fixture_id, label="injuries") or []
             if injuries:
                 _merge_injuries(injuries, home, home_lineup)
                 _merge_injuries(injuries, away, away_lineup)
 
             # ── Standings ─────────────────────────────────────────
             league_id: int = league_info.get("id", 0)
-            season: int = league_info.get(
-                "season", datetime.now(timezone.utc).year
+            season: int = league_info.get("season", datetime.now(UTC).year)
+            standings = (
+                self._safe_call(
+                    self._api.get_standings,
+                    league_id,
+                    season,
+                    label="standings",
+                )
+                or []
             )
-            standings = self._safe_call(
-                self._api.get_standings,
-                league_id,
-                season,
-                label="standings",
-            ) or []
 
             # Free-tier API-Football only covers up to 2024
             if not standings and season > 2024:
-                standings = self._safe_call(
-                    self._api.get_standings,
-                    league_id,
-                    2024,
-                    label="standings-fallback",
-                ) or []
+                standings = (
+                    self._safe_call(
+                        self._api.get_standings,
+                        league_id,
+                        2024,
+                        label="standings-fallback",
+                    )
+                    or []
+                )
 
             home_standing = _find_standing(standings, home)
             away_standing = _find_standing(standings, away)
@@ -699,7 +673,7 @@ class ContextCollector:
         self,
         home: str,
         away: str,
-        snapshots: Dict[str, SuperbetSnapshot],
+        snapshots: dict[str, SuperbetSnapshot],
     ) -> OddsContext:
         """Best-effort fuzzy match between API-Football teams and Superbet events."""
         odds = OddsContext()
@@ -709,33 +683,32 @@ class ContextCollector:
             sb_home_l = snap.home_team.lower()
             sb_away_l = snap.away_team.lower()
 
-            if home_l in sb_home_l or sb_home_l in home_l:
-                if away_l in sb_away_l or sb_away_l in away_l:
-                    # Corner market — pick the first available line
-                    if snap.corners:
-                        c = snap.corners[0]
-                        odds.corner_line = c.market_line
-                        odds.corner_over_odds = c.over_odds
-                        odds.corner_under_odds = c.under_odds
-                    # Match odds
-                    if snap.match_odds:
-                        m = snap.match_odds[0]
-                        odds.home_odds = m.home_odds
-                        odds.draw_odds = m.draw_odds
-                        odds.away_odds = m.away_odds
-                    # BTTS
-                    if snap.btts:
-                        b = snap.btts[0]
-                        odds.btts_yes = b.yes_odds
-                        odds.btts_no = b.no_odds
-                    break
+            if (home_l in sb_home_l or sb_home_l in home_l) and (away_l in sb_away_l or sb_away_l in away_l):
+                # Corner market — pick the first available line
+                if snap.corners:
+                    c = snap.corners[0]
+                    odds.corner_line = c.market_line
+                    odds.corner_over_odds = c.over_odds
+                    odds.corner_under_odds = c.under_odds
+                # Match odds
+                if snap.match_odds:
+                    m = snap.match_odds[0]
+                    odds.home_odds = m.home_odds
+                    odds.draw_odds = m.draw_odds
+                    odds.away_odds = m.away_odds
+                # BTTS
+                if snap.btts:
+                    b = snap.btts[0]
+                    odds.btts_yes = b.yes_odds
+                    odds.btts_no = b.no_odds
+                break
 
         return odds
 
     @staticmethod
     def _extract_kickoff_from_snapshot(
         snap: SuperbetSnapshot,
-    ) -> Optional[datetime]:
+    ) -> datetime | None:
         """Extract kickoff datetime from a Superbet snapshot's raw event data.
 
         Superbet SSE events carry ``unixDateMillis``, ``matchDate``,
@@ -750,13 +723,13 @@ class ContextCollector:
         if unix_ms:
             try:
                 ts = int(str(unix_ms)) / 1000
-                return datetime.fromtimestamp(ts, tz=timezone.utc)
+                return datetime.fromtimestamp(ts, tz=UTC)
             except (ValueError, OSError, TypeError):
                 pass
 
         # Try ISO string fields
-        for field in ("matchDate", "utcDate", "startDate", "startTime", "matchStartDate"):
-            val = event.get(field)
+        for key in ("matchDate", "utcDate", "startDate", "startTime", "matchStartDate"):
+            val = event.get(key)
             if val is None:
                 continue
             val_str = str(val)
@@ -767,7 +740,7 @@ class ContextCollector:
                     ts = int(val_str)
                     if ts > 1e12:
                         ts = ts / 1000
-                    return datetime.fromtimestamp(ts, tz=timezone.utc)
+                    return datetime.fromtimestamp(ts, tz=UTC)
                 except (ValueError, OSError):
                     continue
 
@@ -781,7 +754,7 @@ class ContextCollector:
         return None
 
     @staticmethod
-    def _safe_call(func, *args, label: str = "call", **kwargs):  # type: ignore[no-untyped-def]
+    def _safe_call(func, *args, label: str = "call", **kwargs):
         """Wrap an API call so failures don't crash the whole pipeline."""
         try:
             return func(*args, **kwargs)
@@ -793,7 +766,7 @@ class ContextCollector:
 # ── module-level helpers ─────────────────────────────────────────────
 
 
-def _load_team_mapping(path: str) -> Optional[Dict[str, str]]:
+def _load_team_mapping(path: str) -> dict[str, str] | None:
     """Load the Superbet → internal team name mapping.
 
     Returns ``None`` (skip filtering) if the file doesn't exist.
@@ -807,9 +780,9 @@ def _load_team_mapping(path: str) -> Optional[Dict[str, str]]:
 
 
 def _merge_injuries(
-    injuries: List[Dict[str, str]],
+    injuries: list[dict[str, str]],
     team_name: str,
-    lineup: Optional[TeamLineup],
+    lineup: TeamLineup | None,
 ) -> None:
     """Add injury records into the lineup's ``missing_players`` list."""
     if lineup is None:
@@ -819,9 +792,7 @@ def _merge_injuries(
             lineup.missing_players.append(inj)
 
 
-def _find_standing(
-    standings: List[StandingsEntry], team_name: str
-) -> Optional[StandingsEntry]:
+def _find_standing(standings: list[StandingsEntry], team_name: str) -> StandingsEntry | None:
     """Find a team's standing row by case-insensitive partial match."""
     lower = team_name.lower()
     for entry in standings:

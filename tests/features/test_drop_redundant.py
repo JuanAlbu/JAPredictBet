@@ -1,6 +1,6 @@
 """Tests for drop_redundant_features (feature correlation cleanup)."""
+
 import pandas as pd
-import pytest
 
 from japredictbet.features.rolling import drop_redundant_features
 

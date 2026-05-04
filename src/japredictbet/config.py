@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
 
 
 @dataclass(frozen=True)
@@ -21,7 +20,7 @@ class DataConfig:
 class FeatureConfig:
     """Feature engineering settings."""
 
-    rolling_windows: List[int] = field(default_factory=lambda: [10, 5])
+    rolling_windows: list[int] = field(default_factory=lambda: [10, 5])
     rolling_use_std: bool = True  # Include rolling standard deviation (P1.B2)
     rolling_use_ema: bool = True  # Include rolling EMA for current form (P1.B2)
     drop_redundant: bool = True  # Drop highly correlated redundant features
@@ -95,8 +94,8 @@ class ApiKeysConfig:
 
     api_football_key: str = ""
     llm_api_key: str = ""
-    llm_base_url: str = ""   # Empty = OpenAI default. Set to Groq/Gemini endpoint for free tiers.
-    llm_model: str = ""      # Empty = use agent default (gpt-4o-mini). Override e.g. llama-3.3-70b-versatile.
+    llm_base_url: str = ""  # Empty = OpenAI default. Set to Groq/Gemini endpoint for free tiers.
+    llm_model: str = ""  # Empty = use agent default (gpt-4o-mini). Override e.g. llama-3.3-70b-versatile.
     # Fallback provider — used automatically when primary returns HTTP 429.
     llm_fallback_api_key: str = ""
     llm_fallback_base_url: str = ""
@@ -119,10 +118,7 @@ class ApiKeysConfig:
 class SuperbetShadowConfig:
     """Superbet SSE feed configuration."""
 
-    sse_endpoint: str = (
-        "https://production-superbet-offer-br.freetls.fastly.net"
-        "/subscription/v2/pt-BR/events/all"
-    )
+    sse_endpoint: str = "https://production-superbet-offer-br.freetls.fastly.net/subscription/v2/pt-BR/events/all"
     sport_id: int = 5
     corner_market_name: str = "Total de Escanteios"
     team_mapping_path: str = "data/mapping/superbet_teams.json"
@@ -191,29 +187,19 @@ class PipelineConfig:
         odds_cfg = OddsConfig(**raw["odds"])
         value_cfg = ValueConfig(**raw["value"])
 
-        gatekeeper_cfg = (
-            GatekeeperConfig(**raw["gatekeeper"]) if "gatekeeper" in raw else GatekeeperConfig()
-        )
-        api_keys_cfg = (
-            ApiKeysConfig(**raw["api_keys"]) if "api_keys" in raw else ApiKeysConfig()
-        )
+        gatekeeper_cfg = GatekeeperConfig(**raw["gatekeeper"]) if "gatekeeper" in raw else GatekeeperConfig()
+        api_keys_cfg = ApiKeysConfig(**raw["api_keys"]) if "api_keys" in raw else ApiKeysConfig()
         superbet_cfg = (
             SuperbetShadowConfig(
                 **{
                     **raw["superbet_shadow"],
-                    "tournament_ids": tuple(
-                        raw["superbet_shadow"].get("tournament_ids", [])
-                    ),
+                    "tournament_ids": tuple(raw["superbet_shadow"].get("tournament_ids", [])),
                 }
             )
             if "superbet_shadow" in raw
             else SuperbetShadowConfig()
         )
-        api_football_cfg = (
-            ApiFootballConfig(**raw["api_football"])
-            if "api_football" in raw
-            else ApiFootballConfig()
-        )
+        api_football_cfg = ApiFootballConfig(**raw["api_football"]) if "api_football" in raw else ApiFootballConfig()
 
         return cls(
             data=data_cfg,

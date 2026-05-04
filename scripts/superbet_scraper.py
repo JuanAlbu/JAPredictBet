@@ -34,6 +34,7 @@ This is **strictly an analytics tool** — no bets are placed.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import logging
 import re
@@ -42,7 +43,7 @@ import time
 from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
 
@@ -58,22 +59,11 @@ logger = logging.getLogger(__name__)
 
 # ── Constants ────────────────────────────────────────────────────────
 
-SSE_ENDPOINT = (
-    "https://production-superbet-offer-br.freetls.fastly.net"
-    "/subscription/v2/pt-BR/events/all"
-)
-SSE_ENDPOINT_PREMATCH = (
-    "https://production-superbet-offer-br.freetls.fastly.net"
-    "/subscription/v2/pt-BR/events/prematch"
-)
-REST_EVENT_URL = (
-    "https://production-superbet-offer-br.freetls.fastly.net"
-    "/v2/pt-BR/events/{event_id}"
-)
+SSE_ENDPOINT = "https://production-superbet-offer-br.freetls.fastly.net/subscription/v2/pt-BR/events/all"
+SSE_ENDPOINT_PREMATCH = "https://production-superbet-offer-br.freetls.fastly.net/subscription/v2/pt-BR/events/prematch"
+REST_EVENT_URL = "https://production-superbet-offer-br.freetls.fastly.net/v2/pt-BR/events/{event_id}"
 USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/125.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 )
 MIDDLE_DOT = "\u00b7"
 SPORT_ID_FOOTBALL = 5
@@ -81,8 +71,8 @@ SPORT_ID_FOOTBALL = 5
 # ── Day name → date mapping ─────────────────────────────────────────
 
 DAY_NAMES_PT = {
-    "domingo": 6,      # Sunday
-    "segunda": 0,       # Monday
+    "domingo": 6,  # Sunday
+    "segunda": 0,  # Monday
     "terca": 1,
     "terça": 1,
     "quarta": 2,
@@ -103,7 +93,7 @@ ALIASES = {
 }
 
 
-def _resolve_target_date(day_str: str) -> Optional[str]:
+def _resolve_target_date(day_str: str) -> str | None:
     """Convert a day name or alias to ISO date string (YYYY-MM-DD).
 
     Returns None for 'all' (no date filter).
@@ -137,15 +127,14 @@ def _resolve_target_date(day_str: str) -> Optional[str]:
         pass
 
     raise ValueError(
-        f"Dia não reconhecido: '{day_str}'. "
-        f"Use: hoje, amanha, domingo, segunda, ..., sabado, todos, ou YYYY-MM-DD"
+        f"Dia não reconhecido: '{day_str}'. Use: hoje, amanha, domingo, segunda, ..., sabado, todos, ou YYYY-MM-DD"
     )
 
 
 # ── Load mappings ────────────────────────────────────────────────────
 
 
-def _load_league_ids() -> Dict[str, int]:
+def _load_league_ids() -> dict[str, int]:
     """Load league folder name → tournament ID mapping."""
     if not LEAGUE_IDS_PATH.exists():
         logger.warning("League IDs file not found: %s", LEAGUE_IDS_PATH)
@@ -156,14 +145,14 @@ def _load_league_ids() -> Dict[str, int]:
     return {k: v for k, v in data.items() if not k.startswith("_")}
 
 
-def _load_team_mapping() -> Dict[str, str]:
+def _load_team_mapping() -> dict[str, str]:
     """Load Superbet team name → canonical name mapping (flat)."""
     if not TEAM_MAPPING_PATH.exists():
         logger.warning("Team mapping file not found: %s", TEAM_MAPPING_PATH)
         return {}
     with open(TEAM_MAPPING_PATH, encoding="utf-8") as f:
         data = json.load(f)
-    flat: Dict[str, str] = {}
+    flat: dict[str, str] = {}
     for league_key, teams in data.items():
         if league_key.startswith("_"):
             continue
@@ -177,9 +166,9 @@ def _load_team_mapping() -> Dict[str, str]:
 
 def _stream_sse(
     duration_s: float = 45.0,
-    tournament_ids: Optional[set] = None,
+    tournament_ids: set | None = None,
     use_prematch: bool = False,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Stream SSE feed and collect football events.
 
     Args:
@@ -197,7 +186,7 @@ def _stream_sse(
     headers = {"User-Agent": USER_AGENT, "Accept": "text/event-stream"}
     timeout = httpx.Timeout(connect=10.0, read=12.0, write=10.0, pool=10.0)
 
-    events: Dict[str, Dict[str, Any]] = {}
+    events: dict[str, dict[str, Any]] = {}
     deadline = time.monotonic() + duration_s
     lines_read = 0
     connection_succeeded = False
@@ -268,10 +257,10 @@ def _stream_sse(
 
 
 def _collect_raw_events_with_fallback(
-    target_date: Optional[str],
+    target_date: str | None,
     tournament_filter: set[int],
     stream_seconds: float,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Collect SSE events with broader fallback strategies when needed.
 
     Hardening (P2-SH13.B):
@@ -297,7 +286,7 @@ def _collect_raw_events_with_fallback(
             use_prematch=True,
         )
         seen: set[str] = set()
-        merged: List[Dict[str, Any]] = []
+        merged: list[dict[str, Any]] = []
         for ev in (raw_live or []) + (raw_pre or []):
             eid = str(ev.get("eventId", ""))
             if eid and eid not in seen:
@@ -305,7 +294,7 @@ def _collect_raw_events_with_fallback(
                 merged.append(ev)
         return merged
 
-    attempts: List[tuple[str, bool, Optional[set[int]]]] = [
+    attempts: list[tuple[str, bool, set[int] | None]] = [
         ("endpoint principal + filtro de torneios", use_prematch, tournament_filter),
     ]
 
@@ -342,20 +331,10 @@ def _collect_raw_events_with_fallback(
         all_failed = False
 
         if target_date is not None:
-            matching_events = [
-                ev for ev in raw_events if _extract_event_date(ev) == target_date
-            ]
-            undated_events = [
-                ev for ev in raw_events if _extract_event_date(ev) is None
-            ]
+            matching_events = [ev for ev in raw_events if _extract_event_date(ev) == target_date]
+            undated_events = [ev for ev in raw_events if _extract_event_date(ev) is None]
             if not matching_events and not undated_events:
-                dates_found = sorted(
-                    {
-                        ev_date
-                        for ev_date in (_extract_event_date(ev) for ev in raw_events)
-                        if ev_date
-                    }
-                )
+                dates_found = sorted({ev_date for ev_date in (_extract_event_date(ev) for ev in raw_events) if ev_date})
                 logger.info(
                     "Tentativa sem eventos da data alvo (%s). Datas vistas: %s",
                     target_date,
@@ -373,8 +352,7 @@ def _collect_raw_events_with_fallback(
     # ── Final long-duration last resort ──────────────────────────────
     if all_failed:
         logger.warning(
-            "Todas as tentativas SSE falharam por erro de conexão. "
-            "Tentando stream longo (%.0fs) como último recurso…",
+            "Todas as tentativas SSE falharam por erro de conexão. Tentando stream longo (%.0fs) como último recurso…",
             stream_seconds * 2,
         )
         final_events = _stream_sse(
@@ -383,9 +361,7 @@ def _collect_raw_events_with_fallback(
             use_prematch=use_prematch,
         )
         if final_events:
-            logger.info(
-                "Stream longo recuperou %d eventos.", len(final_events)
-            )
+            logger.info("Stream longo recuperou %d eventos.", len(final_events))
             return final_events
 
     # ── Cache fallback ───────────────────────────────────────────────
@@ -397,7 +373,7 @@ def _collect_raw_events_with_fallback(
                 cache_path,
             )
             try:
-                with open(cache_path, "r", encoding="utf-8") as f:
+                with open(cache_path, encoding="utf-8") as f:
                     cached = json.load(f)
                 if cached:
                     logger.info(
@@ -462,13 +438,10 @@ def _is_market_of_interest(market_name: str) -> bool:
 def _is_player_market(market_name: str) -> bool:
     """Check if a market is a player-level stat market."""
     lower = market_name.lower()
-    for kw in PLAYER_MARKET_KEYWORDS:
-        if kw in lower:
-            return True
-    return False
+    return any(kw in lower for kw in PLAYER_MARKET_KEYWORDS)
 
 
-def _fetch_full_event(event_id: str) -> Optional[Dict[str, Any]]:
+def _fetch_full_event(event_id: str) -> dict[str, Any] | None:
     """Fetch full event data (all markets) from REST API.
 
     Uses: GET /v2/pt-BR/events/{eventId}
@@ -500,8 +473,8 @@ def _fetch_full_event(event_id: str) -> Optional[Dict[str, Any]]:
 
 
 def _enrich_events_with_full_odds(
-    events: List[Dict[str, Any]],
-) -> List[Dict[str, Any]]:
+    events: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """For each event, fetch full odds via REST API and replace the SSE odds.
 
     The SSE feed only returns ~3 selections (Resultado Final).
@@ -513,7 +486,10 @@ def _enrich_events_with_full_odds(
         match_name = ev.get("matchName", "?")
         logger.info(
             "Buscando odds completas [%d/%d]: %s (ID: %s)",
-            i + 1, len(events), match_name, eid,
+            i + 1,
+            len(events),
+            match_name,
+            eid,
         )
         full = _fetch_full_event(eid)
         if full:
@@ -525,7 +501,7 @@ def _enrich_events_with_full_odds(
     return enriched
 
 
-def _extract_event_date(event: dict) -> Optional[str]:
+def _extract_event_date(event: dict) -> str | None:
     """Try to extract match date (YYYY-MM-DD) from event data.
 
     Superbet SSE events include: matchDate, utcDate, unixDateMillis.
@@ -568,7 +544,7 @@ def _extract_event_date(event: dict) -> Optional[str]:
     return None
 
 
-def _extract_event_time(event: dict) -> Optional[str]:
+def _extract_event_time(event: dict) -> str | None:
     """Try to extract kickoff time (HH:MM) from event data."""
     # Try unixDateMillis first
     unix_ms = event.get("unixDateMillis")
@@ -609,22 +585,22 @@ def _parse_teams(match_name: str) -> tuple[str, str]:
     return parts[0].strip(), parts[1].strip()
 
 
-def _extract_markets(event: dict) -> Dict[str, Dict[str, Any]]:
+def _extract_markets(event: dict) -> dict[str, dict[str, Any]]:
     """Extract odds grouped by market name.
 
     Returns: {market_name: {name, selections: [{name, code, price, line}], ...}}
     For simple markets (1X2): also has home/draw/away keys.
     For over/under markets: has list of {line, over, under} entries.
     """
-    markets_raw: Dict[str, list] = defaultdict(list)
+    markets_raw: dict[str, list] = defaultdict(list)
     for sel in event.get("odds") or []:
         mn = sel.get("marketName", "")
         if mn:
             markets_raw[mn].append(sel)
 
-    result: Dict[str, Dict[str, Any]] = {}
+    result: dict[str, dict[str, Any]] = {}
     for market_name, selections in markets_raw.items():
-        m: Dict[str, Any] = {"name": market_name, "selections": []}
+        m: dict[str, Any] = {"name": market_name, "selections": []}
 
         # Parse each selection
         for sel in selections:
@@ -647,19 +623,16 @@ def _extract_markets(event: dict) -> Dict[str, Dict[str, Any]]:
             line_val = None
             line_str = sel.get("showSpecialBetValue") or sel.get("specialBetValue")
             if line_str and str(line_str) not in ("0", ""):
-                try:
+                with contextlib.suppress(TypeError, ValueError):
                     line_val = float(line_str)
-                except (TypeError, ValueError):
-                    pass
             # Parse line from name pattern "Mais de X.Y" / "Menos de X.Y"
             if line_val is None:
                 import re as _re
+
                 line_match = _re.search(r"(\d+[.,]\d+)", name)
                 if line_match:
-                    try:
+                    with contextlib.suppress(ValueError):
                         line_val = float(line_match.group(1).replace(",", "."))
-                    except ValueError:
-                        pass
 
             sel_data = {
                 "name": raw_name,
@@ -676,7 +649,7 @@ def _extract_markets(event: dict) -> Dict[str, Dict[str, Any]]:
                 m["draw"] = price
             elif code in ("2", "away"):
                 m["away"] = price
-            elif code in ("yes", "sim") or "sim" == name.strip():
+            elif code in ("yes", "sim") or name.strip() == "sim":
                 m["yes"] = price
             elif code in ("no", "não", "nao") or name.strip() in ("não", "nao"):
                 m["no"] = price
@@ -688,8 +661,9 @@ def _extract_markets(event: dict) -> Dict[str, Dict[str, Any]]:
 
 # ── Display ──────────────────────────────────────────────────────────
 
+
 # Reverse lookup: tournamentId → league name
-def _build_tid_to_league(league_ids: Dict[str, int]) -> Dict[int, str]:
+def _build_tid_to_league(league_ids: dict[str, int]) -> dict[int, str]:
     return {v: k for k, v in league_ids.items()}
 
 
@@ -700,9 +674,9 @@ def _market_is_interesting(name: str) -> bool:
 
 def _display_match(
     event: dict,
-    tid_to_league: Dict[int, str],
+    tid_to_league: dict[int, str],
     show_all_markets: bool = False,
-) -> List[str]:
+) -> list[str]:
     """Format a single match for display. Returns list of lines."""
     match_name = event.get("matchName", "?")
     home, away = _parse_teams(match_name)
@@ -711,7 +685,7 @@ def _display_match(
     league = tid_to_league.get(tid, f"tournament:{tid}")
     kickoff = _extract_event_time(event) or "??:??"
 
-    lines: List[str] = []
+    lines: list[str] = []
     lines.append(f"  >> {home} vs {away}")
     lines.append(f"     Liga: {league} | Horário: {kickoff} | ID: {eid}")
 
@@ -719,6 +693,7 @@ def _display_match(
     slug_raw = match_name.replace(MIDDLE_DOT, "-x-").strip()
     # Normalize accented chars for URL
     import unicodedata
+
     slug_nfkd = unicodedata.normalize("NFKD", slug_raw)
     slug_ascii = slug_nfkd.encode("ascii", "ignore").decode("ascii")
     slug = re.sub(r"[^a-zA-Z0-9-]+", "-", slug_ascii).strip("-").lower()
@@ -740,7 +715,7 @@ def _display_match(
 
         # Simple 1X2 / Dupla Chance / BTTS markets
         if "home" in m or "yes" in m:
-            parts: List[str] = []
+            parts: list[str] = []
             if "home" in m:
                 parts.append(f"1={m['home']:.2f}")
             if "draw" in m:
@@ -757,8 +732,8 @@ def _display_match(
             # Over/Under or multi-line markets — group by line
             lines.append(f"     -> {mname}:")
             # Pair up over/under by line value
-            by_line: Dict[Optional[float], Dict[str, float]] = defaultdict(dict)
-            unpaired: List[str] = []
+            by_line: dict[float | None, dict[str, float]] = defaultdict(dict)
+            unpaired: list[str] = []
             for s in sels:
                 sname = s["name"].lower()
                 price = s["price"]
@@ -791,8 +766,8 @@ def _display_match(
 
 def _event_to_dict(
     event: dict,
-    tid_to_league: Dict[int, str],
-) -> Dict[str, Any]:
+    tid_to_league: dict[int, str],
+) -> dict[str, Any]:
     """Convert raw event to a clean export dict."""
     match_name = event.get("matchName", "")
     home, away = _parse_teams(match_name)
@@ -813,12 +788,12 @@ def _event_to_dict(
 
 
 def _apply_snapshot_filter(
-    events: List[dict],
-    tid_to_league: Dict[int, str],
+    events: list[dict],
+    tid_to_league: dict[int, str],
     *,
     min_odd: float = 1.25,
-    market_filter: Optional[List[str]] = None,
-) -> tuple[List[dict], int, int]:
+    market_filter: list[str] | None = None,
+) -> tuple[list[dict], int, int]:
     """Filter events before saving to JSON/snapshot.
 
     Parameters
@@ -842,7 +817,7 @@ def _apply_snapshot_filter(
     (filtered_events, total_before, total_after)
     """
     total_before = len(events)
-    filtered: List[dict] = []
+    filtered: list[dict] = []
 
     for ev in events:
         markets = ev.get("markets", {})
@@ -886,12 +861,17 @@ def _apply_snapshot_filter(
     if market_filter:
         logger.info(
             "Snapshot filter: %d → %d eventos (filtro mercados=%s, min_odd=%.2f)",
-            total_before, total_after, ", ".join(market_filter), min_odd,
+            total_before,
+            total_after,
+            ", ".join(market_filter),
+            min_odd,
         )
     else:
         logger.info(
             "Snapshot filter: %d → %d eventos (min_odd=%.2f)",
-            total_before, total_after, min_odd,
+            total_before,
+            total_after,
+            min_odd,
         )
     return filtered, total_before, total_after
 
@@ -943,15 +923,19 @@ def main() -> None:
         type=float,
         default=1.25,
         help="Odd mínima para incluir evento no JSON/snapshot (default: 1.25 — ZONA MORTA). "
-             "Eventos sem nenhuma odd >= min_odd são descartados do JSON salvo.",
+        "Eventos sem nenhuma odd >= min_odd são descartados do JSON salvo.",
     )
     parser.add_argument(
         "--markets",
         nargs="*",
-        default=["total de escanteios", "resultado final", "ambas as equipes marcam",
-                 "total de gols"],
+        default=[
+            "total de escanteios",
+            "resultado final",
+            "ambas as equipes marcam",
+            "total de gols",
+        ],
         help="Mercados para incluir no JSON/snapshot (default: corner, 1x2, BTTS, gols). "
-             "Use '--markets all' para todos os mercados.",
+        "Use '--markets all' para todos os mercados.",
     )
     parser.add_argument(
         "--debug",
@@ -959,7 +943,8 @@ def main() -> None:
         help="Modo debug: mostra campos brutos do primeiro evento",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Log detalhado",
     )
@@ -1006,8 +991,7 @@ def main() -> None:
                 tournament_filter.add(league_ids[lg])
             else:
                 logger.warning(
-                    "Liga '%s' não encontrada em league_tournament_ids.json. "
-                    "Disponíveis: %s",
+                    "Liga '%s' não encontrada em league_tournament_ids.json. Disponíveis: %s",
                     lg,
                     ", ".join(sorted(league_ids.keys())),
                 )
@@ -1020,9 +1004,7 @@ def main() -> None:
     logger.info(
         "Filtrando por %d ligas: %s",
         len(tournament_filter),
-        ", ".join(
-            tid_to_league.get(t, str(t)) for t in sorted(tournament_filter)
-        ),
+        ", ".join(tid_to_league.get(t, str(t)) for t in sorted(tournament_filter)),
     )
 
     raw_events = _collect_raw_events_with_fallback(
@@ -1067,8 +1049,7 @@ def main() -> None:
             filtered = dated
         elif undated:
             logger.warning(
-                "Nenhum evento com data '%s' encontrado. "
-                "Mostrando %d eventos sem data (podem ser do dia).",
+                "Nenhum evento com data '%s' encontrado. Mostrando %d eventos sem data (podem ser do dia).",
                 target_date,
                 len(undated),
             )
@@ -1099,7 +1080,7 @@ def main() -> None:
         filtered = _enrich_events_with_full_odds(filtered)
 
     # Group by league
-    by_league: Dict[str, List[dict]] = defaultdict(list)
+    by_league: dict[str, list[dict]] = defaultdict(list)
     for ev in filtered:
         tid = ev.get("tournamentId")
         league_name = tid_to_league.get(tid, f"tournament:{tid}")
@@ -1131,9 +1112,7 @@ def main() -> None:
     if args.markets and len(args.markets) == 1 and args.markets[0].lower() == "all":
         market_filter_kw = None
     else:
-        market_filter_kw = (
-            [kw.lower() for kw in args.markets] if args.markets else None
-        )
+        market_filter_kw = [kw.lower() for kw in args.markets] if args.markets else None
     snapshot_events, total_before, total_after = _apply_snapshot_filter(
         filtered,
         tid_to_league,

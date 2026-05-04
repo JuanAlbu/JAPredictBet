@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any
 
 
 @dataclass
 class AgentContext:
     """Context passed to agents during orchestration."""
 
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
 
 
 class BaseAgent:
@@ -18,7 +18,7 @@ class BaseAgent:
 
     name: str = "base"
 
-    def run(self, context: AgentContext) -> Dict[str, Any]:
+    def run(self, context: AgentContext) -> dict[str, Any]:
         """Execute the agent action."""
 
         raise NotImplementedError("Agent execution not implemented.")

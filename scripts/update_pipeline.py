@@ -8,10 +8,10 @@ Bugs corrigidos (P2.B3):
     matchup, H2H, drop redundant, team encoding).
   - Bug 3: algorithms hardcoded sem Ridge/ElasticNet — corrigido (usa config + fallback completo).
 """
+
 import logging
 import shutil
 from pathlib import Path
-from typing import Sequence
 
 import pandas as pd
 
@@ -22,8 +22,6 @@ from japredictbet.features.matchup import add_h2h_features, add_matchup_features
 from japredictbet.features.rolling import (
     add_result_rolling,
     add_stat_rolling,
-    add_rolling_std,
-    add_rolling_ema,
     drop_redundant_features,
 )
 from japredictbet.features.team_identity import add_team_target_encoding
@@ -54,9 +52,7 @@ def _build_recency_weights(seasons: pd.Series) -> pd.Series:
     unique = sorted(seasons.unique())
     season_rank = {season: idx for idx, season in enumerate(unique)}
     max_rank = max(season_rank.values()) if season_rank else 1
-    return seasons.map(
-        lambda season: 1.0 + (season_rank[season] / max_rank if max_rank else 0.0)
-    )
+    return seasons.map(lambda season: 1.0 + (season_rank[season] / max_rank if max_rank else 0.0))
 
 
 def _engineer_features(data: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
@@ -88,9 +84,7 @@ def _engineer_features(data: pd.DataFrame, config: PipelineConfig) -> pd.DataFra
         df = drop_redundant_features(df, config.features.rolling_windows)
 
     # Team target encoding
-    train_mask = _build_temporal_split_simple(
-        df["season"], config.model.random_state
-    )
+    train_mask = _build_temporal_split_simple(df["season"], config.model.random_state)
     df = add_elo_ratings(
         df,
         home_team_col="home_team",
@@ -125,9 +119,7 @@ def _engineer_features(data: pd.DataFrame, config: PipelineConfig) -> pd.DataFra
     return df
 
 
-def _add_rolling_std_features(
-    data: pd.DataFrame, window: int, season_col: str | None = None
-) -> pd.DataFrame:
+def _add_rolling_std_features(data: pd.DataFrame, window: int, season_col: str | None = None) -> pd.DataFrame:
     """Add rolling standard deviation features for key stats."""
     df = data.copy()
     group_cols = ["home_team", "away_team"]
@@ -142,21 +134,18 @@ def _add_rolling_std_features(
     ]
 
     for home_stat, away_stat in stat_pairs:
-        for prefix, stat in [("home", home_stat), ("away", away_stat)]:
+        for _prefix, stat in [("home", home_stat), ("away", away_stat)]:
             if stat not in df.columns:
                 continue
             col = f"{stat}_rolling_std_{window}"
             if col not in df.columns:  # Avoid redundant computation
-                df[col] = (
-                    df.groupby(group_cols)[stat]
-                    .transform(lambda s: s.shift(1).rolling(window, min_periods=1).std())
+                df[col] = df.groupby(group_cols)[stat].transform(
+                    lambda s: s.shift(1).rolling(window, min_periods=1).std()
                 )
     return df
 
 
-def _add_rolling_ema_features(
-    data: pd.DataFrame, window: int, season_col: str | None = None
-) -> pd.DataFrame:
+def _add_rolling_ema_features(data: pd.DataFrame, window: int, season_col: str | None = None) -> pd.DataFrame:
     """Add EMA features for key stats."""
     df = data.copy()
     group_cols = ["home_team", "away_team"]
@@ -165,10 +154,14 @@ def _add_rolling_ema_features(
 
     span = max(2, window)
     stat_list = [
-        "home_corners", "away_corners",
-        "home_goals", "away_goals",
-        "home_shots", "away_shots",
-        "home_shots_on_target", "away_shots_on_target",
+        "home_corners",
+        "away_corners",
+        "home_goals",
+        "away_goals",
+        "home_shots",
+        "away_shots",
+        "home_shots_on_target",
+        "away_shots_on_target",
     ]
 
     for stat in stat_list:
@@ -176,10 +169,7 @@ def _add_rolling_ema_features(
             continue
         col = f"{stat}_ema_{window}"
         if col not in df.columns:
-            df[col] = (
-                df.groupby(group_cols)[stat]
-                .transform(lambda s: s.shift(1).ewm(span=span, adjust=False).mean())
-            )
+            df[col] = df.groupby(group_cols)[stat].transform(lambda s: s.shift(1).ewm(span=span, adjust=False).mean())
     return df
 
 
@@ -261,6 +251,7 @@ def main(new_dataset_path: str) -> None:
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) > 1:
         main(sys.argv[1])
     else:

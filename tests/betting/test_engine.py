@@ -1,7 +1,7 @@
 """Tests for the core betting engine."""
 
 from __future__ import annotations
-import math
+
 import numpy as np
 import pytest
 from scipy.stats import poisson
@@ -78,9 +78,7 @@ def test_should_bet():
 def test_evaluate_bet():
     """Test the end-to-end evaluation for a single bet."""
     # Total corners ~ Poisson(11.1), line=10.5, odds=1.92
-    result = engine.evaluate_bet(
-        lambda_=11.1, line=10.5, odds=1.92, bet_type="over", edge_threshold=0.05
-    )
+    result = engine.evaluate_bet(lambda_=11.1, line=10.5, odds=1.92, bet_type="over", edge_threshold=0.05)
     # p_model = P(X > 10.5) = 1 - P(X<=10) for lambda=11.1
     p_model_expected = 1 - poisson.cdf(10, 11.1)
     p_odds_expected = 1 / 1.92
@@ -98,7 +96,7 @@ def test_evaluate_result():
     # Over bet
     assert engine.evaluate_result(real_value=10, line=8.5, bet_type="over") is True
     assert engine.evaluate_result(real_value=8, line=8.5, bet_type="over") is False
-    assert engine.evaluate_result(real_value=9, line=9.0, bet_type="over") is None # Push
+    assert engine.evaluate_result(real_value=9, line=9.0, bet_type="over") is None  # Push
     # Under bet
     assert engine.evaluate_result(real_value=7, line=8.5, bet_type="under") is True
     assert engine.evaluate_result(real_value=9, line=8.5, bet_type="under") is False
@@ -106,7 +104,7 @@ def test_evaluate_result():
 
 def test_compute_profit():
     """Test backtest helper for profit calculation."""
-    assert np.isclose(engine.compute_profit(result=True, odds=2.5, stake=10), 15.0) # 10 * (2.5-1)
+    assert np.isclose(engine.compute_profit(result=True, odds=2.5, stake=10), 15.0)  # 10 * (2.5-1)
     assert np.isclose(engine.compute_profit(result=False, odds=2.5, stake=10), -10.0)
     assert np.isclose(engine.compute_profit(result=None, odds=2.5, stake=10), 0.0)
 
@@ -161,9 +159,7 @@ def test_consensus_engine_discards_without_agreement():
     assert result["votes_positive"] == 0
     assert np.isclose(result["agreement"], 0.0)
     assert result["bet"] is False
-    assert result["status_message"] == (
-        "Aposta descartada por falta de consenso (Agreement: 0%)"
-    )
+    assert result["status_message"] == ("Aposta descartada por falta de consenso (Agreement: 0%)")
     assert result["consensus_label"] == "Consenso: 0/4 - 0% | Status: Insegura"
     assert result["decision_status"] == "Insegura"
     assert result["model_votes"] == [0, 0, 0, 0]

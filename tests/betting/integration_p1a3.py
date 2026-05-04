@@ -5,6 +5,7 @@ Demonstrates that the validation catches invalid lambdas before they corrupt res
 """
 
 import sys
+
 from src.japredictbet.betting.engine import ConsensusEngine, report_consensus
 
 
@@ -12,20 +13,20 @@ def test_scenario_1_all_valid():
     """Scenario 1: Valid lambdas work correctly."""
     print("\n=== SCENARIO 1: Valid Lambdas ===")
     engine = ConsensusEngine(edge_threshold=0.05, use_dynamic_margin=True)
-    
+
     predictions = [
         {"lambda_home": 4.5, "lambda_away": 5.0},
         {"lambda_home": 4.3, "lambda_away": 5.2},
         {"lambda_home": 4.7, "lambda_away": 4.8},
     ]
     odds_data = {"line": 9.5, "odds": 2.0, "type": "over"}
-    
+
     result = engine.evaluate_with_consensus(
         predictions_list=predictions,
         odds_data=odds_data,
         threshold=0.45,
     )
-    print(f"✓ Valid predictions processed successfully")
+    print("✓ Valid predictions processed successfully")
     print(f"  Agreement: {result['agreement']:.1%}")
     print(f"  Bet Decision: {result['bet']}")
 
@@ -34,16 +35,16 @@ def test_scenario_2_nan_detection():
     """Scenario 2: NaN is caught and rejected."""
     print("\n=== SCENARIO 2: NaN Detection ===")
     engine = ConsensusEngine(edge_threshold=0.05)
-    
+
     predictions = [
         {"lambda_home": 4.5, "lambda_away": 5.0},
         {"lambda_total": float("nan")},  # INVALID
         {"lambda_home": 4.7, "lambda_away": 4.8},
     ]
     odds_data = {"line": 9.5, "odds": 2.0}
-    
+
     try:
-        result = engine.evaluate_with_consensus(
+        engine.evaluate_with_consensus(
             predictions_list=predictions,
             odds_data=odds_data,
             threshold=0.45,
@@ -59,16 +60,16 @@ def test_scenario_3_negative_detection():
     """Scenario 3: Negative lambda is caught and rejected."""
     print("\n=== SCENARIO 3: Negative Lambda Detection ===")
     engine = ConsensusEngine(edge_threshold=0.05)
-    
+
     predictions = [
         {"lambda_home": 4.5, "lambda_away": 5.0},
         {"lambda_total": -3.0},  # INVALID - negative
         {"lambda_home": 4.7, "lambda_away": 4.8},
     ]
     odds_data = {"line": 9.5, "odds": 2.0}
-    
+
     try:
-        result = engine.evaluate_with_consensus(
+        engine.evaluate_with_consensus(
             predictions_list=predictions,
             odds_data=odds_data,
             threshold=0.45,
@@ -84,15 +85,15 @@ def test_scenario_4_inf_detection():
     """Scenario 4: Infinite lambda is caught and rejected."""
     print("\n=== SCENARIO 4: Infinite Lambda Detection ===")
     engine = ConsensusEngine(edge_threshold=0.05)
-    
+
     predictions = [
         {"lambda_home": 4.5, "lambda_away": 5.0},
         {"lambda_total": float("inf")},  # INVALID - infinite
     ]
     odds_data = {"line": 9.5, "odds": 2.0}
-    
+
     try:
-        result = engine.evaluate_with_consensus(
+        engine.evaluate_with_consensus(
             predictions_list=predictions,
             odds_data=odds_data,
             threshold=0.45,
@@ -107,9 +108,9 @@ def test_scenario_4_inf_detection():
 def test_scenario_5_report_consensus_validation():
     """Scenario 5: report_consensus validates all lambdas upfront."""
     print("\n=== SCENARIO 5: report_consensus Batch Validation ===")
-    
+
     lambdas = [9.0, 9.5, 10.0]
-    
+
     result = report_consensus(
         lambdas=lambdas,
         odds=2.0,
@@ -117,10 +118,10 @@ def test_scenario_5_report_consensus_validation():
         threshold_edge=0.05,
         consensus_threshold=0.5,
     )
-    print(f"✓ Valid lambdas processed by report_consensus")
+    print("✓ Valid lambdas processed by report_consensus")
     print(f"  Mean lambda: {result['mean_lambda']:.2f}")
     print(f"  Vote distribution: {result['votes']}/{len(lambdas)}")
-    
+
     # Now try with invalid lambda
     try:
         result = report_consensus(
@@ -141,20 +142,20 @@ if __name__ == "__main__":
     print("=" * 70)
     print("P1.A3 Integration Test: Lambda Validation in Production")
     print("=" * 70)
-    
+
     all_pass = True
-    
+
     try:
         test_scenario_1_all_valid()
     except Exception as e:
         print(f"✗ Scenario 1 failed: {e}")
         all_pass = False
-    
+
     all_pass &= test_scenario_2_nan_detection()
     all_pass &= test_scenario_3_negative_detection()
     all_pass &= test_scenario_4_inf_detection()
     all_pass &= test_scenario_5_report_consensus_validation()
-    
+
     print("\n" + "=" * 70)
     if all_pass:
         print("✓ ALL INTEGRATION SCENARIOS PASSED")

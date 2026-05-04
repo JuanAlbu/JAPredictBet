@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 
 from japredictbet.betting.engine import ConsensusEngine
@@ -13,7 +12,7 @@ class TestWeightedConsensus:
 
     def _make_predictions(self, lambdas: list[float]) -> list[dict]:
         """Helper: create prediction dicts from lambda totals."""
-        return [{"lambda_total": l} for l in lambdas]
+        return [{"lambda_total": lam} for lam in lambdas]
 
     def _make_odds(self, line: float = 9.5, odds: float = 1.85) -> dict:
         return {"line": line, "odds": odds, "type": "over"}
@@ -40,15 +39,12 @@ class TestWeightedConsensus:
         odds = self._make_odds(line=9.5, odds=1.85)
 
         # Without weights: 3/5 = 60% → bet if threshold=0.5
-        result_unweighted = engine.evaluate_with_consensus(
-            preds, odds, threshold=0.5
-        )
+        result_unweighted = engine.evaluate_with_consensus(preds, odds, threshold=0.5)
         assert result_unweighted["bet"] is True
 
         # With heavy weight on "no" models → weighted agreement should drop
         result_weighted = engine.evaluate_with_consensus(
-            preds, odds, threshold=0.5,
-            model_weights=[1.0, 1.0, 1.0, 10.0, 10.0]
+            preds, odds, threshold=0.5, model_weights=[1.0, 1.0, 1.0, 10.0, 10.0]
         )
         # Weighted: (1+1+1+0+0) / (1+1+1+10+10) = 3/23 ≈ 13% → no bet
         assert result_weighted["bet"] is False
@@ -69,9 +65,7 @@ class TestWeightedConsensus:
         odds = self._make_odds()
 
         # 2 weights for 3 models → ignored, uses equal
-        result = engine.evaluate_with_consensus(
-            preds, odds, threshold=0.5, model_weights=[1.0, 1.0]
-        )
+        result = engine.evaluate_with_consensus(preds, odds, threshold=0.5, model_weights=[1.0, 1.0])
         assert result["total_models"] == 3
 
     def test_weighted_agreement_value(self):
@@ -81,10 +75,7 @@ class TestWeightedConsensus:
         preds = self._make_predictions([15.0, 15.0, 15.0])
         odds = self._make_odds(line=9.5, odds=1.85)
 
-        result = engine.evaluate_with_consensus(
-            preds, odds, threshold=0.5,
-            model_weights=[2.0, 3.0, 5.0]
-        )
+        result = engine.evaluate_with_consensus(preds, odds, threshold=0.5, model_weights=[2.0, 3.0, 5.0])
         # All vote yes: weighted = (2+3+5)/(2+3+5) = 1.0
         assert result["agreement"] == pytest.approx(1.0)
 
@@ -94,9 +85,6 @@ class TestWeightedConsensus:
         preds = self._make_predictions([12.0, 12.0, 5.0, 5.0])
         odds = self._make_odds()
 
-        result = engine.evaluate_match_with_consensus(
-            preds, odds, threshold=0.5,
-            model_weights=[1.0, 1.0, 10.0, 10.0]
-        )
+        result = engine.evaluate_match_with_consensus(preds, odds, threshold=0.5, model_weights=[1.0, 1.0, 10.0, 10.0])
         # Weighted: (1+1+0+0) / (1+1+10+10) = 2/22 ≈ 9% → no bet
         assert result["bet"] is False

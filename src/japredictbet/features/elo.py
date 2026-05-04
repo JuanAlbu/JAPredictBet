@@ -33,7 +33,7 @@ def add_elo_ratings(
     data["away_elo_rating"] = pd.NA
     data["elo_diff"] = pd.NA
 
-    for season, group in data.groupby(season_col, sort=False):
+    for _season, group in data.groupby(season_col, sort=False):
         ratings: dict[str, float] = {}
         for idx, row in group.iterrows():
             home = row[home_team_col]
@@ -51,9 +51,7 @@ def add_elo_ratings(
                 continue
 
             result = _result_from_score(float(home_score), float(away_score))
-            expected_home = _expected_score(
-                home_rating + cfg.home_advantage, away_rating
-            )
+            expected_home = _expected_score(home_rating + cfg.home_advantage, away_rating)
             expected_away = 1.0 - expected_home
 
             ratings[home] = home_rating + cfg.k_factor * (result - expected_home)

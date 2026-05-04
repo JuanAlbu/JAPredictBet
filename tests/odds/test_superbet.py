@@ -54,27 +54,27 @@ class TestIterSseEvents:
         assert events[0]["id"] == 1
 
     def test_multiple_events(self):
-        payloads = [
-            {"id": i, "sportId": 5, "matchName": f"Home{i}\u00b7Away{i}"}
-            for i in range(3)
-        ]
-        raw_text = "\n".join(
-            f"data:{json.dumps({'resourceId': 'event:' + str(p['id']), 'timestamp': 0, 'data': p})}"
-            for p in payloads
-        ) + "\n"
+        payloads = [{"id": i, "sportId": 5, "matchName": f"Home{i}\u00b7Away{i}"} for i in range(3)]
+        raw_text = (
+            "\n".join(
+                f"data:{json.dumps({'resourceId': 'event:' + str(p['id']), 'timestamp': 0, 'data': p})}"
+                for p in payloads
+            )
+            + "\n"
+        )
         events = list(_iter_sse_events(raw_text))
         assert len(events) == 3
 
     def test_malformed_json_skipped(self):
         valid_outer = json.dumps({"resourceId": "e:1", "timestamp": 0, "data": {"id": 1, "sportId": 5}})
-        raw_text = f'data:{{invalid json}}\ndata:{valid_outer}\n'
+        raw_text = f"data:{{invalid json}}\ndata:{valid_outer}\n"
         events = list(_iter_sse_events(raw_text))
         assert len(events) == 1
         assert events[0]["id"] == 1
 
     def test_retry_and_empty_lines_ignored(self):
         outer = json.dumps({"resourceId": "e:1", "timestamp": 0, "data": {"id": 1}})
-        raw_text = f'retry:1000\n\ndata:{outer}\n\n'
+        raw_text = f"retry:1000\n\ndata:{outer}\n\n"
         events = list(_iter_sse_events(raw_text))
         assert len(events) == 1
 

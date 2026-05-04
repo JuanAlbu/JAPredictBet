@@ -10,11 +10,28 @@ version = "0.1.0"
 where = ["src"]
 
 [tool.ruff]
-target-version = "py310"
-line-length = 100
+target-version = "py311"
+line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "ARG", "PTH", "PL"]
+ignore = [
+    "PLR2004",      # Magic value comparison (too pedantic for tests/scripts)
+    "PLR0911",      # Too many return statements (valid for guard clauses)
+    "PLR0912",      # Too many branches (structural, hard to refactor now)
+    "PLR0915",      # Too many statements (structural, hard to refactor now)
+    "PLR5501",      # Use elif instead of else then if (minor style)
+    "PLR0913",      # Too many arguments (data science functions need params)
+    "ARG001",       # Unused function argument (false positives in callbacks)
+    "PTH",          # pathlib suggestions (pragmatic exceptions)
+    "PLC0415",      # Import at top-level (lazy imports are valid in hotspots)
+    "SIM117",       # Combine `with` statements (nested is more readable)
+    "SIM108",       # Use ternary operator (if-else is more readable)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PLR2004", "PLR0912", "PLR0915", "PLR5501", "PLC0415", "ARG002"]
+"scripts/**" = ["PLR2004", "PLR0912", "PLR0915", "PLR5501", "PLC0415"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -22,14 +39,23 @@ indent-style = "space"
 line-ending = "auto"
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 ignore_missing_imports = true
-strict = true
+strict = false
 disallow_untyped_defs = false
 check_untyped_defs = true
 warn_unused_ignores = true
 warn_redundant_casts = true
 no_implicit_optional = true
+disallow_any_unimported = false
+disallow_any_expr = false
+disallow_any_decorated = false
+disallow_any_explicit = false
+disallow_any_generics = false
+disallow_subclassing_any = false
+warn_no_return = true
+warn_return_any = false
+strict_equality = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

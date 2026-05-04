@@ -202,8 +202,7 @@ def main() -> None:
         # Gatekeeper multi-market results
         if entry.gatekeeper_markets:
             print(
-                f"        Mercados: {entry.gatekeeper_markets_approved}/"
-                f"{entry.gatekeeper_markets_evaluated} aprovados"
+                f"        Mercados: {entry.gatekeeper_markets_approved}/{entry.gatekeeper_markets_evaluated} aprovados"
             )
             for m in entry.gatekeeper_markets:
                 if m.get("status") == "APPROVED":
@@ -220,11 +219,7 @@ def main() -> None:
         print("  (nenhum jogo coletado dentro da janela)")
 
     print("=" * 60)
-    shadow_path = (
-        config.gatekeeper.shadow_log_path
-        if config.gatekeeper
-        else "logs/shadow_bets.log"
-    )
+    shadow_path = config.gatekeeper.shadow_log_path if config.gatekeeper else "logs/shadow_bets.log"
     print(f"  Shadow log: {shadow_path}")
     print()
 

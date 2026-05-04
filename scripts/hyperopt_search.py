@@ -18,7 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -30,8 +30,13 @@ from sklearn.model_selection import KFold
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import optuna
+
 from japredictbet.config import PipelineConfig
 from japredictbet.data.ingestion import load_historical_dataset
+from japredictbet.features.elo import EloConfig, add_elo_ratings
+from japredictbet.features.matchup import add_h2h_features, add_matchup_features
+from japredictbet.features.rolling import drop_redundant_features
+from japredictbet.features.team_identity import add_team_target_encoding
 from japredictbet.models.train import (
     _build_regressor,
     _select_feature_columns,
@@ -46,10 +51,6 @@ from japredictbet.pipeline.mvp_pipeline import (
     _build_temporal_split,
     _ensure_season_column,
 )
-from japredictbet.features.matchup import add_h2h_features, add_matchup_features
-from japredictbet.features.elo import EloConfig, add_elo_ratings
-from japredictbet.features.rolling import drop_redundant_features
-from japredictbet.features.team_identity import add_team_target_encoding
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
@@ -177,7 +178,7 @@ def _prepare_data(config: PipelineConfig) -> tuple[pd.DataFrame, pd.Series]:
     if not feature_cols:
         raise RuntimeError("No feature columns after filtering.")
 
-    x = data[feature_cols]
+    data[feature_cols]
     y_home = data["home_corners"]
     y_away = data["away_corners"]
     mask = _valid_training_mask(y_home, y_away)
@@ -256,7 +257,7 @@ def run_hyperopt(
     n_folds: int,
 ) -> dict:
     """Run Optuna hyperparameter search and return best params per algorithm."""
-    print(f"[HyperOpt] Preparing data...")
+    print("[HyperOpt] Preparing data...")
     data, feature_cols = _prepare_data(config)
     print(f"[HyperOpt] Training data: {len(data)} rows, {len(feature_cols)} features")
 
@@ -304,7 +305,7 @@ def _save_results(results: dict, output_dir: Path) -> None:
         print(f"[HyperOpt] Saved: {path}")
 
     summary = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "algorithms": list(results.keys()),
         "results": results,
     }
