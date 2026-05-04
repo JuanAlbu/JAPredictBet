@@ -1,9 +1,9 @@
-# JA PREDICT BET — ROADMAP (REVISÃO 03-MAI-2026)
+# JA PREDICT BET — ROADMAP (REVISÃO 04-MAI-2026)
 
-**Data da Revisão:** 03 de Maio, 2026
+**Data da Revisão:** 04 de Maio, 2026
 **Status Geral:** P0 ✅ | P0-FIX ✅ | P1 ✅ | Onda 1 ✅ | Onda 2 ✅ | Onda 4 parcial | P3-ARCH ✅ | P2-REFACTOR ✅ — **254/254 testes** (21 arquivos). 106 features. 30 modelos.
 **Histórico Completo:** [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md)
-**Itens pendentes:** 17 (Onda 3) + 1 (Onda 4) + 10 (Onda 5) + 4 (CKPT) + 4 (P3) + 3 (R&D) + 2 (Stretch) = 41 total
+**Itens pendentes:** 17 (Onda 3) + 1 (Onda 4) + 10 (Onda 5) + 3 (Onda 6) + 5 (Onda 7) + 5 (P3) + 3 (R&D) + 2 (Stretch) = 46 total
 
 > Este documento contém **apenas itens em aberto**. Itens concluídos são registrados em [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md).
 
@@ -169,9 +169,9 @@
 
 ---
 
-## Onda 6 — Arquitetura do Cockpit & Agentes V2 (4 Pilares)
+## Onda 6 — Arquitetura do Cockpit, Infra & Otimização (3 Pilares)
 
-**Objetivo:** Implementar os 4 pilares estratégicos para otimização de tokens, memória de longo prazo, operação remota e contexto externo.
+**Objetivo:** Otimização de tokens para LLM, operação remota via Telegram e infraestrutura cloud.
 
 - [ ] **CKPT.1 - Otimização de Tokens: Filtro de Relevância (The Bouncer V2)**
   - **Escopo:** Expandir a lógica de pré-filtro no Python para poupar tokens. Em vez de passar o JSON bruto de odds para o LLM, o módulo `pre_match_odds.py` deve aplicar a função `get_interesting_lines()`.
@@ -180,21 +180,88 @@
     - **Exclusão:** Cortar mercados de handicap ou linhas extremamente "esticadas" (ex: Over 0.5 a 1.05).
   - **Nota pós-refactor:** O critério de correlação com algoritmo foi removido — o 30-model ensemble é exclusivo do Mode 1 (Backtest) e não está disponível no Shadow Mode.
 
-- [ ] **CKPT.2 - Base Interna: Memória de Longo Prazo (Knowledge Store)**
-  - **Escopo:** Reduzir latência e custos de API com uma base leve (SQLite ou TinyDB) integrada ao `FeatureStore`.
-  - **Armazenamento:**
-    - **Cache de Contexto:** Escalações, desfalques e histórico de confrontos dos últimos 7 dias.
-    - **Histórico de Veredictos:** Armazenar por que o Gatekeeper rejeitou um jogo, evitando reprocessamento idêntico.
-    - **Shadow Performance:** Base para `consensus_accuracy_report.py` ler rapidamente o ROI por liga e modelo.
-
-- [ ] **CKPT.3 - Cockpit via Telegram: Operação Remota**
+- [ ] **CKPT.2 - Cockpit via Telegram: Operação Remota**
   - **Escopo:** Transformar o sistema num serviço de sinais pessoais através de um bot de Telegram. *(Absorve P2.D4 e P4.NOTIFY)*
   - **Implementação:** Novo módulo `src/japredictbet/interfaces/telegram_bot.py` via `python-telegram-bot`.
   - **Fluxo e Comandos:** O pipeline roda no T-60; jogos `APPROVED` enviam cards com botões de Acompanhar/Ignorar. Comandos suportados: `/resumo` (jogos mapeados para hoje), `/odds [time]` (consulta rápida de odds via Superbet), e `/stats` (relatório de performance mensal).
+  - **Dependências:** Onda 7 (Enriquecimento de Contexto) para qualidade das análises; P3.ENG para execução assíncrona.
 
-- [ ] **CKPT.4 - Agente de Pesquisa (The Scout): Contexto Externo**
-  - **Escopo:** Evoluir o Gatekeeper Agent com um módulo "Scout" ativo focado em leitura de contexto de fontes externas (ex: notícias, desfalques de última hora).
-  - **Fluxo:** Ao identificar jogo de alto interesse, o agente pesquisa na web ("desfalques", "provável escalação"), resume as 3 notícias mais relevantes e injeta o resultado no Prompt Mestre V26 no campo `[EXTERNAL_RESEARCH]`.
+- [ ] **CKPT.3 - Deploy Cloud & Containerização (Docker)**
+  - **Tipo:** Infraestrutura / DevOps.
+  - **Escopo:** Criar `Dockerfile` e configurar deploy contínuo em plataforma cloud (Railway, Render ou AWS EC2) para execução 24/7 do pipeline T-60.
+  - **Objetivo:** Eliminar dependência do computador pessoal ligado. Permitir que o cron job rode de hora em hora automaticamente.
+  - **Pré-requisitos:** CKPT.2 (Telegram) para notificações remotas. Onda 7 (Knowledge Store) para cache entre execuções.
+  - **Entregáveis:** `Dockerfile`, `docker-compose.yml` (opcional), script de deploy, documentação de infraestrutura.
+  - **Origem:** Plano Gemini — FASE 3 (Cloud Deploy).
+
+---
+
+## Onda 7 — Enriquecimento de Contexto para o Gatekeeper (5 itens)
+
+**Objetivo:** Elevar a precisão do Gatekeeper LLM enriquecendo o `MatchContext` com dados que hoje estão ausentes (árbitro, H2H recente, notícias externas) e com memória de longo prazo (RAG) para evitar repetir erros. Esta onda é **pré-requisito para a Onda 6** (Cockpit Telegram e Deploy Cloud dependem de análises de alta qualidade).
+
+**Motivação:** O diagnóstico de 04-MAI-2026 revelou que o `MatchContext` atual cobre odds + escalações + lesões + tabela, mas tem **3 gaps críticos**: (a) `RefereeInfo` nunca populado, (b) H2H recente ausente no Shadow Mode, (c) zero contexto externo (notícias, desfalques de última hora, perfil histórico de árbitros/times).
+
+### Bloco 7A — Estudo e Planejamento (1 item)
+
+- [ ] **ENR.1 - Estudo de Viabilidade: Fontes, Tecnologias e Custo/Benefício**
+  - **Tipo:** Pesquisa / Planejamento.
+  - **Objetivo:** Antes de implementar, avaliar sistematicamente as opções de enriquecimento de contexto.
+  - **Entregáveis:** Documento `docs/context_enrichment_study.md` cobrindo:
+    - **Fontes de dados avaliadas:**
+      - *API-Football v3* — endpoints já disponíveis: `fixtures/{id}` (referee), `fixtures/headtohead` (H2H). Custo: gratuito no plano free (100 req/dia).
+      - *Web Search* — DuckDuckGo (gratuito, ilimitado, sem API key) vs Tavily (pago, estruturado, melhor para LLM) vs SerpAPI (pago, resultados Google).
+      - *RAG / Knowledge Store* — SQLite + embeddings locais (gratuito) vs ChromaDB (gratuito, open source) vs Pinecone (pago, cloud).
+      - *News APIs* — NewsAPI.org (gratuito 100 req/dia), GNews (gratuito 100 req/dia), RSS feeds de portais esportivos (gratuito, ilimitado).
+    - **Comparação custo/benefício:** Latência de cada fonte, qualidade do output para o LLM, custo financeiro mensal estimado, limite de requisições.
+    - **Recomendação faseada:** O que implementar primeiro (quick wins), o que depende de orçamento, o que deixar para fases posteriores.
+    - **Riscos:** Rate limits, dados desatualizados, falsos positivos em fuzzy matching de nomes, token bloat no prompt.
+  - **Módulo:** Novo `docs/context_enrichment_study.md`.
+
+### Bloco 7B — Memória de Longo Prazo (RAG) (1 item)
+
+- [ ] **ENR.2 - Knowledge Store: Memória de Longo Prazo (RAG)**
+  - **Tipo:** Infraestrutura de Dados / Agentes.
+  - **Escopo:** Implementar base de conhecimento leve (SQLite + embeddings) integrada ao `FeatureStore` para que o Gatekeeper "lembre" de comportamentos passados.
+  - **Origem:** Ex-CKPT.2 + Gemini FASE 2.
+  - **Armazenamento:**
+    - **Cache de Contexto:** Escalações, desfalques e H2H dos últimos 7 dias — evita chamadas repetidas à API-Football.
+    - **Histórico de Veredictos:** Armazenar por que o Gatekeeper rejeitou ou aprovou cada jogo, evitando reprocessamento idêntico e permitindo aprendizado com erros passados.
+    - **Shadow Performance:** Base para `consensus_accuracy_report.py` e `session_dashboard.py` lerem rapidamente ROI por liga, mercado e horário.
+    - **Perfil de Arbitragem:** Registrar padrões históricos de árbitros (média de cartões, faltas, escanteios por jogo apitado; viés casa/fora). Na avaliação de um jogo, o sistema consulta o perfil do árbitro da partida e injeta no prompt (ex: "Wilton Pereira Sampaio apitou 3 jogos do Flamengo esse ano, média 6 cartões/jogo, 60% dos jogos com over 4.5 cartões").
+  - **Módulos:** `data/feature_store.py`, novo `data/knowledge_store.py`.
+
+### Bloco 7C — Contexto por Partida (3 itens)
+
+- [ ] **ENR.3 - Árbitro no MatchContext (Quick Win)**
+  - **Tipo:** Correção de Gap Operacional.
+  - **Escopo:** Popular o campo `MatchContext.referee` (dataclass [`RefereeInfo`](src/japredictbet/data/context_collector.py:63) já existe mas nunca é populado).
+  - **Ação:** Adicionar chamada ao endpoint `fixtures/{id}` da API-Football (que retorna `referee` no response) durante a coleta de contexto em `ContextCollector.collect_upcoming()` e `enrich_pre_match_contexts()`.
+  - **Módulos:** `data/context_collector.py` (adicionar `ApiFootballClient.get_referee()` e popular `ctx.referee`).
+  - **Dependência:** Nenhuma — API-Football já está integrada com chave configurada.
+
+- [ ] **ENR.4 - H2H Recente no MatchContext**
+  - **Tipo:** Melhoria de Contexto.
+  - **Escopo:** Trazer o histórico de confronto direto (H2H) para o Shadow Mode. O [`matchup.py`](src/japredictbet/features/matchup.py) já implementa `add_h2h_features()` para o Mode 1 (Backtest), mas o Shadow Mode não tem acesso a esse dado.
+  - **Ação:**
+    - Adicionar `ApiFootballClient.get_h2h(fixture_id)` usando o endpoint `fixtures/headtohead`.
+    - Popular novo campo `MatchContext.h2h` com resumo dos últimos 3 confrontos (placar, escanteios, gols).
+    - Serializar no `to_llm_context()` para injeção no prompt.
+  - **Módulos:** `data/context_collector.py`, `data/context_collector.py::MatchContext`.
+  - **Dependência:** ENR.3 (aproveitar a mesma chamada de API para fixtures).
+
+- [ ] **ENR.5 - The Scout: Agente de Pesquisa Web para Contexto Externo**
+  - **Tipo:** Agente / Integração.
+  - **Escopo:** Evoluir o Gatekeeper com um módulo "Scout" ativo que pesquisa notícias e contexto externo para jogos de alto interesse.
+  - **Origem:** Ex-CKPT.4 + Gemini FASE 1.
+  - **Fluxo:**
+    1. Ao identificar jogo com odds na Zona Alvo (1.60–2.20), o sistema dispara pesquisa web.
+    2. Pesquisa por `"[home_team] [away_team] escalação desfalques notícias"`.
+    3. Resume as 3 notícias/insights mais relevantes.
+    4. Injeta no Prompt Mestre V26 como campo `[EXTERNAL_RESEARCH]`.
+  - **Tecnologias candidatas:** DuckDuckGo Search (gratuito) ou Tavily API (pago, melhor qualidade) — definido pelo estudo ENR.1.
+  - **Módulos:** `agents/gatekeeper.py` (integração), novo `data/web_scout.py`.
+  - **Dependências:** ENR.1 (estudo define a tecnologia), ENR.2 (cache para evitar pesquisas repetidas).
 
 ---
 
@@ -231,6 +298,17 @@
   - **Saída esperada:** parecer consolidado com status final, justificativa comum, divergências relevantes e recomendação final única.
   - **Módulos:** `agents/gatekeeper.py`, novo `agents/llm_consensus.py`, `pipeline/gatekeeper_live_pipeline.py`.
   - **Nota pós-refactor:** Prompt único via `PROMPT_MESTRE.md` V26 (multi-mercado). Não há mais `PROMPT_ANALYST.md`.
+
+- [ ] **P3.LLM-AUDITOR - Auditor LLM para Backtest (Modo 1)**
+  - **Tipo:** Melhoria Analítica.
+  - **Escopo:** Criar um agente LLM específico para o Mode 1 (Backtest) que lê o relatório de saída dos 30 modelos do ensemble.
+  - **Objetivo:** Complementar o [`consensus_accuracy_report.py`](scripts/consensus_accuracy_report.py) (que opera com thresholds puramente numéricos) com um auditor narrativo. O LLM lê o output de [`predict.py`](src/japredictbet/models/predict.py) e sugere, em linguagem natural:
+    - Ajustes de pesos dos modelos no ensemble
+    - Recomendações de calibração (Brier, ECE)
+    - Ajustes nas regras de Kelly Criterion com base na variância encontrada
+    - Identificação de ligas ou mercados com desempenho atípico
+  - **Módulos:** `models/predict.py`, `scripts/consensus_accuracy_report.py`, novo `agents/backtest_auditor.py`.
+  - **Origem:** Plano Gemini — FASE FUTURA (LLM no Modo 1).
 
 ---
 

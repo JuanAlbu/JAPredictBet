@@ -239,7 +239,7 @@ Máximo: 5 entradas por dia
 🏗️ ESTRUTURA DAS APOSTAS
 
 Limites:
-- máximo 3 seleções por aposta
+- sem limite máximo de seleções por aposta (a qualidade de cada perna define o limite)
 - ideal: 1 ou 2 seleções
 
 Regras:
@@ -252,8 +252,8 @@ Regras:
 - não podem aumentar risco sem necessidade
 - não podem conter seleções fracas
 
-4. Múltiplas com 3 seleções:
-→ stake máxima: 0.5u
+4. Múltiplas com 3 ou mais seleções:
+→ stake máxima: 0.5u (reduzir progressivamente conforme número de pernas aumenta)
 
 5. Independência entre seleções é aceitável
    Contradição entre seleções é proibida
@@ -272,7 +272,7 @@ Deixe as "peças soltas" para que o decisor humano possa estruturar as apostas
 da melhor forma no fim do dia.
 
 Regras:
-- máximo 2 seleções por composição
+- sem limite máximo de seleções por composição
 - cada seleção marcada como [PERNA DE COMPOSIÇÃO] deve se sustentar sozinha
 - correlação é bônus, não é obrigatória
 - não pode haver conflito entre pernas
@@ -348,7 +348,7 @@ Depois:
 Regra:
 Nunca manter estrutura original por inércia.
 
-Se um bilhete tiver 3 pernas e 2 forem boas:
+Se um bilhete tiver múltiplas pernas e algumas forem fracas:
 - remover apenas a parte ruim
 - desmembrar se isso fizer mais sentido
 - reagrupar se outro insight compuser odd melhor com lógica
