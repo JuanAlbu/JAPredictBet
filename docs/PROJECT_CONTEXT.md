@@ -1,4 +1,4 @@
-# Project Context (Atualizado 03-MAY-2026)
+# Project Context (Atualizado 05-MAY-2026)
 
 
 ## LLM Providers (Atualização 03-MAY-2026)
@@ -67,10 +67,16 @@ Nenhum agente executa apostas reais — Shadow Mode é 100% observacional.
 - **Shadow Log:** JSONL (observational only — no real bets)
 - **Ver:** [`docs/COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md#p2-refactoring--unified-architecture-03-mai-2026)
 
-### Next Priority
-- Train ensemble models (`artifacts/models/` is empty)
+### Next Priority (Atualizado 05-MAI-2026)
+- ~~Train ensemble models (`artifacts/models/` is empty)~~ ✅ **30 modelos já treinados** (11 XGB + 10 LGBM + 5 Ridge + 4 ElasticNet)
 - Confirm Bundesliga + Premier League tournament IDs
-- P2 residual: B3 (update_pipeline), B7 (pickle hash), B8 (temporal holdout), C7 (hyperopt params)
+- P2 residual: ~~B3 (update_pipeline)~~ ✅, ~~B7 (pickle hash)~~ ✅, ~~B8 (temporal holdout)~~ ✅, ~~C7 (hyperopt params)~~ ✅ — **Onda 2 já concluída**
+- CI Pipeline ✅ — GitHub Actions com lint, type check e coverage gate
+- P2.C4 ✅ — Imports padronizados nos testes
+- ENR.1 ✅ — Estudo de Viabilidade de Contexto concluído
+- **Onda 3:** 16 itens pendentes (testes + dead code)
+- **Onda 4:** SH4 pendente (mapeamento manual para 9 ligas)
+- **Onda 5:** 7 itens pendentes (logging, dashboard, menu bootstrap)
 
 ### P0-FIX Hotfix (03-APR-2026)
 - `FIX.5` (rolling cross-group contamination): code-level fix implemented in `src/japredictbet/features/rolling.py` by migrating rolling mean/sum/std flows to `group.transform(...)`.

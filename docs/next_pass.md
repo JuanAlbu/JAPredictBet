@@ -1,9 +1,9 @@
-# JA PREDICT BET — ROADMAP (REVISÃO 04-MAI-2026)
+# JA PREDICT BET — ROADMAP (REVISÃO 05-MAI-2026)
 
-**Data da Revisão:** 04 de Maio, 2026
-**Status Geral:** P0 ✅ | P0-FIX ✅ | P1 ✅ | Onda 1 ✅ | Onda 2 ✅ | Onda 4 parcial | P3-ARCH ✅ | P2-REFACTOR ✅ — **254/254 testes** (21 arquivos). 106 features. 30 modelos.
+**Data da Revisão:** 05 de Maio, 2026
+**Status Geral:** P0 ✅ | P0-FIX ✅ | P1 ✅ | Onda 1 ✅ | Onda 2 ✅ | Onda 4 parcial | P3-ARCH ✅ | P2-REFACTOR ✅ | **CI Pipeline ✅** | **ENR.1 ✅** — **254/254 testes** (21 arquivos). 106 features. 30 modelos treinados.
 **Histórico Completo:** [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md)
-**Itens pendentes:** 17 (Onda 3) + 1 (Onda 4) + 10 (Onda 5) + 3 (Onda 6) + 5 (Onda 7) + 5 (P3) + 3 (R&D) + 2 (Stretch) = 46 total
+**Itens pendentes:** 16 (Onda 3) + 1 (Onda 4) + 7 (Onda 5) + 3 (Onda 6) + 4 (Onda 7) + 5 (P3) + 3 (R&D) + 2 (Stretch) = **41 total**
 
 > Este documento contém **apenas itens em aberto**. Itens concluídos são registrados em [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md).
 
@@ -11,22 +11,25 @@
 
 ## Prioridades Imediatas
 
-1. **Treinar ensemble** — `artifacts/models/` não existe no estado atual → `python run.py --config config.yml`
+1. **Resolver gaps de dead code (P2.C1/C6)** — `add_rolling_features()` + teste associado confirmados como código morto. Remover ambos junto com P2.C1 + P2.C6.
 2. **Onda 4 residual** — SH4 pendente (mapeamento manual), demais itens concluídos
 3. **P3.ENG** — Execução assíncrona T-60 (próximo grande salto de performance)
 
 ---
 
-## Observações LLM (03-MAI-2026)
+## Observações LLM (05-MAI-2026)
 
 - O Gatekeeper unificado avalia TODOS os mercados em uma única chamada LLM (Prompt Mestre V26).
 - O 30-model ensemble é exclusivo do Mode 1 (Backtest) — NÃO é usado no Shadow Mode.
 - Nenhum agente executa apostas reais — Shadow Mode é 100% observacional.
 - Gemini AI Studio não está disponível no Brasil (limit: 0). Use OpenRouter ou Groq.
+- **Novo:** CI pipeline com GitHub Actions (Ruff lint + MyPy type check + pytest com coverage ≥60%) operacional.
+- **Novo:** ENR.1 (Estudo de Viabilidade de Contexto) concluído — [`docs/context_enrichment_study.md`](context_enrichment_study.md).
+- **Novo:** Todos os 30 modelos do ensemble treinados e disponíveis em `artifacts/models/`.
 
 ---
 
-## Onda 3 — Testes & Limpeza (17 itens)
+## Onda 3 — Testes & Limpeza (16 itens)
 
 **Objetivo:** Elevar cobertura de ~55% para 70%+, remover dead code, padronizar estilo.
 
@@ -80,7 +83,7 @@
   - **Módulo:** `tests/scripts/test_superbet_scraper.py` (novo).
   - **Nota:** Testar funções extract/transform; não testar `_stream_sse()` (requer rede real).
 
-### Bloco 3B — Limpeza & Consistência (6 itens)
+### Bloco 3B — Limpeza & Consistência (5 itens)
 
 - [ ] **P2.C1 - Remover código morto**
   - ~~`value/value_engine.py` (217 linhas) — duplicada, com bugs próprios.~~ ✅ Já removido.
@@ -93,11 +96,6 @@
 
 - [ ] **P2.C3 - Padronizar código (linguagem + style)**
   - Mix português/inglês. Imports inline em `mvp_pipeline.py`. Config RandomForest enganoso no `algorithms`.
-
-- [ ] **P2.C4 - Padronizar imports nos testes: `from src.japredictbet` → `from japredictbet`**
-  - **6 arquivos** usam `from src.japredictbet...` (não-canônico), enquanto 16 arquivos usam `from japredictbet...` (canônico).
-  - Funciona apenas porque PYTHONPATH inclui a raiz do projeto — frágil e inconsistente.
-  - **Arquivos afetados:** `tests/features/test_rolling_cross_group.py`, `tests/features/test_rolling_p1b2.py`, `tests/betting/integration_p1a3.py`, `tests/betting/integration_p1a2.py`, `tests/betting/test_lambda_validation.py`, `tests/betting/test_p1a2_dynamic_margin.py`.
 
 - [ ] **P2.C5 - Corrigir docstring obsoleta em `test_shadow_integration.py`**
   - Linha 13: *"The 30-model ensemble and AnalystAgent are exclusive to Mode 1 (Backtest)"*.
@@ -122,21 +120,19 @@
 
 ---
 
-## Onda 5 — CI, Produto & Polish (13 itens)
+## Onda 5 — CI, Produto & Polish (7 itens)
 
 **Objetivo:** Automatizar qualidade, melhorar observabilidade e experiência final.
 
-### Bloco 5A — CI & Infraestrutura (5 itens)
+### Bloco 5A — CI & Infraestrutura (3 itens)
 
-- [ ] **P2.B1 - CI Básico (pytest em push)** — Coverage gate > 60%.
+- ~~**P2.B1 - CI Básico (pytest em push)** — Coverage gate > 60%.~~ ✅ **Concluído 05-MAI-2026** — GitHub Actions com Ruff lint, MyPy type check, pytest + coverage ≥60%, Python 3.11 e 3.12.
 - [ ] **P2.B2 - Logging Estruturado por Aposta** — Lambdas, votos, edge, threshold, stake, resultado.
 - [ ] **P2.B4 - Migrar `run.py` de `print()` para `logging`** — Usar `utils/logging.py` existente.
-- [ ] **P2.B5 - Completar `pyproject.toml`** — Metadata, entry points, dev dependencies.
-- [ ] **P2.B9 - Blindar coleta de testes**
-  - `python -m pytest -q` falha por coletar `test_output.txt` na raiz.
-  - **Fix:** Definir `testpaths`/`python_files` no `pyproject.toml`.
+- ~~**P2.B5/P2.B9 - Blindar coleta de testes** — `testpaths` e `python_files` no `pyproject.toml`.~~ ✅ **Concluído 05-MAI-2026**.
+- [ ] **Completar `pyproject.toml`** — Metadata, entry points, dev dependencies.
 
-### Bloco 5B — Produto (8 itens)
+### Bloco 5B — Produto (4 itens)
 
 - [ ] **P2.D1 - Tratamento de Erros Robusto** — `try-except` em `fetch_odds` e pontos críticos.
 - [ ] **P2.D2 - Dashboard de Saúde do Modelo** — Volume, hit rate, ROI, CLV, calibração por período.
@@ -196,27 +192,22 @@
 
 ---
 
-## Onda 7 — Enriquecimento de Contexto para o Gatekeeper (5 itens)
+## Onda 7 — Enriquecimento de Contexto para o Gatekeeper (4 itens)
 
 **Objetivo:** Elevar a precisão do Gatekeeper LLM enriquecendo o `MatchContext` com dados que hoje estão ausentes (árbitro, H2H recente, notícias externas) e com memória de longo prazo (RAG) para evitar repetir erros. Esta onda é **pré-requisito para a Onda 6** (Cockpit Telegram e Deploy Cloud dependem de análises de alta qualidade).
 
-**Motivação:** O diagnóstico de 04-MAI-2026 revelou que o `MatchContext` atual cobre odds + escalações + lesões + tabela, mas tem **3 gaps críticos**: (a) `RefereeInfo` nunca populado, (b) H2H recente ausente no Shadow Mode, (c) zero contexto externo (notícias, desfalques de última hora, perfil histórico de árbitros/times).
+**Motivação:** O diagnóstico de 05-MAI-2026 revelou que o `MatchContext` atual cobre odds + escalações + lesões + tabela, mas tem **3 gaps críticos**: (a) `RefereeInfo` nunca populado, (b) H2H recente ausente no Shadow Mode, (c) zero contexto externo (notícias, desfalques de última hora, perfil histórico de árbitros/times).
 
-### Bloco 7A — Estudo e Planejamento (1 item)
+### Bloco 7A — Estudo e Planejamento (✅ CONCLUÍDO)
 
-- [ ] **ENR.1 - Estudo de Viabilidade: Fontes, Tecnologias e Custo/Benefício**
-  - **Tipo:** Pesquisa / Planejamento.
-  - **Objetivo:** Antes de implementar, avaliar sistematicamente as opções de enriquecimento de contexto.
-  - **Entregáveis:** Documento `docs/context_enrichment_study.md` cobrindo:
-    - **Fontes de dados avaliadas:**
-      - *API-Football v3* — endpoints já disponíveis: `fixtures/{id}` (referee), `fixtures/headtohead` (H2H). Custo: gratuito no plano free (100 req/dia).
-      - *Web Search* — DuckDuckGo (gratuito, ilimitado, sem API key) vs Tavily (pago, estruturado, melhor para LLM) vs SerpAPI (pago, resultados Google).
-      - *RAG / Knowledge Store* — SQLite + embeddings locais (gratuito) vs ChromaDB (gratuito, open source) vs Pinecone (pago, cloud).
-      - *News APIs* — NewsAPI.org (gratuito 100 req/dia), GNews (gratuito 100 req/dia), RSS feeds de portais esportivos (gratuito, ilimitado).
-    - **Comparação custo/benefício:** Latência de cada fonte, qualidade do output para o LLM, custo financeiro mensal estimado, limite de requisições.
-    - **Recomendação faseada:** O que implementar primeiro (quick wins), o que depende de orçamento, o que deixar para fases posteriores.
-    - **Riscos:** Rate limits, dados desatualizados, falsos positivos em fuzzy matching de nomes, token bloat no prompt.
-  - **Módulo:** Novo `docs/context_enrichment_study.md`.
+- [x] **ENR.1 - Estudo de Viabilidade: Fontes, Tecnologias e Custo/Benefício**
+  - **Status:** ✅ **Concluído 04-MAI-2026.**
+  - **Entregue:** [`docs/context_enrichment_study.md`](context_enrichment_study.md) cobrindo:
+    - Fontes de dados avaliadas (API-Football, DuckDuckGo, Tavily, NewsAPI, RSS)
+    - Comparação custo/benefício detalhada
+    - Recomendação faseada (4 fases)
+    - Riscos e mitigações (incluindo alerta crítico sobre standings com fallback 2024)
+    - Métricas de sucesso
 
 ### Bloco 7B — Memória de Longo Prazo (RAG) (1 item)
 
@@ -239,6 +230,7 @@
   - **Ação:** Adicionar chamada ao endpoint `fixtures/{id}` da API-Football (que retorna `referee` no response) durante a coleta de contexto em `ContextCollector.collect_upcoming()` e `enrich_pre_match_contexts()`.
   - **Módulos:** `data/context_collector.py` (adicionar `ApiFootballClient.get_referee()` e popular `ctx.referee`).
   - **Dependência:** Nenhuma — API-Football já está integrada com chave configurada.
+  - **Referência:** Estudo completo em [`docs/context_enrichment_study.md`](context_enrichment_study.md#33-enr3--árbitro-quick-win).
 
 - [ ] **ENR.4 - H2H Recente no MatchContext**
   - **Tipo:** Melhoria de Contexto.
@@ -261,11 +253,11 @@
     4. Injeta no Prompt Mestre V26 como campo `[EXTERNAL_RESEARCH]`.
   - **Tecnologias candidatas:** DuckDuckGo Search (gratuito) ou Tavily API (pago, melhor qualidade) — definido pelo estudo ENR.1.
   - **Módulos:** `agents/gatekeeper.py` (integração), novo `data/web_scout.py`.
-  - **Dependências:** ENR.1 (estudo define a tecnologia), ENR.2 (cache para evitar pesquisas repetidas).
+  - **Dependências:** ENR.2 (cache para evitar pesquisas repetidas).
 
 ---
 
-## P3 — Performance, Otimização e Arquitetura (4 itens)
+## P3 — Performance, Otimização e Arquitetura (5 itens)
 
 - ~~**P2-UNIFY — Arquitetura Unificada (03-MAI-2026)** ✅~~ *(Movido para [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md))*
   - Motor de Valor Cego (ML): 30-model ensemble opera apenas escanteios, gera `[SUGESTÕES ALGORITMO]`.

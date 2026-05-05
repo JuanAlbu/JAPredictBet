@@ -372,3 +372,65 @@
 | 03-MAI-2026 | **SH19 — Testes de integração Shadow (42/42)** — `test_shadow_integration.py` corrigido: 11 issues fixados (dataclass fields, fixture formatting, API assinaturas, FeatureStore build via construtor direto). |
 | 03-MAI-2026 | **SH24 — Enriquecer pre-match com API-Football** — `enrich_pre_match_contexts()` chamado no `run()` pre-match block. Lineups, standings e injuries populados. |
 | 03-MAI-2026 | Testes 218→260. 21 arquivos de teste. SH19 42/42 integração. |
+
+---
+
+## Onda 5 — CI Pipeline + Imports Fix + Context Study (05-MAI-2026)
+
+> **Status:** ✅ CI Pipeline completo, P2.C4 (imports) corrigido, P2.B5 (blindar testes) resolvido, ENR.1 (context study) concluído, ensemble treinado.
+
+**Itens concluídos em 05-MAI-2026:**
+
+| Item | Descrição | Evidência |
+|------|-----------|-----------|
+| P2.B1 | CI Básico (GitHub Actions com Ruff lint + MyPy type check + pytest coverage ≥60%, Python 3.11/3.12) | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — 3 jobs (lint, test 3.11, test 3.12) |
+| P2.B5/B9 | Blindar coleta de testes — `testpaths` e `python_files` configurados no `pyproject.toml` | [`pyproject.toml`](pyproject.toml#:60) — `testpaths = ["tests"]`, `python_files = ["test_*.py"]` |
+| P2.C4 | Padronizar imports nos testes — 6 arquivos corrigidos de `src.japredictbet` → `japredictbet` | Commits: `f5ba6e3`, `7c0e852`. Nenhum arquivo de teste usa mais `src.` prefix |
+| ENR.1 | Estudo de Viabilidade de Enriquecimento de Contexto | [`docs/context_enrichment_study.md`](docs/context_enrichment_study.md) — 350+ linhas, 4 fases, análise completa de 6 fontes de dados |
+| Ensemble | 30 modelos treinados em `artifacts/models/` | 11 XGB + 10 LGBM + 5 Ridge + 4 ElasticNet — todos com `.pkl` + `.json` metadata |
+| P2.C1 (parcial) | Verificação de código morto — `add_rolling_features()` confirmada como não-usada | Função e teste associado ainda existem (pendente remoção) |
+
+### Detalhamento das implementações
+
+#### P2.B1 — CI Pipeline (GitHub Actions)
+
+- **Arquivo:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
+- **Jobs:**
+  - `lint:` Ruff lint + format check + MyPy type check em Python 3.11
+  - `test:` Matrix Python 3.11 + 3.12, pytest com coverage report, gate ≥60%
+- **Triggers:** Push/PR em branches `main` nos paths `src/`, `scripts/`, `tests/`, `requirements*.txt`, `pyproject.toml`
+- **Concorrência:** Cancelamento automático de runs anteriores no mesmo PR
+- **Cache:** `actions/setup-python@v5` com cache pip
+
+#### P2.B5/B9 — Blindar coleta de testes
+
+- [`pyproject.toml`](pyproject.toml#:60): `testpaths = ["tests"]` + `python_files = ["test_*.py"]` + `python_functions = ["test_*"]`
+- Elimina falsos positivos de coleta (ex: `test_output.txt` na raiz)
+
+#### P2.C4 — Padronização de imports
+
+- **6 arquivos corrigidos:** `test_rolling_cross_group.py`, `test_rolling_p1b2.py`, `integration_p1a3.py`, `integration_p1a2.py`, `test_lambda_validation.py`, `test_p1a2_dynamic_margin.py`
+- **Padrão utilizado:** `from japredictbet.xxx import yyy` (sem prefixo `src.`)
+- **Validação:** `findstr "src.japredictbet" tests/**/*.py` retorna vazio
+
+#### ENR.1 — Estudo de Viabilidade de Contexto
+
+- **Arquivo:** [`docs/context_enrichment_study.md`](docs/context_enrichment_study.md) (04-MAI-2026)
+- **Commit:** `39da387 docs: ENR.1 — Estudo de Viabilidade de Enriquecimento de Contexto (Onda 7)`
+- **Cobertura:**
+  - Diagnóstico do fluxo atual (pre-match e live T-60)
+  - Análise de 6 fontes de dados (API-Football, DuckDuckGo, Tavily, NewsAPI, GNews, RSS)
+  - Custo/benefício detalhado por fonte
+  - Recomendação faseada em 4 fases (Quick Wins → RAG → The Scout → Refinamento)
+  - Alerta crítico sobre standings com fallback 2024
+  - Riscos e mitigações
+  - Métricas de sucesso
+  - Apêndices com exemplos de response da API-Football
+
+---
+
+## Changelog (Continuação)
+
+| Data | Ação |
+|------|------|
+| 05-MAI-2026 | **Revisão profunda do backlog.** Descobertas: (a) `artifacts/models/` já tem 30 modelos treinados (desmentindo prioridade #1 do roadmap anterior), (b) CI pipeline já implementado (P2.B1 concluído), (c) imports padronizados (P2.C4 concluído), (d) `pyproject.toml` já blindado contra falsa coleta (P2.B5/B9 concluído), (e) ENR.1 (context study) já concluído (commit 39da387). Total de 5 itens removidos do backlog ativo. `next_pass.md` reescrito: 46→41 itens pendentes, data atualizada para 05-MAI-2026. |
