@@ -69,11 +69,14 @@ Nenhum agente executa apostas reais — Shadow Mode é 100% observacional.
 
 ### Next Priority (Atualizado 05-MAI-2026)
 - ~~Train ensemble models (`artifacts/models/` is empty)~~ ✅ **30 modelos já treinados** (11 XGB + 10 LGBM + 5 Ridge + 4 ElasticNet)
+- ~~FASE 0 — Fallback 2024 standings~~ ✅ **Corrigido** — fallback removido, `null` explícito, Gatekeeper instruído a ignorar standings indisponíveis
 - Confirm Bundesliga + Premier League tournament IDs
 - P2 residual: ~~B3 (update_pipeline)~~ ✅, ~~B7 (pickle hash)~~ ✅, ~~B8 (temporal holdout)~~ ✅, ~~C7 (hyperopt params)~~ ✅ — **Onda 2 já concluída**
 - CI Pipeline ✅ — GitHub Actions com lint, type check e coverage gate
 - P2.C4 ✅ — Imports padronizados nos testes
 - ENR.1 ✅ — Estudo de Viabilidade de Contexto concluído
+- Web scraping (Soccerway/Flashscore) registrado como desenvolvimento futuro em [`context_enrichment_study.md`](context_enrichment_study.md#34-web-scraping-de-dados-estruturados--desenvolvimento-futuro-pós-mvp)
+- **Próximo:** FASE 1 (Limpeza Imediata — 4 itens, ~2-3h)
 - **Onda 3:** 16 itens pendentes (testes + dead code)
 - **Onda 4:** SH4 pendente (mapeamento manual para 9 ligas)
 - **Onda 5:** 7 itens pendentes (logging, dashboard, menu bootstrap)

@@ -87,6 +87,10 @@ Toda seleção deve ser validada nos 5 pilares:
 - tabela
 - rotação
 - incentivo real
+- ⚠️ Se `home_standing` ou `away_standing` for `null` (ausente no JSON de entrada):
+  → Significa que a API-Football (plano free, capped em 2024) não tem dados da temporada atual.
+  → NÃO usar tabela como fator de decisão. Dados indisponíveis são neutros — não pesam a favor nem contra.
+  → Decidir com base nos outros pilares (comportamento, desfalques, arbitragem, coerência).
 
 ━━━━━━━━━━━━━━━━━━━━━━━
 🔍 FILTRO TÉCNICO

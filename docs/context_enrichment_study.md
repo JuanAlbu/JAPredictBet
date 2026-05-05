@@ -164,6 +164,36 @@ ContextCollector.collect_upcoming(minutes_before=60)
 
 **Conclusão:** Para notícias de desfalques de última hora, melhor usar web search. APIs esportivas cobrem dados estruturados, não notícias.
 
+### 3.4 Web Scraping de Dados Estruturados — Desenvolvimento Futuro (Pós-MVP)
+
+> **Status:** 🧪 OPÇÃO LEVANTADA — NÃO implementar. Registrada para avaliação futura.
+
+Como alternativa à API-Football PRO ($40/mês) para obter standings da temporada atual, o web scraping de portais esportivos públicos foi considerado:
+
+| Fonte | Dados Disponíveis | Complexidade | Risco Legal | Robustez |
+|-------|-------------------|-------------|-------------|----------|
+| **Soccerway** | Tabelas completas, forma (W/D/L), próximos jogos, H2H | Média — HTML estruturado, sem API pública | Baixo-médio (dados públicos) | Alta — estrutura estável |
+| **Flashscore** | Standings, forma recente, H2H, escalações, estatísticas do jogo | Alta — HTML dinâmico, carregamento JS | Baixo-médio (dados públicos) | Média — mudanças ocasionais de layout |
+| **SofaScore** | Standings, médias por time (cantos, gols, cartões), H2H | Alta — fortemente dinâmico, anti-bot | Médio — ToS restritivo | Baixa — requer Selenium/Playwright |
+| **WhoScored** | Estatísticas avançadas (xG, posses, pressão) | Alta — anti-bot agressivo | Alto — dados licenciados da Opta | Muito baixa |
+
+**Recomendação para o futuro:**
+- **Soccerway** como primeira opção de scraping — HTML semântico, estrutura previsível, baixo risco
+- **Flashscore** como fallback — mais dados, mas requer parsing mais complexo
+- **NÃO scrapear SofaScore ou WhoScored** — risco legal e técnico elevados
+
+**Estimativa de esforço futuro:**
+- Soccerway scraper: 3-5 dias (parser HTML + extração de standings + cache)
+- Flashscore scraper: 5-8 dias (requer headless browser para JS rendering)
+- Manutenção contínua: ~2-4h/mês (ajustes de layout quando os sites mudam)
+
+**Pré-requisitos para considerar esta rota:**
+1. Volume de apostas justifique o custo de manutenção (estimado: >20 entradas/mês)
+2. API-Football PRO descartada por custo ou limitação de cobertura
+3. Jurisdição local permita web scraping de dados públicos esportivos
+
+**Conclusão:** Manter como opção de médio/longo prazo. A correção da FASE 0 (05-MAI-2026) remove o fallback para dados velhos e aceita `standings: null`, o que é suficiente para o MVP atual. O web scraping só se justifica quando o volume de operação exigir standings da temporada corrente como diferencial competitivo.
+
 ---
 
 ## 4. RAG / Knowledge Store — Tecnologias

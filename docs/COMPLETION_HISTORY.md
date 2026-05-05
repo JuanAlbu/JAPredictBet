@@ -1,8 +1,25 @@
 # JA PREDICT BET — HISTÓRICO DE ITENS CONCLUÍDOS
 
 **Criado:** 03 de Abril, 2026
-**Última atualização:** 03-MAI-2026
+**Última atualização:** 05-MAI-2026
 **Propósito:** Registro permanente de todos os itens de roadmap concluídos, com datas, evidências e detalhes de implementação. Itens são movidos do roadmap ativo (`next_pass.md`) para cá ao serem fechados.
+
+---
+
+## FASE 0 — Correção Crítica P0 (05-MAI-2026)
+
+> **Status:** ✅ CONCLUÍDO — Fallback 2024 removido. Standings indisponíveis = `null` explícito. 254/254 testes sem regressão.
+
+| Item | Descrição | Data |
+|------|-----------|------|
+| P0.FALLBACK | Remover fallback `2024` → `None` nos 2 pontos de `context_collector.py` (`collect_upcoming` + `enrich_pre_match_contexts`) | 05-MAI-2026 |
+| P0.FALLBACK | Atualizar `PROMPT_MESTRE.md` — Pilar 5: instrução para tratar `home_standing: null` como "dados indisponíveis — não usar como fator de decisão" | 05-MAI-2026 |
+| P0.FALLBACK | Verificar `to_llm_context()` — `_slim_standing()` já retorna `None` e só adiciona ao payload se não for None ✅ | 05-MAI-2026 |
+| P0.FALLBACK | Registrar web scraping (Soccerway, Flashscore) como desenvolvimento futuro em `context_enrichment_study.md` Seção 3.4 | 05-MAI-2026 |
+
+**Arquivos modificados:** `context_collector.py` (2 blocos), `PROMPT_MESTRE.md`, `context_enrichment_study.md`, `next_pass.md`, `PROJECT_CONTEXT.md`, `COMPLETION_HISTORY.md`
+
+**Contexto:** O plano free da API-Football v3 só cobre temporadas até 2024. O fallback silencioso injetava standings de 2024 em análises de jogos de 2026 — dados piores que ausência, pois induziam o LLM a conclusões incorretas sobre o momento da equipe. A correção substitui o fallback por `None` explícito e instrui o Gatekeeper a ignorar standings indisponíveis.
 
 ---
 
@@ -433,4 +450,5 @@
 
 | Data | Ação |
 |------|------|
+| 05-MAI-2026 | **FASE 0 CONCLUÍDA** — P0.FALLBACK: fallback 2024 removido de `context_collector.py` (2 pontos), `PROMPT_MESTRE.md` atualizado (Pilar 5), `context_enrichment_study.md` expandido (Seção 3.4 — web scraping futuro). 254/254 testes. |
 | 05-MAI-2026 | **Revisão profunda do backlog.** Descobertas: (a) `artifacts/models/` já tem 30 modelos treinados (desmentindo prioridade #1 do roadmap anterior), (b) CI pipeline já implementado (P2.B1 concluído), (c) imports padronizados (P2.C4 concluído), (d) `pyproject.toml` já blindado contra falsa coleta (P2.B5/B9 concluído), (e) ENR.1 (context study) já concluído (commit 39da387). Total de 5 itens removidos do backlog ativo. `next_pass.md` reescrito: 46→41 itens pendentes, data atualizada para 05-MAI-2026. |

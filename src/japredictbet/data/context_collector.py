@@ -502,21 +502,16 @@ class ContextCollector:
                     or []
                 )
 
-                # Free-tier API-Football only covers up to 2024 — fall back if empty
+                # Free-tier API-Football only covers up to 2024.
+                # Season > 2024 → standings unavailable → leave as None.
+                # DO NOT fall back to old data — stale standings are worse than no data.
                 if not standings and season > 2024:
-                    logger.info(
-                        "Standings for league %d season %d unavailable — retrying with 2024 fallback.",
+                    logger.warning(
+                        "Standings for league %d season %d unavailable — "
+                        "free-tier API caps at 2024. Standings will be None. "
+                        "Gatekeeper has been instructed to ignore this pillar.",
                         league_id,
                         season,
-                    )
-                    standings = (
-                        self._safe_call(
-                            self._api.get_standings,
-                            league_id,
-                            2024,
-                            label="standings-fallback",
-                        )
-                        or []
                     )
 
                 home_standing = _find_standing(standings, home_name)
@@ -635,16 +630,15 @@ class ContextCollector:
                 or []
             )
 
-            # Free-tier API-Football only covers up to 2024
+            # Free-tier API-Football only covers up to 2024.
+            # Season > 2024 → standings unavailable → leave as None.
+            # DO NOT fall back to old data — stale standings are worse than no data.
             if not standings and season > 2024:
-                standings = (
-                    self._safe_call(
-                        self._api.get_standings,
-                        league_id,
-                        2024,
-                        label="standings-fallback",
-                    )
-                    or []
+                logger.warning(
+                    "Standings for league %d season %d unavailable — "
+                    "free-tier API caps at 2024. Standings will be None.",
+                    league_id,
+                    season,
                 )
 
             home_standing = _find_standing(standings, home)
