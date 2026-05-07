@@ -375,7 +375,7 @@ def _extract_team_names_from_container(html_snippet: str) -> str:
 
     Looks for the match name pattern inside the rendered HTML.
     """
-    MIDDLE_DOT = "\u00b7"
+    middle_dot = "\u00b7"
 
     # 1) Extract from Superbet odds URL slug (most reliable).
     #    URL pattern: https://superbet.bet.br/odds/futebol/{home}-x-{away}-{eventId}
@@ -386,14 +386,14 @@ def _extract_team_names_from_container(html_snippet: str) -> str:
     if slug_match:
         home_raw = slug_match.group(1).replace("-", " ").title()
         away_raw = slug_match.group(2).replace("-", " ").title()
-        return f"{home_raw} {MIDDLE_DOT} {away_raw}"
+        return f"{home_raw} {middle_dot} {away_raw}"
 
     # 2) Look for text with the middle-dot separator (·)
     lines = html_snippet.split("\n")
     for line in lines:
-        if MIDDLE_DOT in line:
+        if middle_dot in line:
             clean = re.sub(r"<[^>]+>", "", line).strip()
-            if clean and MIDDLE_DOT in clean:
+            if clean and middle_dot in clean:
                 return clean
 
     # 3) Look for anchor tags with team names
@@ -1567,9 +1567,7 @@ def main() -> None:
     # are legitimately included.  Undated events (Playwright source) are
     # always kept as the source is already day-filtered.
     if target_date:
-        from datetime import datetime as _dt, timedelta as _td
-
-        _next_day = (_dt.strptime(target_date, "%Y-%m-%d") + _td(days=1)).strftime("%Y-%m-%d")
+        _next_day = (datetime.strptime(target_date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
         dated = []
         undated = []
         for ev in raw_events:
