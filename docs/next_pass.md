@@ -1,7 +1,7 @@
-# JA PREDICT BET — ROADMAP (REVISÃO 05-MAI-2026)
+# JA PREDICT BET — ROADMAP (REVISÃO 06-MAI-2026)
 
-**Data da Revisão:** 05 de Maio, 2026
-**Status Geral:** P0 ✅ | P0-FIX ✅ | P1 ✅ | Onda 1 ✅ | Onda 2 ✅ | Onda 3 ✅ | Onda 4 parcial | P3-ARCH ✅ | P2-REFACTOR ✅ | **CI Pipeline ✅** | **ENR.1 ✅** | **FASE 0 ✅** — **254/254 testes** (21 arquivos). 106 features. 30 modelos treinados.
+**Data da Revisão:** 06 de Maio, 2026
+**Status Geral:** P0 ✅ | P0-FIX ✅ | P1 ✅ | Onda 1 ✅ | Onda 2 ✅ | Onda 3 ✅ | Onda 4 parcial | P3-ARCH ✅ | P2-REFACTOR ✅ | **CI Pipeline ✅** | **ENR.1 ✅** | **FASE 0 ✅** | **SCRAPER.1 ✅** | **SCRAPER.2 ✅** — **254/254 testes** (21 arquivos). 106 features. 30 modelos treinados. Scraper migrado para REST by-date (20 TIDs rastreados de 19 ligas). Playwright com multi-scroll. Mapeamento `list[int]` para TIDs múltiplos.
 **Histórico Completo:** [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md)
 **Itens pendentes:** 4 (F1) + 3 (F2) + 3 (F3) + 11 (F4) + 5 (F5) + 3 (F6) + 3 (F7) + 4 (F8) + 1 (Padronização) + 3 (R&D) + 2 (Stretch) = **42 total**
 
@@ -196,7 +196,9 @@ R&D/Stretch                 █████░░░░░░░░░░░░�
 - [~] **SH4 — Mapeamento Superbet → IDs internos** (parcial — apenas Brasileirão preenchido)
   - [`data/mapping/superbet_teams.json`](data/mapping/superbet_teams.json) (template criado, preenchimento manual por liga).
   - `superbet_client.py` já aceita `team_mapping` — equipes sem mapeamento geram WARNING e skip.
-  - **Pendente:** preencher mapeamento para as demais 9 ligas (Serie A, La Liga, Ligue 1, Eredivisie, Primeira Liga, MLS, Bundesliga, Premier League, Jupiler Pro League).
+  - **Tournament IDs:** 20 TIDs rastreados de 19 ligas em [`data/mapping/league_tournament_ids.json`](data/mapping/league_tournament_ids.json). O formato agora suporta `int` (maioria das ligas) ou `list[int]` (ligas com múltiplos TIDs, ex.: `sul_americana: [51372, 51375]`). 18 ligas com TID único + 1 liga (sul_americana) com 2 TIDs = **20 TIDs no total**.
+  - **Nota:** O `league_tournament_ids.json` foi alterado para suportar `list[int]` como valor. Todos os consumidores (superbet_scraper.py, feature_store.py, _discover_tournaments.py) foram atualizados para lidar com ambos os tipos.
+  - **Pendente:** preencher mapeamento de nomes de times para as demais 18 ligas (apenas Brasileirão preenchido atualmente).
   - **Esforço:** Trabalho manual — ~2-3 dias para todas as ligas.
 
 - [ ] **P2.D6.B — Bootstrap Operacional do Menu**

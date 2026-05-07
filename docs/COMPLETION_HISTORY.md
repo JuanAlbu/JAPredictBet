@@ -1,8 +1,138 @@
 # JA PREDICT BET — HISTÓRICO DE ITENS CONCLUÍDOS
 
 **Criado:** 03 de Abril, 2026
-**Última atualização:** 05-MAI-2026
+**Última atualização:** 06-MAI-2026
 **Propósito:** Registro permanente de todos os itens de roadmap concluídos, com datas, evidências e detalhes de implementação. Itens são movidos do roadmap ativo (`next_pass.md`) para cá ao serem fechados.
+
+---
+
+## SCRAPER.1 — Migração do Scraper para REST by-date API (06-MAI-2026)
+
+> **Status:** ✅ CONCLUÍDO — Scraper migrado de SSE para REST by-date API como fonte primária. Testado com sexta-feira (26 eventos) e quinta-feira (5 eventos filtrados).
+
+### Problema
+O Superbet é uma SPA (Single Page Application) que retorna 3227 bytes de HTML shell vazio. O feed SSE (`/subscription/v2/pt-BR/events/prematch`) só publica eventos 1-2 dias antes da partida, tornando impossível buscar jogos de 6+ dias no futuro. Tentativas com HTTPX direto em URLs do site retornavam apenas o shell SPA.
+
+### Descoberta
+Interceptação de tráfego de rede via Playwright (navegador headless Chromium) revelou um endpoint REST não documentado:
+
+```
+GET /v2/pt-BR/events/by-date?currentStatus=active&offerState=prematch
+    &startDate=2026-05-08+03:00:00&endDate=2026-05-09+13:00:00&sportId=5
+```
+
+Este endpoint funciona diretamente via HTTPX (sem Playwright) e retorna **todos os eventos** para qualquer data futura — 354+ eventos brutos por dia.
+
+### Implementação
+| Alteração | Arquivo | Descrição |
+|-----------|---------|-----------|
+| Constante `BY_DATE_API_URL` | `scripts/superbet_scraper.py:67` | URL do endpoint by-date com query params |
+| `_collect_raw_events_via_by_date_api()` | `scripts/superbet_scraper.py:280` | Função que consulta REST API, filtra por TIDs conhecidos |
+| `_collect_raw_events_with_fallback()` | `scripts/superbet_scraper.py:353` | Tenta REST API primeiro, SSE como fallback |
+| Flag `--use-sse` | `scripts/superbet_scraper.py:1088` | Força fallback manual ao SSE |
+
+### Arquivos Modificados
+- `scripts/superbet_scraper.py` — Adicionada função by-date, fallback, flag `--use-sse`
+- `docs/ARCHITECTURE.md` — Seção do scraper atualizada com nova arquitetura
+
+### Arquivos Criados (durante desenvolvimento)
+- `scripts/_scrape_superbet_playwright.py` — Playwright scraper (interceptação de rede que levou à descoberta)
+- `data/_playwright_sexta_feira.json` / `data/_playwright_quinta_feira.json` — Capturas de tráfego (removidos após consolidação)
+
+### Arquivos Removidos (limpeza)
+- `scripts/_test_by_date.py` — Teste temporário (funcionalidade incorporada)
+- `scripts/_scrape_sexta.py` — Tentativa httpx que só retornava SPA shell
+- 24 scripts `_*.py` de descoberta one-off
+- 27 arquivos `data/_*` de investigação intermediária
+
+### Testes Realizados
+| Comando | Resultado |
+|---------|-----------|
+| `python scripts/superbet_scraper.py sexta` | 26 eventos filtrados, 18 na data alvo, odds completas |
+| `python scripts/superbet_scraper.py quinta --leagues libertadores sul_americana europa_league` | 5 eventos (Flamengo, São Paulo, Aston Villa, etc.) |
+| `python scripts/superbet_scraper.py quinta` | 5 eventos (todas as 19 ligas configuradas) |
+
+### Lições Aprendidas
+1. O Superbet expõe uma REST API rica que não está documentada — descoberta via interceptação Playwright
+2. A API by-date aceita datas futuras arbitrárias e retorna todos os eventos, resolvendo a limitação do SSE
+3. O endpoint por-evento (`/v2/pt-BR/events/{eventId}`) retorna 700+ mercados por jogo
+4. Playwright foi necessário apenas para descobrir a API — a solução final usa HTTPX puro
+
+---
+
+## SCRAPER.2 — Multi-Scroll Playwright + Mapeamento `list[int]` com TID 51375 (06-MAI-2026)
+
+> **Status:** ✅ CONCLUÍDO — Playwright agora executa 5 scrolls incrementais com waits de 2s para capturar seções lazy-loaded. TID 51375 (Sul-Americana Gr.H) adicionado ao mapeamento direto. `league_tournament_ids.json` suporta `list[int]`. Total: 20 TIDs rastreados.
+
+### Problema
+Após a migração para REST by-date API (SCRAPER.1), identificou-se um gap de 3 jogos que o Playwright não encontrava vs a REST API:
+
+| Jogo | TID | Causa |
+|------|-----|-------|
+| Freiburg vs Braga | 688 | SPA renderiza apenas 1 evento por TID; múltiplos jogos no mesmo TID não apareciam |
+| Ind Medellín vs Flamengo | 51372 | SPA renderiza apenas 1 evento por TID |
+| O'Higgins vs São Paulo | 51375 | TID não estava no mapeamento direto — apenas em comentário no JSON |
+
+### Melhoria 1 — Multi-Scroll Playwright
+O scraper Playwright fazia um único `scrollTo(0, document.body.scrollHeight)` que não era suficiente para acionar todas as seções lazy-loaded da SPA.
+
+**Antes:**
+```python
+page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+page.wait_for_timeout(3000)
+```
+
+**Depois:**
+```python
+page_height = page.evaluate("document.body.scrollHeight")
+steps = 5
+for i in range(1, steps + 1):
+    scroll_to = int(page_height * (i / steps))
+    page.evaluate(f"window.scrollTo(0, {scroll_to})")
+    page.wait_for_timeout(2000)
+page.wait_for_timeout(3000)
+```
+
+5 scrolls progressivos (20%, 40%, 60%, 80%, 100%) com 2s de espera entre cada um + 3s final. Isso garante que seções carregadas sob demanda sejam renderizadas.
+
+### Melhoria 3 — Mapeamento Direto TID 51375
+A Sul-Americana tem **dois** tournament IDs na temporada 2026:
+- `51372` — Grupo A-F (já mapeado como `sul_americana`)
+- `51375` — Grupo G-H (estava apenas em comentário no JSON, não no mapeamento ativo)
+
+**Antes:**
+```json
+{ "sul_americana": 51372 }
+```
+
+**Depois:**
+```json
+{ "sul_americana": [51372, 51375] }
+```
+
+Isso exigiu mudança de tipo no `league_tournament_ids.json`: de `dict[str, int]` para `dict[str, int | list[int]]`.
+
+### Arquivos Modificados
+
+| Arquivo | Alteração |
+|---------|-----------|
+| [`data/mapping/league_tournament_ids.json`](data/mapping/league_tournament_ids.json) | `sul_americana` mudou de `51372` (int) para `[51372, 51375]` (list) |
+| [`scripts/superbet_scraper.py`](scripts/superbet_scraper.py) | Multi-scroll Playwright (linhas 464-476); `_load_league_ids()` retorna `dict[str, int \| list[int]]`; `_build_tid_to_league()` achata listas em flat dict; `main()` usa `_flatten_tids()` para construir `tournament_filter` |
+| [`src/japredictbet/data/feature_store.py`](src/japredictbet/data/feature_store.py) | `get_active_tournament_ids()` trata valores `list[int]` com `isinstance(v, list)` |
+| [`scripts/_discover_tournaments.py`](scripts/_discover_tournaments.py) | `load_known_ids()` retorna `dict[str, int \| list[int]]`; `known_tids` itera com `isinstance()` |
+
+### Testes Realizados
+
+| Comando | Resultado |
+|---------|-----------|
+| `python scripts/superbet_scraper.py hoje --no-playwright --quick --no-save` | "20 ligas (TIDs: ... 51372, 51375)" ✅ |
+| `python scripts/superbet_scraper.py hoje --quick --no-save` | Playwright com multi-scroll, sem erros ✅ |
+
+### Impacto
+- **20 TIDs rastreados** (up from 19)
+- Sul-Americana agora captura **ambos os grupos** (G-H incluso)
+- Playwright mais robusto para SPA com lazy-loading
+- Nenhum teste existente quebrado — todos os consumidores do JSON tratam `list[int]`
 
 ---
 

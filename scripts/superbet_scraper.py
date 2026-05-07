@@ -1,18 +1,27 @@
-"""Superbet odds scraper — fetch pre-match odds by day from the SSE feed.
+"""Superbet odds scraper — fetch pre-match odds by day.
 
-This is the **primary** odds collector for the JAPredictBet pipeline.
-It runs BEFORE match day (or early on match day) to capture baseline odds
-for all markets (corners, 1x2, BTTS, etc.).
+**Primary source:** Playwright headless browser — opens the Superbet website
+(``https://superbet.bet.br/apostas/futebol?day=sexta-feira``) and extracts
+event IDs, tournament IDs, and match names directly from the rendered HTML.
 
-The live SSE client (``superbet_client.py``) is used separately to
-**monitor odds movements** during matches.
+**Secondary source:** REST by-date API (``/v2/pt-BR/events/by-date``) as
+fallback when Playwright is unavailable or the site is unreachable.
+
+**Tertiary fallback:** SSE streaming (``/subscription/v2/pt-BR/events/...``)
+for live events or very close dates.
+
+After discovery, **all** strategies use the per-event REST API
+(``GET /v2/pt-BR/events/{eventId}``) to fetch the full 700+ markets.
 
 Architecture:
-    superbet_scraper.py  →  pre-match snapshot (JSON)  →  pipeline reads it
-    superbet_client.py   →  live SSE stream (in-play)  →  movement alerts
+    superbet_scraper.py  →  Playwright (site) → event discovery
+                        →  REST per-event     → full odds (700+ markets)
+                        →  pre-match snapshot (JSON) → pipeline
 
-Maps the Superbet website URL pattern to SSE feed filtering:
-    https://superbet.bet.br/apostas/futebol/domingo  →  Sunday's matches
+    superbet_client.py  →  live SSE stream (in-play) → movement alerts
+
+Maps the Superbet website URL pattern to the day-filtered page:
+    https://superbet.bet.br/apostas/futebol?day=sexta-feira  →  Friday's matches
 
 Usage:
     python scripts/superbet_scraper.py domingo
@@ -20,7 +29,8 @@ Usage:
     python scripts/superbet_scraper.py amanha
     python scripts/superbet_scraper.py 2026-04-13
     python scripts/superbet_scraper.py domingo --leagues brasileirao serie_a
-    python scripts/superbet_scraper.py domingo --stream-seconds 60
+    python scripts/superbet_scraper.py domingo --no-playwright  (skip browser)
+    python scripts/superbet_scraper.py domingo --use-sse  (force SSE fallback)
     python scripts/superbet_scraper.py domingo --json output.json
     python scripts/superbet_scraper.py domingo --debug
 
@@ -47,6 +57,15 @@ from typing import Any
 
 import httpx
 
+# Playwright is optional — used for site scraping (primary discovery).
+# Falls back to REST by-date API if not installed.
+try:
+    from playwright.sync_api import sync_playwright
+
+    _PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    _PLAYWRIGHT_AVAILABLE = False
+
 # ── Paths ────────────────────────────────────────────────────────────
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -62,6 +81,13 @@ logger = logging.getLogger(__name__)
 SSE_ENDPOINT = "https://production-superbet-offer-br.freetls.fastly.net/subscription/v2/pt-BR/events/all"
 SSE_ENDPOINT_PREMATCH = "https://production-superbet-offer-br.freetls.fastly.net/subscription/v2/pt-BR/events/prematch"
 REST_EVENT_URL = "https://production-superbet-offer-br.freetls.fastly.net/v2/pt-BR/events/{event_id}"
+
+# REST API by-date — primary source (works without Playwright, returns all events for a day)
+BY_DATE_API_URL = (
+    "https://production-superbet-offer-br.freetls.fastly.net/v2/pt-BR/events/by-date"
+    "?currentStatus=active&offerState=prematch"
+    "&startDate={start_date}+03:00:00&endDate={end_date}+13:00:00&sportId=5"
+)
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 )
@@ -134,8 +160,13 @@ def _resolve_target_date(day_str: str) -> str | None:
 # ── Load mappings ────────────────────────────────────────────────────
 
 
-def _load_league_ids() -> dict[str, int]:
-    """Load league folder name → tournament ID mapping."""
+def _load_league_ids() -> dict[str, int | list[int]]:
+    """Load league folder name → tournament ID(s) mapping.
+
+    Returns a dict where values can be a single ``int`` (most leagues) or a
+    ``list[int]`` (leagues with multiple tournament IDs, e.g. Copa Sul-Americana
+    has different TIDs per group stage).
+    """
     if not LEAGUE_IDS_PATH.exists():
         logger.warning("League IDs file not found: %s", LEAGUE_IDS_PATH)
         return {}
@@ -256,15 +287,386 @@ def _stream_sse(
     return list(events.values())
 
 
+# ── Playwright site scraping (primary discovery) ────────────────────
+
+
+def _day_to_portuguese(target_date: str) -> str | None:
+    """Map an ISO date string to the Portuguese day name used in Superbet URLs.
+
+    Example:
+        "2026-05-08" -> "sexta-feira"
+        "2026-05-07" -> "quinta-feira"
+    """
+    pt_day_names = [
+        "segunda-feira",   # 0 Monday
+        "terça-feira",     # 1 Tuesday
+        "quarta-feira",    # 2 Wednesday
+        "quinta-feira",    # 3 Thursday
+        "sexta-feira",     # 4 Friday
+        "sábado",          # 5 Saturday
+        "domingo",         # 6 Sunday
+    ]
+    try:
+        dt = datetime.strptime(target_date, "%Y-%m-%d")
+        return pt_day_names[dt.weekday()]
+    except (ValueError, IndexError):
+        return None
+
+
+def _parse_event_id_from_container(container_id: str) -> tuple[int, str] | None:
+    """Parse tournament ID and event ID from a Superbet container element ID.
+
+    Format: ``offer-prematch-{TID}-{eventId1}-{eventId2}``
+
+    Returns ``(tournament_id, event_id)`` or ``None`` if pattern doesn't match.
+    """
+    # Matches: offer-prematch-1698-301508314-301508314
+    match = re.match(r"^offer-prematch-(\d+)-(\d+)-\d+$", container_id)
+    if match:
+        return int(match.group(1)), match.group(2)
+    return None
+
+
+def _extract_league_from_section(
+    html_snippet: str,
+    section_start: int,
+) -> str:
+    """Look backward from a section position to find the league/competition name.
+
+    Searches for ``e2e-competition-header`` or ``sds-section-title`` elements
+    preceding the event container.
+    """
+    # Look back up to 5000 chars for a competition header
+    search_start = max(0, section_start - 5000)
+    before = html_snippet[search_start:section_start]
+
+    # Try to find e2e-competition-header (most specific)
+    header_match = re.search(
+        r'<div[^>]*class="[^"]*e2e-competition-header[^"]*"[^>]*>\s*(.*?)\s*</div>',
+        before,
+        re.DOTALL,
+    )
+    if header_match:
+        raw = header_match.group(1)
+        # Strip any inner HTML tags
+        clean = re.sub(r"<[^>]+>", "", raw).strip()
+        if clean:
+            return clean
+
+    # Fallback: sds-section-title
+    section_match = re.search(
+        r'<div[^>]*class="[^"]*sds-section-title[^"]*"[^>]*>\s*(.*?)\s*</div>',
+        before,
+        re.DOTALL,
+    )
+    if section_match:
+        raw = section_match.group(1)
+        clean = re.sub(r"<[^>]+>", "", raw).strip()
+        if clean:
+            return clean
+
+    return "Desconhecida"
+
+
+def _extract_team_names_from_container(html_snippet: str) -> str:
+    """Extract the match name (\"Team A · Team B\") from an event container.
+
+    Looks for the match name pattern inside the rendered HTML.
+    """
+    # Try common Superbet patterns for match name display
+    # 1) Look for text with the middle-dot separator (·)
+    middle_dot = "\u00b7"
+    lines = html_snippet.split("\n")
+    for line in lines:
+        if middle_dot in line:
+            # Found a line with middle dot — likely the match name
+            clean = re.sub(r"<[^>]+>", "", line).strip()
+            if clean and middle_dot in clean:
+                return clean
+
+    # 2) Look for anchor tags with team names
+    anchor_match = re.search(
+        r'<a[^>]*href="[^"]*/odds/[^"]*"[^>]*>\s*(.*?)\s*</a>',
+        html_snippet,
+        re.DOTALL,
+    )
+    if anchor_match:
+        clean = re.sub(r"<[^>]+>", "", anchor_match.group(1)).strip()
+        if clean:
+            return clean
+
+    return "Time Casa vs Time Fora"
+
+
+def _collect_raw_events_via_playwright(
+    target_date: str,
+    tournament_filter: set[int] | None = None,
+) -> list[dict[str, Any]] | None:
+    """Scrape Superbet website using Playwright to discover events by day.
+
+    Opens ``https://superbet.bet.br/apostas/futebol?day={day_name}`` in a
+    headless Chromium browser, waits for JavaScript to render, and extracts
+    event IDs, tournament IDs, and match names directly from the DOM.
+
+    This is the **primary** data source — it shows ALL games for a given day
+    exactly as a user would see them in the browser.
+
+    Args:
+        target_date: ISO date string (YYYY-MM-DD) for the target day.
+        tournament_filter: Optional set of tournament IDs to filter by.
+
+    Returns:
+        List of raw event dicts (with ``eventId``, ``tournamentId``,
+        ``matchName`` keys), or ``None`` on failure.
+    """
+    if not _PLAYWRIGHT_AVAILABLE:
+        logger.warning("Playwright não disponível. Instale com: pip install playwright && playwright install chromium")
+        return None
+
+    day_name = _day_to_portuguese(target_date)
+    if day_name is None:
+        logger.error("Não foi possível mapear a data '%s' para nome do dia em português.", target_date)
+        return None
+
+    url = f"https://superbet.bet.br/apostas/futebol?day={day_name}"
+    logger.info(
+        "Playwright: abrindo %s (headless) para extrair eventos...",
+        url,
+    )
+
+    events_map: dict[str, dict[str, Any]] = {}
+    league_cache: dict[str, str] = {}  # tid -> league name
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context(
+                viewport={"width": 1920, "height": 1080},
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                ),
+                locale="pt-BR",
+            )
+            page = context.new_page()
+
+            # Step 1: Navigate with "domcontentloaded" (fires when HTML is parsed,
+            # regardless of background polling). This avoids timeout issues that
+            # occur with "networkidle" on SPAs with continuous network activity.
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=45000)
+            except Exception as nav_exc:
+                logger.warning(
+                    "Playwright: navegação com domcontentloaded excedeu 45s — "
+                    "prosseguindo com HTML parcial: %s",
+                    nav_exc,
+                )
+
+            # Step 2: Extra wait for JavaScript to render dynamic content
+            # (event containers, odds, etc.)
+            page.wait_for_timeout(8000)
+
+            # Step 3: Multiple scrolls to trigger lazy-loaded sections
+            #
+            # The SPA renders content incrementally; a single scroll to bottom
+            # may not trigger all lazy sections. We scroll in fractional steps
+            # with waits between each to give the React renderer time to
+            # populate new DOM nodes before proceeding.
+            try:
+                page_height = page.evaluate("document.body.scrollHeight")
+                steps = 5
+                for i in range(1, steps + 1):
+                    scroll_to = int(page_height * (i / steps))
+                    page.evaluate(f"window.scrollTo(0, {scroll_to})")
+                    page.wait_for_timeout(2000)
+                # Final wait for any last lazy-loads triggered by the scrolls
+                page.wait_for_timeout(3000)
+            except Exception:
+                pass
+
+            # Get rendered HTML
+            html = page.content()
+            browser.close()
+
+    except Exception as exc:
+        logger.warning("Playwright: erro ao acessar %s: %s", url, exc)
+        return None
+
+    if not html:
+        logger.warning("Playwright: HTML vazio retornado para %s.", url)
+        return None
+
+    logger.info("Playwright: HTML capturado (%d bytes). Processando...", len(html))
+
+    # ── Parse rendered HTML ────────────────────────────────────────
+
+    # Strategy 1: Find event containers by ID pattern
+    # Format: id="offer-prematch-{TID}-{eventId1}-{eventId2}"
+    container_pattern = re.compile(r'id="offer-prematch-(\d+)-(\d+)-\d+"')
+    for container_match in container_pattern.finditer(html):
+        tid = int(container_match.group(1))
+        event_id = container_match.group(2)
+        container_start = container_match.start()
+
+        # Extract league name from preceding section
+        league_name = _extract_league_from_section(html, container_start)
+
+        # Cache league name by TID
+        if str(tid) not in league_cache and league_name:
+            league_cache[str(tid)] = league_name
+
+        # Extract match name from surrounding HTML
+        # Get ~1000 chars around the container
+        snippet_start = max(0, container_start - 200)
+        snippet_end = min(len(html), container_start + 800)
+        snippet = html[snippet_start:snippet_end]
+        match_name = _extract_team_names_from_container(snippet)
+
+        if event_id not in events_map:
+            events_map[event_id] = {
+                "eventId": int(event_id),
+                "tournamentId": tid,
+                "matchName": match_name,
+                "unixDateMillis": None,
+                "odds": [],
+                "_source": "playwright_site",
+            }
+
+    if not events_map:
+        logger.warning(
+            "Playwright: nenhum container de evento encontrado no HTML de %s. "
+            "O site pode ter mudado de estrutura.",
+            url,
+        )
+        return None
+
+    events = list(events_map.values())
+
+    # Log TIDs found for debugging
+    tids_found = {ev.get("tournamentId") for ev in events}
+    logger.info(
+        "Playwright: %d eventos extraídos de %s. TIDs: %s",
+        len(events),
+        url,
+        sorted(tids_found),
+    )
+
+    # ── Apply tournament filter ────────────────────────────────────
+    if tournament_filter is not None:
+        filtered = [ev for ev in events if ev.get("tournamentId") in tournament_filter]
+        logger.info(
+            "Playwright: %d eventos após filtro de %d torneios.",
+            len(filtered),
+            len(tournament_filter),
+        )
+        return filtered
+
+    return events
+
+
+# ── REST by-date API (secondary source / fallback) ─────────────────
+
+
+def _collect_raw_events_via_by_date_api(
+    target_date: str,
+    tournament_filter: set[int] | None = None,
+) -> list[dict[str, Any]] | None:
+    """Fetch events for a specific date via the REST by-date API.
+
+    This is the **primary** data source — it works directly via HTTPX
+    (no Playwright needed) and returns ALL events for a given day,
+    including those not yet published in the SSE feed.
+
+    Args:
+        target_date: ISO date string (YYYY-MM-DD) for the target day.
+        tournament_filter: Optional set of tournament IDs to filter by.
+                          If None, returns all events.
+
+    Returns:
+        List of raw event dicts (same format as SSE events), or None
+        on connection error.
+
+    The by-date API response includes all fields needed by the pipeline:
+    ``eventId``, ``tournamentId``, ``matchName``, ``odds``, ``unixDateMillis``.
+    """
+    target_dt = datetime.strptime(target_date, "%Y-%m-%d")
+    next_day = (target_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    endpoint = BY_DATE_API_URL.format(start_date=target_date, end_date=next_day)
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "application/json",
+        "Origin": "https://superbet.bet.br",
+        "Referer": "https://superbet.bet.br/",
+    }
+
+    logger.info("Consultando REST API by-date para %s...", target_date)
+
+    try:
+        with httpx.Client(timeout=httpx.Timeout(10.0, connect=10.0, read=15.0, write=10.0, pool=10.0)) as client:
+            r = client.get(endpoint, headers=headers)
+            r.raise_for_status()
+            data = r.json()
+            raw_events = data.get("data", [])
+    except httpx.TimeoutException:
+        logger.warning("Timeout ao consultar REST API by-date para %s", target_date)
+        return None
+    except (httpx.HTTPStatusError, httpx.TransportError) as exc:
+        logger.warning("Erro HTTP na REST API by-date: %s", exc)
+        return None
+    except (json.JSONDecodeError, KeyError) as exc:
+        logger.warning("Resposta inválida da REST API by-date: %s", exc)
+        return None
+
+    if not raw_events:
+        logger.info("REST API by-date: nenhum evento encontrado para %s.", target_date)
+        return []
+
+    # Apply tournament filter if provided
+    if tournament_filter is not None:
+        filtered = [
+            ev for ev in raw_events
+            if ev.get("tournamentId") in tournament_filter
+        ]
+        logger.info(
+            "REST API by-date: %d eventos brutos, %d após filtro de %d torneios.",
+            len(raw_events),
+            len(filtered),
+            len(tournament_filter),
+        )
+        return filtered
+
+    logger.info(
+        "REST API by-date: %d eventos encontrados para %s (sem filtro).",
+        len(raw_events),
+        target_date,
+    )
+    return raw_events
+
+
 def _collect_raw_events_with_fallback(
     target_date: str | None,
     tournament_filter: set[int],
     stream_seconds: float,
+    use_sse: bool = False,
+    use_playwright: bool = True,
 ) -> list[dict[str, Any]]:
-    """Collect SSE events with broader fallback strategies when needed.
+    """Collect events using primary Playwright, secondary REST API, or SSE fallback.
+
+    Priority:
+        1. Playwright (site scraping) — opens the Superbet website in a
+           headless browser and extracts events from rendered HTML.
+           Shows ALL games for the day exactly as a user would see them.
+        2. REST by-date API — direct HTTP call, no browser needed.
+           Used when Playwright is unavailable or fails.
+        3. SSE streaming — for live events or very close dates.
+
+    Args:
+        use_sse: If True, skip Playwright + REST, use SSE directly.
+        use_playwright: If False, skip Playwright, go straight to REST API.
 
     Hardening (P2-SH13.B):
-    - ``_stream_sse`` now returns ``None`` on transport error vs ``[]`` on empty.
+    - ``_stream_sse`` returns ``None`` on transport error vs ``[]`` on empty.
     - Falls back to a long-duration SSE stream (2× duration) when all
       standard attempts return empty.
     - Checks for existing ``data/odds/pre_match/{target_date}.json`` as
@@ -273,6 +675,76 @@ def _collect_raw_events_with_fallback(
     today_str = datetime.now().strftime("%Y-%m-%d")
     use_prematch = target_date is not None and target_date > today_str
 
+    # ── Strategy 1: Playwright site scraping (primary source) ──────
+    # Opens https://superbet.bet.br/apostas/futebol?day={day_name} in a
+    # headless Chromium browser and extracts event IDs, tournament IDs,
+    # and match names from the rendered DOM.
+    #
+    # Why Playwright first (not REST API):
+    #   The SSE / REST by-date APIs only publish events ~1-2 days in advance.
+    #   The website shows ALL games scheduled for that day, even weeks ahead.
+    #   Playwright guarantees we see everything the user would see.
+    #
+    # Playwright works on VPS (headless mode needs no display/GUI).
+    # Skip if --no-playwright or --use-sse flags are passed.
+    if target_date is not None and use_playwright and not use_sse:
+        logger.info(
+            "Estratégia primária: Playwright scraping para %s (filtro: %d torneios).",
+            target_date,
+            len(tournament_filter),
+        )
+        pw_events = _collect_raw_events_via_playwright(
+            target_date=target_date,
+            tournament_filter=tournament_filter,
+        )
+
+        if pw_events is None:
+            logger.warning(
+                "Playwright falhou ou não disponível. Usando fallback REST API..."
+            )
+        elif not pw_events:
+            logger.info(
+                "Playwright retornou 0 eventos. Usando fallback REST API..."
+            )
+        else:
+            logger.info(
+                "Playwright: %d eventos encontrados (fonte primária).",
+                len(pw_events),
+            )
+            return pw_events
+
+    # ── Strategy 2: REST by-date API (secondary source) ────────────
+    # Direct HTTP call, no browser. Works for any future date.
+    # Skip if --use-sse flag is passed (forced SSE fallback)
+    if target_date is not None and not use_sse:
+        logger.info(
+            "Estratégia secundária: REST API by-date para %s (filtro: %d torneios).",
+            target_date,
+            len(tournament_filter),
+        )
+        rest_events = _collect_raw_events_via_by_date_api(
+            target_date=target_date,
+            tournament_filter=tournament_filter,
+        )
+
+        # None = connection error — fall through to SSE
+        if rest_events is None:
+            logger.warning(
+                "REST API by-date indisponível. Usando fallback SSE..."
+            )
+        elif not rest_events:
+            logger.info(
+                "REST API by-date retornou 0 eventos. Usando fallback SSE..."
+            )
+        else:
+            logger.info(
+                "REST API by-date: %d eventos encontrados (fonte secundária).",
+                len(rest_events),
+            )
+            return rest_events
+
+    # ── Strategy 2: SSE streaming (fallback) ────────────────────────
+    # For "all" mode (no date filter) or when REST API is unavailable.
     if target_date is None:
         logger.info("Coletando eventos LIVE + PREMATCH...")
         raw_live = _stream_sse(
@@ -369,7 +841,7 @@ def _collect_raw_events_with_fallback(
         cache_path = PRE_MATCH_DIR / f"{target_date}.json"
         if cache_path.exists():
             logger.warning(
-                "SSE não retornou eventos. Usando cache existente: %s",
+                "Todas as fontes falharam. Usando cache existente: %s",
                 cache_path,
             )
             try:
@@ -662,9 +1134,20 @@ def _extract_markets(event: dict) -> dict[str, dict[str, Any]]:
 # ── Display ──────────────────────────────────────────────────────────
 
 
-# Reverse lookup: tournamentId → league name
-def _build_tid_to_league(league_ids: dict[str, int]) -> dict[int, str]:
-    return {v: k for k, v in league_ids.items()}
+def _build_tid_to_league(league_ids: dict[str, int | list[int]]) -> dict[int, str]:
+    """Build reverse lookup: tournamentId → league name.
+
+    Flattens ``list[int]`` values so each TID maps to its league name,
+    e.g. ``{51372: "sul_americana", 51375: "sul_americana"}``.
+    """
+    result: dict[int, str] = {}
+    for league, tid_or_list in league_ids.items():
+        if isinstance(tid_or_list, list):
+            for tid in tid_or_list:
+                result[tid] = league
+        else:
+            result[tid_or_list] = league
+    return result
 
 
 def _market_is_interesting(name: str) -> bool:
@@ -820,7 +1303,10 @@ def _apply_snapshot_filter(
     filtered: list[dict] = []
 
     for ev in events:
-        markets = ev.get("markets", {})
+        # Support both pre-parsed (--quick) and raw REST-API events
+        markets = ev.get("markets")
+        if not markets:
+            markets = _extract_markets(ev)
         if not markets:
             continue
 
@@ -956,7 +1442,17 @@ def main() -> None:
     parser.add_argument(
         "--quick",
         action="store_true",
-        help="Modo rapido: apenas SSE, sem buscar odds completas via REST API",
+        help="Modo rapido: apenas coleta inicial, sem buscar odds completas via REST API",
+    )
+    parser.add_argument(
+        "--no-playwright",
+        action="store_true",
+        help="Pular Playwright e ir direto para REST API by-date (fallback para VPS/servidores sem Chromium)",
+    )
+    parser.add_argument(
+        "--use-sse",
+        action="store_true",
+        help="Forcar uso do feed SSE (pula Playwright e REST by-date)",
     )
 
     args = parser.parse_args()
@@ -979,31 +1475,48 @@ def main() -> None:
     else:
         logger.info("Modo: todos os jogos (sem filtro de data)")
 
+    def _flatten_tids(values: list[int | list[int]]) -> set[int]:
+        """Flatten a mixed list of ``int | list[int]`` into pure ``set[int]``.
+
+        Uses ``list`` (not ``set``) as input because ``list[int]`` is unhashable
+        and cannot be placed in a ``set``.
+        """
+        flat: set[int] = set()
+        for v in values:
+            if isinstance(v, list):
+                flat.update(v)
+            else:
+                flat.add(v)
+        return flat
+
     # Load mappings
     league_ids = _load_league_ids()
     tid_to_league = _build_tid_to_league(league_ids)
 
     # Determine tournament filter
     if args.leagues:
-        tournament_filter = set()
+        tournament_filter_raw: list[int | list[int]] = []
         for lg in args.leagues:
             if lg in league_ids:
-                tournament_filter.add(league_ids[lg])
+                tournament_filter_raw.append(league_ids[lg])
             else:
                 logger.warning(
                     "Liga '%s' não encontrada em league_tournament_ids.json. Disponíveis: %s",
                     lg,
                     ", ".join(sorted(league_ids.keys())),
                 )
+        tournament_filter = _flatten_tids(tournament_filter_raw)
         if not tournament_filter:
             logger.error("Nenhuma liga válida especificada.")
             sys.exit(1)
     else:
-        tournament_filter = set(league_ids.values())
+        # Collect all values (int or list[int]) from league_ids
+        tournament_filter = _flatten_tids(list(league_ids.values()))
 
     logger.info(
-        "Filtrando por %d ligas: %s",
+        "Filtrando por %d ligas (TIDs: %s): %s",
         len(tournament_filter),
+        sorted(tournament_filter),
         ", ".join(tid_to_league.get(t, str(t)) for t in sorted(tournament_filter)),
     )
 
@@ -1011,14 +1524,28 @@ def main() -> None:
         target_date=target_date,
         tournament_filter=tournament_filter,
         stream_seconds=args.stream_seconds,
+        use_sse=args.use_sse,
+        use_playwright=not args.no_playwright,
     )
 
     if not raw_events:
-        print("\n[!] Nenhum evento encontrado no feed SSE para as ligas selecionadas.")
+        if args.use_sse:
+            source_label = "SSE"
+        elif args.no_playwright:
+            source_label = "REST API / SSE"
+        else:
+            source_label = "Playwright / REST API / SSE"
+        print(f"\n[!] Nenhum evento encontrado ({source_label}) para as ligas selecionadas.")
         print("   Possiveis causas:")
         print("   - Nao ha jogos programados para essas ligas")
         print("   - Os tournament_ids podem estar desatualizados")
-        print("   - Tente aumentar --stream-seconds")
+        if args.use_sse:
+            print("   - Tente aumentar --stream-seconds")
+        elif args.no_playwright:
+            print("   - Tente remover --no-playwright para usar Playwright (site)")
+        else:
+            print("   - Tente --no-playwright para pular o browser (REST API)")
+            print("   - Tente --use-sse para forcar o feed SSE (fallback)")
         sys.exit(0)
 
     # Debug mode: dump first raw event

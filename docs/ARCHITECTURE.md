@@ -297,18 +297,21 @@ SuperbetCollector (SSE) + API-Football → ContextCollector → List[MatchContex
 ### Superbet Scraper CLI (`scripts/superbet_scraper.py`)
 
 - **Purpose:** Standalone CLI tool for comprehensive odds collection across all market types.
-- **Two-Phase Architecture:**
-  1. **SSE Discovery:** Connects to Superbet's SSE feed to discover matches. Two endpoints:
+- **Three-Tier Discovery Architecture (fallback chain):**
+  1. **Playwright Site Scraping (primary):** Opens `https://superbet.bet.br/apostas/futebol?day={dia}` in headless Chromium. Extracts event IDs from rendered DOM by matching HTML container IDs (`offer-prematch-{TID}-{eventId1}-{eventId2}`). Shows ALL games for the day as a user would see them in the browser. Uses `wait_until="domcontentloaded"` with 45s timeout + 8s initial JS render wait. **Multi-scroll technique:** 5 incremental scrolls (20%, 40%, 60%, 80%, 100% of page height) each followed by 2s wait, plus 3s final wait, to trigger lazy-loaded sections. Returns events with `eventId`, `tournamentId`, `matchName`, `_source: "playwright_site"`.
+  2. **REST by-date API Discovery (secondary):** Calls `GET /v2/pt-BR/events/by-date?startDate=...&endDate=...&sportId=5` on the Fastly CDN. Returns ALL events for a date range (139+ events raw for a single day). The scraper filters by known tournament IDs from `league_tournament_ids.json` (20 TIDs across 19 league names) before enrichment. Can be forced via `--no-playwright` flag.
+  3. **SSE Fallback (tertiary):** If both Playwright and REST API fail, falls back to Superbet's SSE feed:
      - `/subscription/v2/pt-BR/events/prematch` — future matches (pre-match)
      - `/subscription/v2/pt-BR/events/all` — live/in-play matches
-     - Output: `event_id`, team names, league, kickoff time. Only 3 odds (1X2) available at this stage.
-  2. **REST Enrichment:** For each discovered `event_id`, calls `GET /v2/pt-BR/events/{eventId}` on the same CDN. This endpoint returns **all** markets for the event (700+ markets, 3000+ selections per match). The scraper filters by `MARKETS_OF_INTEREST` (15 patterns) before display.
+     - Can be forced via `--use-sse` flag.
+- **REST Enrichment (same for all three sources):** For each discovered `event_id`, calls `GET /v2/pt-BR/events/{eventId}` on the same CDN. This endpoint returns **all** markets for the event (700+ markets, 3000+ selections per match). The scraper filters by `MARKETS_OF_INTEREST` (15 patterns) before display.
+- **Key Discovery:** The by-date REST endpoint was identified by intercepting network traffic using Playwright headless browser. The website HTML parsing uses the `id="offer-prematch-{TID}-{eventId1}-{eventId2}"` container ID pattern for event extraction, and `e2e-competition-header` / `sds-section-title` CSS classes for league name extraction.
 - **Price Format:** Centesimal encoding — prices ≥ 100 are divided by 100 (e.g., 250 → 2.50 decimal odds).
 - **Markets Covered:** Resultado Final, Total de Gols, Dupla Chance, Ambas as Equipes Marcam, Total de Escanteios, Total de Cartões, Total de Finalizações, Total de Chutes no Gol, Handicap, Handicap Asiático, player combo markets.
-- **CLI Interface:** `python scripts/superbet_scraper.py <day>` — accepts `hoje`, `amanha`, `domingo`, `YYYY-MM-DD`, `todos`.
-- **Key Flags:** `--quick` (SSE only, skip REST), `--all-markets` (show all 700+ markets), `--json`, `--no-save`.
+- **CLI Interface:** `python scripts/superbet_scraper.py <day>` — accepts `hoje`, `amanha`, `domingo`, `YYYY-MM-DD`, `todos`, `sexta`, `quinta`.
+- **Key Flags:** `--quick` (raw events only, skip REST enrichment), `--all-markets` (show all 700+ markets), `--json`, `--no-save`, `--no-playwright` (skip browser, use REST API directly), `--use-sse` (skip both Playwright and REST API, force SSE feed).
 - **Auto-Save:** JSON snapshots saved to `data/odds/pre_match/{date}.json`.
-- **League Filter:** Uses `data/mapping/league_tournament_ids.json` (12 leagues mapped).
+- **League Filter:** Uses `data/mapping/league_tournament_ids.json` (20 TIDs across 19 league names: brasileirao, serie_a, serie_b, la_liga, la_liga_2, ligue_1, ligue_2, premier_league, championship, bundesliga, bundesliga_2, eredivisie, jupiler_pro_league, liga_portugal, super_lig, mls, libertadores, sul_americana=[51372, 51375], europa_league). The mapping now supports `list[int]` values for leagues with multiple tournament IDs (e.g., sul_americana has 2 TIDs for separate group phases).
 
 ### T-60 Context Collector (`data/context_collector.py`)
 

@@ -1,5 +1,11 @@
 {
-  "_comment": "Maps data/raw/leagues/<folder_name> → Superbet tournamentId. IDs confirmed via live SSE feed capture. Add new entries when new league folders are created.",
+  "_comment": "Maps data/raw/leagues/<folder_name> → Superbet tournamentId. IDs confirmed via live SSE feed + Playwright browser scraping. IMPORTANT: Copa Libertadores and Copa Sul-Americana have 1 TID per group stage; the listed TID is a representative group. All known group TIDs are listed in _libertadores_all_tids and _sul_americana_all_tids.",
+  "_libertadores_all_tids": "Copa Libertadores groups: 630 (Gr.B), 656 (Gr.E), 657 (Gr.G), 689 (Gr.F), 690 (Gr.A)",
+  "_sul_americana_all_tids": "Copa Sul-Americana groups: 51372 (Gr.C), 51375 (Gr.H)",
+  "_europa_league_tids": "UEFA Europa League: 688",
+  "_la_liga_2_tid": "LaLiga 2: 191",
+  "_championship_tid": "English Championship: 1608",
+  "_saudi_cup_tid": "Arabia Saudita - Copa: 8773",
   "brasileirao": 1698,
   "serie_a": 104,
   "la_liga": 98,
@@ -13,5 +19,10 @@
   "premier_league": 106,
   "serie_b": 244,
   "jupiler_pro_league": 1713,
-  "super_lig": 323
+  "super_lig": 323,
+  "libertadores": 690,
+  "sul_americana": [51372, 51375],
+  "europa_league": 688,
+  "la_liga_2": 191,
+  "championship": 1608
 }
