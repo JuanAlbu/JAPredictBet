@@ -553,9 +553,7 @@ def get_active_tournament_ids(
     with open(mapping_path, encoding="utf-8") as f:
         raw = json.load(f)
     # Strip comment keys (keys starting with "_")
-    mapping: dict[str, int | list[int]] = {
-        k.strip().lower(): v for k, v in raw.items() if not k.startswith("_")
-    }
+    mapping: dict[str, int | list[int]] = {k.strip().lower(): v for k, v in raw.items() if not k.startswith("_")}
 
     active_ids: list[int] = []
     folders_with_data: list[str] = []

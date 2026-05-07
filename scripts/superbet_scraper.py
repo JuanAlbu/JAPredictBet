@@ -298,13 +298,13 @@ def _day_to_portuguese(target_date: str) -> str | None:
         "2026-05-07" -> "quinta-feira"
     """
     pt_day_names = [
-        "segunda-feira",   # 0 Monday
-        "terça-feira",     # 1 Tuesday
-        "quarta-feira",    # 2 Wednesday
-        "quinta-feira",    # 3 Thursday
-        "sexta-feira",     # 4 Friday
-        "sábado",          # 5 Saturday
-        "domingo",         # 6 Sunday
+        "segunda-feira",  # 0 Monday
+        "terça-feira",  # 1 Tuesday
+        "quarta-feira",  # 2 Wednesday
+        "quinta-feira",  # 3 Thursday
+        "sexta-feira",  # 4 Friday
+        "sábado",  # 5 Saturday
+        "domingo",  # 6 Sunday
     ]
     try:
         dt = datetime.strptime(target_date, "%Y-%m-%d")
@@ -457,8 +457,7 @@ def _collect_raw_events_via_playwright(
                 page.goto(url, wait_until="domcontentloaded", timeout=45000)
             except Exception as nav_exc:
                 logger.warning(
-                    "Playwright: navegação com domcontentloaded excedeu 45s — "
-                    "prosseguindo com HTML parcial: %s",
+                    "Playwright: navegação com domcontentloaded excedeu 45s — prosseguindo com HTML parcial: %s",
                     nav_exc,
                 )
 
@@ -534,8 +533,7 @@ def _collect_raw_events_via_playwright(
 
     if not events_map:
         logger.warning(
-            "Playwright: nenhum container de evento encontrado no HTML de %s. "
-            "O site pode ter mudado de estrutura.",
+            "Playwright: nenhum container de evento encontrado no HTML de %s. O site pode ter mudado de estrutura.",
             url,
         )
         return None
@@ -624,10 +622,7 @@ def _collect_raw_events_via_by_date_api(
 
     # Apply tournament filter if provided
     if tournament_filter is not None:
-        filtered = [
-            ev for ev in raw_events
-            if ev.get("tournamentId") in tournament_filter
-        ]
+        filtered = [ev for ev in raw_events if ev.get("tournamentId") in tournament_filter]
         logger.info(
             "REST API by-date: %d eventos brutos, %d após filtro de %d torneios.",
             len(raw_events),
@@ -699,13 +694,9 @@ def _collect_raw_events_with_fallback(
         )
 
         if pw_events is None:
-            logger.warning(
-                "Playwright falhou ou não disponível. Usando fallback REST API..."
-            )
+            logger.warning("Playwright falhou ou não disponível. Usando fallback REST API...")
         elif not pw_events:
-            logger.info(
-                "Playwright retornou 0 eventos. Usando fallback REST API..."
-            )
+            logger.info("Playwright retornou 0 eventos. Usando fallback REST API...")
         else:
             logger.info(
                 "Playwright: %d eventos encontrados (fonte primária).",
@@ -729,13 +720,9 @@ def _collect_raw_events_with_fallback(
 
         # None = connection error — fall through to SSE
         if rest_events is None:
-            logger.warning(
-                "REST API by-date indisponível. Usando fallback SSE..."
-            )
+            logger.warning("REST API by-date indisponível. Usando fallback SSE...")
         elif not rest_events:
-            logger.info(
-                "REST API by-date retornou 0 eventos. Usando fallback SSE..."
-            )
+            logger.info("REST API by-date retornou 0 eventos. Usando fallback SSE...")
         else:
             logger.info(
                 "REST API by-date: %d eventos encontrados (fonte secundária).",
