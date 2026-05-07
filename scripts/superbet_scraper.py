@@ -316,12 +316,14 @@ def _day_to_portuguese(target_date: str) -> str | None:
 def _parse_event_id_from_container(container_id: str) -> tuple[int, str] | None:
     """Parse tournament ID and event ID from a Superbet container element ID.
 
-    Format: ``offer-prematch-{TID}-{eventId1}-{eventId2}``
+    Format (group with multiple events): ``offer-prematch-{TID}-{eventId1}-{eventId2}``
+    Format (group with single event):  ``offer-prematch-{TID}-{eventId1}``
 
     Returns ``(tournament_id, event_id)`` or ``None`` if pattern doesn't match.
     """
-    # Matches: offer-prematch-1698-301508314-301508314
-    match = re.match(r"^offer-prematch-(\d+)-(\d+)-\d+$", container_id)
+    # Matches both: offer-prematch-1698-301508314-301508314 (multi-event)
+    #           and: offer-prematch-106-12025321           (single-event)
+    match = re.match(r"^offer-prematch-(\d+)-(\d+)(?:-\d+)?$", container_id)
     if match:
         return int(match.group(1)), match.group(2)
     return None
@@ -373,18 +375,28 @@ def _extract_team_names_from_container(html_snippet: str) -> str:
 
     Looks for the match name pattern inside the rendered HTML.
     """
-    # Try common Superbet patterns for match name display
-    # 1) Look for text with the middle-dot separator (·)
-    middle_dot = "\u00b7"
+    MIDDLE_DOT = "\u00b7"
+
+    # 1) Extract from Superbet odds URL slug (most reliable).
+    #    URL pattern: https://superbet.bet.br/odds/futebol/{home}-x-{away}-{eventId}
+    slug_match = re.search(
+        r'href="[^"]*odds/futebol/([^"-]+)-x-([^"-]+)-\d+"',
+        html_snippet,
+    )
+    if slug_match:
+        home_raw = slug_match.group(1).replace("-", " ").title()
+        away_raw = slug_match.group(2).replace("-", " ").title()
+        return f"{home_raw} {MIDDLE_DOT} {away_raw}"
+
+    # 2) Look for text with the middle-dot separator (·)
     lines = html_snippet.split("\n")
     for line in lines:
-        if middle_dot in line:
-            # Found a line with middle dot — likely the match name
+        if MIDDLE_DOT in line:
             clean = re.sub(r"<[^>]+>", "", line).strip()
-            if clean and middle_dot in clean:
+            if clean and MIDDLE_DOT in clean:
                 return clean
 
-    # 2) Look for anchor tags with team names
+    # 3) Look for anchor tags with team names
     anchor_match = re.search(
         r'<a[^>]*href="[^"]*/odds/[^"]*"[^>]*>\s*(.*?)\s*</a>',
         html_snippet,
@@ -500,8 +512,9 @@ def _collect_raw_events_via_playwright(
     # ── Parse rendered HTML ────────────────────────────────────────
 
     # Strategy 1: Find event containers by ID pattern
-    # Format: id="offer-prematch-{TID}-{eventId1}-{eventId2}"
-    container_pattern = re.compile(r'id="offer-prematch-(\d+)-(\d+)-\d+"')
+    # Format (group with multiple events): id="offer-prematch-{TID}-{eventId1}-{eventId2}"
+    # Format (group with single event):  id="offer-prematch-{TID}-{eventId1}"
+    container_pattern = re.compile(r'id="offer-prematch-(\d+)-(\d+)(?:-\d+)?"')
     for container_match in container_pattern.finditer(html):
         tid = int(container_match.group(1))
         event_id = container_match.group(2)
@@ -1549,12 +1562,19 @@ def main() -> None:
         print()
 
     # Filter by date
+    # The REST API queries [target_date, target_date+1 13:00), so events
+    # from the next day's early hours (e.g. Saturday 08:30 on Friday's page)
+    # are legitimately included.  Undated events (Playwright source) are
+    # always kept as the source is already day-filtered.
     if target_date:
+        from datetime import datetime as _dt, timedelta as _td
+
+        _next_day = (_dt.strptime(target_date, "%Y-%m-%d") + _td(days=1)).strftime("%Y-%m-%d")
         dated = []
         undated = []
         for ev in raw_events:
             ev_date = _extract_event_date(ev)
-            if ev_date == target_date:
+            if ev_date in (target_date, _next_day):
                 dated.append(ev)
             elif ev_date is None:
                 undated.append(ev)
