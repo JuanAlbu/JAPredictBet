@@ -1,7 +1,7 @@
 # JA PREDICT BET — HISTÓRICO DE ITENS CONCLUÍDOS
 
 **Criado:** 03 de Abril, 2026
-**Última atualização:** 06-MAI-2026
+**Última atualização:** 07-MAI-2026
 **Propósito:** Registro permanente de todos os itens de roadmap concluídos, com datas, evidências e detalhes de implementação. Itens são movidos do roadmap ativo (`next_pass.md`) para cá ao serem fechados.
 
 ---
@@ -497,7 +497,7 @@ Isso exigiu mudança de tipo no `league_tournament_ids.json`: de `dict[str, int]
 
 | Item | Descrição | Data | Evidência |
 |------|-----------|------|-----------|
-| P2.D6 | Menu Central de Execução | 03-MAI-2026 | [`scripts/menu.py`](scripts/menu.py) — 296 linhas, 5 opções operacionais (extrair odds, shadow mode, dry-run, auditoria, manutenção) |
+| P2.D6 | Menu Central de Execução (v1.0) | 03-MAI-2026 | [`scripts/menu.py`](scripts/menu.py) — 296 linhas, 5 opções operacionais (extrair odds, shadow mode, dry-run, auditoria, manutenção). **Refatorado para v2.0 em 07-MAI-2026** (ver changelog). |
 | P2.C1 (parcial) | `value/value_engine.py` removido | 03-MAI-2026 | Arquivo não existe no projeto — diretório `value/` ausente |
 | P2.C1 (parcial) | `config_backup.yml` removido | 03-MAI-2026 | Arquivo não existe no projeto |
 | Prioridade #2 | Decisão provedor LLM (OpenRouter escolhido) | 03-MAI-2026 | Decisão tomada, documentada em [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md) |
@@ -582,3 +582,5 @@ Isso exigiu mudança de tipo no `league_tournament_ids.json`: de `dict[str, int]
 |------|------|
 | 05-MAI-2026 | **FASE 0 CONCLUÍDA** — P0.FALLBACK: fallback 2024 removido de `context_collector.py` (2 pontos), `PROMPT_MESTRE.md` atualizado (Pilar 5), `context_enrichment_study.md` expandido (Seção 3.4 — web scraping futuro). 254/254 testes. |
 | 05-MAI-2026 | **Revisão profunda do backlog.** Descobertas: (a) `artifacts/models/` já tem 30 modelos treinados (desmentindo prioridade #1 do roadmap anterior), (b) CI pipeline já implementado (P2.B1 concluído), (c) imports padronizados (P2.C4 concluído), (d) `pyproject.toml` já blindado contra falsa coleta (P2.B5/B9 concluído), (e) ENR.1 (context study) já concluído (commit 39da387). Total de 5 itens removidos do backlog ativo. `next_pass.md` reescrito: 46→41 itens pendentes, data atualizada para 05-MAI-2026. |
+| 07-MAI-2026 | **Auditoria de arquitetura — 5 blocos analisados.** Roadmap atualizado: 48→54 itens. Novos itens: AUDIT.1 (News Context — 6º pilar no Prompt Mestre), AUDIT.2 (Test Mocks para DuckDuckGo/API-Football), AUDIT.3 (Fuzzy Matching com rapidfuzz), AUDIT.4 (Telegram Notifier), AUDIT.5 (RAG Lite / Memory). |
+| 07-MAI-2026 | **Menu refatorado para v2.0.** [`scripts/menu.py`](scripts/menu.py): 296→355 linhas, 5→6 opções. Correções: descrição "ML+LLM" → "Gatekeeper LLM", Analisar agora reutiliza JSON do scraper sem re-scraping, manutenção semanal remove `run.py` (retreino agora sob demanda). Fluxo encadeado com `_executar_encadeado()`. Toggle `[V]` verbose. Ruff/MyPy/pytest (254/254) validados. Commit `8a7d121`. |

@@ -64,9 +64,9 @@ PRINCÍPIOS
 6. Preço justo é suficiente; erro da casa não é requisito
 
 ━━━━━━━━━━━━━━━━━━━━━━━
-🛡️ VALIDAÇÃO (5 PILARES)
+🛡️ VALIDAÇÃO (6 PILARES)
 
-Toda seleção deve ser validada nos 5 pilares:
+Toda seleção deve ser validada nos 6 pilares:
 
 1. Comportamento
 - volume
@@ -91,6 +91,15 @@ Toda seleção deve ser validada nos 5 pilares:
   → Significa que a API-Football (plano free, capped em 2024) não tem dados da temporada atual.
   → NÃO usar tabela como fator de decisão. Dados indisponíveis são neutros — não pesam a favor nem contra.
   → Decidir com base nos outros pilares (comportamento, desfalques, arbitragem, coerência).
+
+6. Contexto Noticioso (quando `news_context` estiver presente no JSON de entrada)
+- derbies / rivalidades históricas → risco aumentado de imprevisibilidade
+- salários em atraso / crise financeira → queda de rendimento
+- poupança de titulares declarada → rotação confirmada
+- crise interna / troca de treinador → instabilidade tática
+- lesões de última hora não capturadas pela API
+- ⚠️ Se `news_context` for `null` ou ausente no JSON → pilar neutro, não pesa a favor nem contra.
+- ⚠️ Notícias são indicadores de risco adicional, não gatilhos automáticos de rejeição. Avaliar impacto real no cenário.
 
 ━━━━━━━━━━━━━━━━━━━━━━━
 🔍 FILTRO TÉCNICO

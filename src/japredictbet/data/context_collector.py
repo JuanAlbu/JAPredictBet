@@ -16,6 +16,16 @@ Security note
 ─────────────
 API keys are **never** hardcoded.  They are resolved from environment
 variables at runtime via :meth:`ApiKeysConfig.resolve`.
+
+News Context (AUDIT.1)
+───────────────────────
+For matches in the Target Zone (odds 1.60–2.20), a lightweight DuckDuckGo
+search is performed to collect qualitative external context: derbies,
+financial crises, coach changes, declared rotation, etc.  The result is
+stored in ``MatchContext.news_context`` and injected into the LLM prompt.
+
+The search is **best-effort** — failures are silently logged and never
+block the pipeline.
 """
 
 from __future__ import annotations
@@ -35,6 +45,13 @@ from japredictbet.config import (
     SuperbetShadowConfig,
 )
 from japredictbet.odds.superbet_client import SuperbetCollector, SuperbetSnapshot
+
+try:
+    from duckduckgo_search import DDGS
+    _DUCKDUCKGO_AVAILABLE = True
+except ImportError:  # pragma: no cover — optional dependency
+    DDGS = None  # type: ignore[assignment]
+    _DUCKDUCKGO_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +133,7 @@ class MatchContext:
     referee: RefereeInfo | None = None
     home_standing: StandingsEntry | None = None
     away_standing: StandingsEntry | None = None
+    news_context: str | None = None
     collected_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def to_json(self) -> str:
@@ -132,6 +150,8 @@ class MatchContext:
           the full starting XI is irrelevant to LLM reasoning)
         - Standings: only ``rank``, ``points``, ``form`` (team name is
           already present as ``home_team`` / ``away_team``)
+        - News context: serialised as-is when present (already a compact
+          summary string)
         """
 
         def _slim_lineup(lineup: TeamLineup | None) -> dict | None:
@@ -175,6 +195,9 @@ class MatchContext:
             payload["home_standing"] = home_st
         if away_st is not None:
             payload["away_standing"] = away_st
+
+        if self.news_context is not None:
+            payload["news_context"] = self.news_context
 
         return json.dumps(payload, ensure_ascii=False)
 
@@ -532,6 +555,10 @@ class ContextCollector:
                 contexts.append(ctx)
 
         logger.info("ContextCollector: %d matches within T-%d window.", len(contexts), window)
+
+        # ── News context enrichment (AUDIT.1) ───────────────────────
+        self._enrich_news_contexts(contexts)
+
         return contexts
 
     # ── pre-match enrichment ───────────────────────────────────────────
@@ -659,6 +686,10 @@ class ContextCollector:
             enriched,
             len(contexts),
         )
+
+        # ── News context enrichment (AUDIT.1) ───────────────────────
+        self._enrich_news_contexts(contexts)
+
         return contexts
 
     # ── private helpers ──────────────────────────────────────────────
@@ -747,6 +778,44 @@ class ContextCollector:
 
         return None
 
+    def _enrich_news_contexts(
+        self,
+        contexts: list[MatchContext],
+    ) -> None:
+        """Populate ``news_context`` on every match in the Target Zone.
+
+        Best-effort — failures are silently logged per-context and never
+        block the pipeline.  Modified in-place.
+        """
+        if not _DUCKDUCKGO_AVAILABLE:
+            logger.debug(
+                "duckduckgo-search not installed — skipping news context enrichment."
+            )
+            return
+
+        enriched = 0
+        for ctx in contexts:
+            if ctx.news_context is not None:
+                continue  # already populated
+            if not self._is_target_zone(ctx.odds):
+                continue
+
+            news = self._collect_news_context(
+                home_team=ctx.home_team,
+                away_team=ctx.away_team,
+                league=ctx.league,
+            )
+            if news is not None:
+                ctx.news_context = news
+                enriched += 1
+
+        if enriched:
+            logger.info(
+                "News context enriched for %d/%d matches in target zone.",
+                enriched,
+                len(contexts),
+            )
+
     @staticmethod
     def _safe_call(func, *args, label: str = "call", **kwargs):
         """Wrap an API call so failures don't crash the whole pipeline."""
@@ -755,6 +824,107 @@ class ContextCollector:
         except Exception:
             logger.warning("Failed to fetch %s — continuing without it.", label, exc_info=True)
             return None
+
+    @staticmethod
+    def _is_target_zone(odds: OddsContext) -> bool:
+        """Return True if any odds fall within the Target Zone (1.60–2.20).
+
+        Only matches with at least one market in the Target Zone justify
+        the cost of a DuckDuckGo search for external news context.
+        """
+        _TARGET_MIN = 1.60
+        _TARGET_MAX = 2.20
+
+        candidates = [
+            odds.corner_over_odds,
+            odds.corner_under_odds,
+            odds.home_odds,
+            odds.draw_odds,
+            odds.away_odds,
+            odds.btts_yes,
+            odds.btts_no,
+            odds.goals_over_1_5,
+            odds.goals_under_1_5,
+            odds.goals_over_2_5,
+            odds.goals_under_2_5,
+        ]
+        return any(
+            o is not None and _TARGET_MIN <= o <= _TARGET_MAX
+            for o in candidates
+        )
+
+    @staticmethod
+    def _collect_news_context(
+        home_team: str,
+        away_team: str,
+        league: str | None = None,
+    ) -> str | None:
+        """Perform a DuckDuckGo search for qualitative external context.
+
+        Searches for recent news about the match-up — derbies, financial
+        crises, coach changes, declared rotation, etc.  Returns a compact
+        summary string (≤500 chars) or ``None`` if the search fails or
+        DuckDuckGo is unavailable.
+
+        This method is **best-effort** — failures are silently logged and
+        never block the pipeline.
+        """
+        if not _DUCKDUCKGO_AVAILABLE:
+            logger.debug(
+                "duckduckgo-search not installed — skipping news context."
+            )
+            return None
+
+        query = f"{home_team} {away_team}"
+        if league:
+            query += f" {league}"
+        query += " noticias escalação desfalque técnico"
+
+        try:
+            with DDGS() as ddgs:
+                results = list(ddgs.text(query, max_results=5))
+        except Exception:
+            logger.debug(
+                "DuckDuckGo search failed for %s — skipping news context.",
+                query,
+                exc_info=True,
+            )
+            return None
+
+        if not results:
+            return None
+
+        # Build a compact summary (token-economy aware)
+        snippets: list[str] = []
+        total_chars = 0
+        _MAX_CHARS = 500
+
+        for r in results:
+            body = r.get("body", "").strip()
+            title = r.get("title", "").strip()
+            if not body:
+                continue
+            line = f"- {title}: {body}" if title else f"- {body}"
+            if total_chars + len(line) > _MAX_CHARS:
+                remaining = _MAX_CHARS - total_chars
+                if remaining > 60:
+                    line = line[:remaining - 3] + "..."
+                else:
+                    break
+            snippets.append(line)
+            total_chars += len(line)
+
+        if not snippets:
+            return None
+
+        summary = "\n".join(snippets)
+        logger.debug(
+            "News context collected for %s vs %s (%d chars).",
+            home_team,
+            away_team,
+            len(summary),
+        )
+        return summary
 
 
 # ── module-level helpers ─────────────────────────────────────────────
