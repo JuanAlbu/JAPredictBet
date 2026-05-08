@@ -1,4 +1,4 @@
-# JA PREDICT BET — ROADMAP (REVISÃO 07-MAI-2026)
+# JA PREDICT BET — ROADMAP (REVISÃO 08-MAI-2026)
 
 **Data da Revisão:** 07 de Maio, 2026
 **Status Geral:** P0 ✅ | P0-FIX ✅ | P1 ✅ | Onda 1 ✅ | Onda 2 ✅ | Onda 3 ✅ | Onda 4 parcial | P3-ARCH ✅ | P2-REFACTOR ✅ | CI Pipeline ✅ | ENR.1 ✅ | FASE 0 ✅ | SCRAPER.1 ✅ | SCRAPER.2 ✅ — **254/254 testes** (21 arquivos). 106 features. 30 modelos treinados. Scraper migrado para REST by-date (20 TIDs rastreados de 19 ligas). Playwright com multi-scroll. Mapeamento `list[int]` para TIDs múltiplos.
@@ -13,7 +13,7 @@
 
 **Objetivo:** Fechar pontos cegos arquiteturais e blindar CI/CD identificados na auditoria de 07-MAI-2026. **Executar antes de qualquer nova feature.**
 
-- [ ] **AUDIT.1 — Integração Cognitiva de News Context (Ponto Cego do Gatekeeper)**
+- [x] **AUDIT.1 — Integração Cognitiva de News Context (Ponto Cego do Gatekeeper)** ✅
   - **Tipo:** Correção Arquitetural.
   - **Problema:** O `MatchContext` não possui campo `news_context`, e o [`PROMPT_MESTRE.md`](docs/PROMPT_MESTRE.md) não instrui o Gatekeeper a analisar notícias externas. A IA é cega a eventos contextuais críticos (derbys, salários em atraso, poupança de titulares, crises internas) que impactam diretamente a qualidade da análise. Isso significa que o Gatekeeper aprova/rejeita com base apenas em dados estruturados (odds, escalações, standings), ignorando completamente fatores qualitativos externos.
   - **Ação:**
@@ -33,7 +33,7 @@
   - **Esforço:** ~3-4h (1h dataclass + serialização, 1h pesquisa web, 1h atualização do prompt).
   - **Pré-requisito para:** ENR.5 (The Scout — FASE 7), que expandirá a coleta para pesquisa ativa.
 
-- [ ] **AUDIT.2 — Blindagem de Testes: Mocks para DuckDuckGo/Context Enricher**
+- [x] **AUDIT.2 — Blindagem de Testes: Mocks para DuckDuckGo/Context Enricher** ✅
   - **Tipo:** Dívida Técnica / CI/CD.
   - **Problema:** O diretório [`tests/data/`](tests/data/) está vazio — não há testes para o módulo de enriquecimento de contexto que faz chamadas de rede (API-Football, DuckDuckGo). Se a esteira do GitHub Actions rodar pesquisas reais na web, os IPs serão bloqueados por rate-limit ou timeout, quebrando o CI/CD.
   - **Ação:**
@@ -60,8 +60,8 @@
 - Todos os 30 modelos do ensemble treinados e disponíveis em `artifacts/models/`.
 - **Alerta:** `config_backup.yml` ainda existe na raiz apesar do [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md) afirmar que foi removido em 03-MAI-2026. Corrigir na FASE 1.
 - **Alerta:** `odds/collector.py` usa `requests` (bloqueante) enquanto todo o resto do projeto adotou `httpx`. Migrar na FASE 3.
-- **Alerta (Auditoria 07-MAI-2026):** O `MatchContext` não possui campo `news_context` e o `PROMPT_MESTRE.md` não instrui o Gatekeeper a analisar notícias → Gatekeeper é cego a contexto qualitativo externo (derbies, crises, rotação). Corrigir via AUDIT.1.
-- **Alerta (Auditoria 07-MAI-2026):** `tests/data/` está vazio — sem testes de isolamento de rede para o context collector. CI/CD vulnerável a rate-limit. Corrigir via AUDIT.2.
+- **✅ (Resolvido 08-MAI-2026 — AUDIT.1):** `MatchContext` agora possui campo `news_context` populado via DuckDuckGo. `PROMPT_MESTRE.md` atualizado com 6º pilar (Contexto Noticioso).
+- **✅ (Resolvido 08-MAI-2026 — AUDIT.2):** `tests/data/test_context_collector.py` criado com 51 testes mockados (zero rede real). CI/CD blindado contra rate-limit.
 
 ---
 

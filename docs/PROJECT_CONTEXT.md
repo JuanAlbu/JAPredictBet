@@ -1,4 +1,4 @@
-# Project Context (Atualizado 05-MAY-2026)
+# Project Context (Atualizado 08-MAI-2026)
 
 
 ## LLM Providers (Atualização 03-MAY-2026)
@@ -58,8 +58,15 @@ Nenhum agente executa apostas reais — Shadow Mode é 100% observacional.
   - D3: Kelly/Risk — `betting/risk.py` (Quarter Kelly, Monte Carlo, slippage)
 - **Consensus script:** Synced with all P1 features (H2H + 106 rolling features)
 
+### P1 Audit (08-MAY-2026)
+- **Status:** ✅ COMPLETO — AUDIT.1 + AUDIT.2 implementados
+- **AUDIT.1 — News Context:** `MatchContext.news_context` populado via DuckDuckGo (Target Zone gate 1.60–2.20). 6º pilar (Contexto Noticioso) no `PROMPT_MESTRE.md`. Graceful fallback — falhas de rede nunca bloqueiam o pipeline.
+- **AUDIT.2 — Test Mocks:** `tests/data/test_context_collector.py` com 51 testes mockados (API-Football, DuckDuckGo, Superbet). CI/CD blindado contra rate-limit. Zero chamadas de rede reais.
+- **Coverage:** 51 novos testes. 10 classes (news_context, target_zone, collect_news, enrich_news, superbet_only, full_mode, pre_match, edge_cases, helpers, from_configs).
+- **Ver:** [`docs/COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md#p1--audit1--audit2-concluído-08-mai-2026)
+
 ### P2 Shadow Pipeline (03-MAY-2026)
-- **Status:** ✅ COMPLETO — Unified architecture, 254/254 testes
+- **Status:** ✅ COMPLETO — Unified architecture, 305/305 testes
 - **Gatekeeper Agent:** LLM-based evaluation of ALL markets (PROMPT_MESTRE V26)
 - **Feature Store:** Pre-computed rolling features via `feature_store.py`
 - **Pre-match Mode:** Scraper JSON → `pre_match_odds.py` → pipeline
@@ -77,6 +84,8 @@ Nenhum agente executa apostas reais — Shadow Mode é 100% observacional.
 - ENR.1 ✅ — Estudo de Viabilidade de Contexto concluído
 - Web scraping (Soccerway/Flashscore) registrado como desenvolvimento futuro em [`context_enrichment_study.md`](context_enrichment_study.md#34-web-scraping-de-dados-estruturados--desenvolvimento-futuro-pós-mvp)
 - **Próximo:** FASE 1 (Limpeza Imediata — 4 itens, ~2-3h)
+- **P1 Concluído:** AUDIT.1 (News Context) + AUDIT.2 (Test Mocks) — 08-MAI-2026
+- **Próximo:** FASE 1 (Limpeza Imediata — 7 itens, ~3-4h)
 - **Onda 3:** 16 itens pendentes (testes + dead code)
 - **Onda 4:** SH4 pendente (mapeamento manual para 9 ligas)
 - **Onda 5:** 7 itens pendentes (logging, dashboard, menu bootstrap)

@@ -261,15 +261,23 @@ Closing Line Value (CLV)
 
 ### Validation
 
-- **Tests:** 254/254 passing across 21 test files.
+- **Tests:** 305/305 passing across 22 test files.
 - **Reproducibility:** All components, including hyperparameter search and risk simulations, are deterministic.
 - **Auditability:** Model parameters, SHAP values, calibration reports, and CLV metrics provide deep insight into system behavior.
 
 ---
 
+## P1 Audit — News Context + Test Mocks (08-MAI-2026) ✅
+
+- **AUDIT.1:** `MatchContext.news_context` field populated via DuckDuckGo search for Target Zone matches (odds 1.60–2.20). [`PROMPT_MESTRE.md`](docs/PROMPT_MESTRE.md) updated from 5→6 pilares (+Contexto Noticioso). Graceful fallback — network/DuckDuckGo failures never block the pipeline.
+- **AUDIT.2:** `tests/data/test_context_collector.py` created with 51 tests across 10 classes. All network calls mocked (API-Football, DuckDuckGo, Superbet). CI/CD safe — zero real network calls.
+- **Ver:** [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md#p1--audit1--audit2-concluído-08-mai-2026)
+
+---
+
 ## P2 Refactoring — Unified Architecture (03-MAY-2026) ✅
 
-Gatekeeper + Analyst merged into a single GatekeeperAgent evaluating ALL markets via Prompt Mestre V26. Shadow Pipeline simplified to single LLM motor. 30-model ensemble exclusive to Mode 1 (Backtest). Scraper pre-filter added (min_odd + market whitelist). Ver [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md#p2-refactoring--unified-architecture-03-mai-2026).
+Gatekeeper + Analyst merged into a single GatekeeperAgent evaluating ALL markets via Prompt Mestre V26 (6 pilares). Shadow Pipeline simplified to single LLM motor. 30-model ensemble exclusive to Mode 1 (Backtest). Scraper pre-filter added (min_odd + market whitelist). Ver [`COMPLETION_HISTORY.md`](COMPLETION_HISTORY.md#p2-refactoring--unified-architecture-03-mai-2026).
 
 ---
 

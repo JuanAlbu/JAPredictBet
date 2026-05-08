@@ -319,8 +319,10 @@ SuperbetCollector (SSE) + API-Football → ContextCollector → List[MatchContex
 - **Data Sources:**
   - Superbet odds (via `SuperbetCollector`)
   - API-Football v3: lineups, injuries, standings
-- **Data Models:** `MatchContext`, `TeamLineup`, `PlayerInfo`, `RefereeInfo`, `StandingsEntry`, `OddsContext`.
-- **Safety:** Each API call wrapped in `_safe_call()` to isolate failures. Fuzzy team-name matching via `_match_superbet_odds()`.
+  - DuckDuckGo Search: external news context for Target Zone matches (odds 1.60–2.20)
+- **Data Models:** `MatchContext` (incl. `news_context: str | None`), `TeamLineup`, `PlayerInfo`, `RefereeInfo`, `StandingsEntry`, `OddsContext`.
+- **News Context:** `_is_target_zone()` gates collection to matches with at least one market in the 1.60–2.20 range. `_collect_news_context()` performs DuckDuckGo search with graceful fallback (library absent, network error, empty results). `_enrich_news_contexts()` batch-processes all contexts — failures never block the pipeline.
+- **Safety:** Each API call wrapped in `_safe_call()` to isolate failures. Fuzzy team-name matching via `_match_superbet_odds()`. `duckduckgo-search` is an optional dependency.
 
 ### Agent Framework (`agents/base.py`, `agents/registry.py`)
 
@@ -330,8 +332,8 @@ SuperbetCollector (SSE) + API-Football → ContextCollector → List[MatchContex
 ### Gatekeeper Agent (`agents/gatekeeper.py`)
 
 - **Purpose:** LLM-based evaluation of all valid markets (excluding Handicap), using qualitative context analysis.
-- **System Prompt:** `docs/PROMPT_MESTRE.md` (V25 Final).
-- **Input:** `MatchContext` JSON only (context, odds, lineups, standings).
+- **System Prompt:** `docs/PROMPT_MESTRE.md` (V26, 6 pilares).
+- **Input:** `MatchContext` JSON only (context, odds, lineups, standings, news_context).
 - **Independence:** Does NOT receive ensemble/ML output.  This is a pure **Context Engine**.
 - **Pre-filter:** Hard Python filter rejects if best odd < `min_odd` (1.25) before calling LLM.
 - **Pricing Zones:** Applies the 4-zone classification (Dead / Builder / Single / Variance).
