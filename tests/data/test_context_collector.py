@@ -20,6 +20,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 
 from japredictbet.config import (
@@ -28,20 +29,18 @@ from japredictbet.config import (
     SuperbetShadowConfig,
 )
 from japredictbet.data.context_collector import (
-    _DUCKDUCKGO_AVAILABLE,
+    ApiFootballClient,
+    ContextCollector,
     MatchContext,
     OddsContext,
-    ContextCollector,
-    ApiFootballClient,
-    _merge_injuries,
     _find_standing,
+    _merge_injuries,
 )
 from japredictbet.odds.superbet_client import (
     SuperbetCollector,
-    SuperbetSnapshot,
     SuperbetOdds,
+    SuperbetSnapshot,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 
@@ -324,9 +323,10 @@ class TestCollectNewsContext:
     """Verify DuckDuckGo search integration (mocked)."""
 
     def test_successful_search_returns_summary(self):
-        with patch(
-            "japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", True
-        ), patch("japredictbet.data.context_collector.DDGS") as mock_ddgs_cls:
+        with (
+            patch("japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", True),
+            patch("japredictbet.data.context_collector.DDGS") as mock_ddgs_cls,
+        ):
             mock_ddgs = MagicMock()
             mock_ddgs.text.return_value = [
                 {"title": "Notícia 1", "body": "Flamengo terá desfalques importantes."},
@@ -334,9 +334,7 @@ class TestCollectNewsContext:
             ]
             mock_ddgs_cls.return_value.__enter__.return_value = mock_ddgs
 
-            result = ContextCollector._collect_news_context(
-                "Flamengo", "Palmeiras", "Brasileirão Série A"
-            )
+            result = ContextCollector._collect_news_context("Flamengo", "Palmeiras", "Brasileirão Série A")
 
             assert result is not None
             assert "Flamengo" in result
@@ -344,9 +342,10 @@ class TestCollectNewsContext:
             assert "desfalques" in result
 
     def test_empty_results_returns_none(self):
-        with patch(
-            "japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", True
-        ), patch("japredictbet.data.context_collector.DDGS") as mock_ddgs_cls:
+        with (
+            patch("japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", True),
+            patch("japredictbet.data.context_collector.DDGS") as mock_ddgs_cls,
+        ):
             mock_ddgs = MagicMock()
             mock_ddgs.text.return_value = []
             mock_ddgs_cls.return_value.__enter__.return_value = mock_ddgs
@@ -355,25 +354,25 @@ class TestCollectNewsContext:
             assert result is None
 
     def test_search_exception_returns_none(self):
-        with patch(
-            "japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", True
-        ), patch("japredictbet.data.context_collector.DDGS") as mock_ddgs_cls:
+        with (
+            patch("japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", True),
+            patch("japredictbet.data.context_collector.DDGS") as mock_ddgs_cls,
+        ):
             mock_ddgs_cls.side_effect = RuntimeError("Network error")
 
             result = ContextCollector._collect_news_context("A", "B")
             assert result is None
 
     def test_duckduckgo_unavailable_returns_none(self):
-        with patch(
-            "japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", False
-        ):
+        with patch("japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", False):
             result = ContextCollector._collect_news_context("A", "B")
             assert result is None
 
     def test_results_with_empty_body_skipped(self):
-        with patch(
-            "japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", True
-        ), patch("japredictbet.data.context_collector.DDGS") as mock_ddgs_cls:
+        with (
+            patch("japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", True),
+            patch("japredictbet.data.context_collector.DDGS") as mock_ddgs_cls,
+        ):
             mock_ddgs = MagicMock()
             mock_ddgs.text.return_value = [
                 {"title": "X", "body": ""},
@@ -389,14 +388,13 @@ class TestCollectNewsContext:
 
     def test_summary_truncated_at_max_chars(self):
         """Long results are truncated to ~500 chars."""
-        with patch(
-            "japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", True
-        ), patch("japredictbet.data.context_collector.DDGS") as mock_ddgs_cls:
+        with (
+            patch("japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", True),
+            patch("japredictbet.data.context_collector.DDGS") as mock_ddgs_cls,
+        ):
             mock_ddgs = MagicMock()
             long_body = "A" * 300
-            mock_ddgs.text.return_value = [
-                {"title": f"T{i}", "body": long_body} for i in range(10)
-            ]
+            mock_ddgs.text.return_value = [{"title": f"T{i}", "body": long_body} for i in range(10)]
             mock_ddgs_cls.return_value.__enter__.return_value = mock_ddgs
 
             result = ContextCollector._collect_news_context("A", "B")
@@ -416,12 +414,13 @@ class TestEnrichNewsContexts:
         sample_context_no_target: MatchContext,
     ):
         contexts = [sample_context, sample_context_no_target]
-        with patch(
-            "japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", True
-        ), patch(
-            "japredictbet.data.context_collector.ContextCollector._collect_news_context",
-            return_value="Notícia sobre Flamengo vs Palmeiras.",
-        ) as mock_collect:
+        with (
+            patch("japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", True),
+            patch(
+                "japredictbet.data.context_collector.ContextCollector._collect_news_context",
+                return_value="Notícia sobre Flamengo vs Palmeiras.",
+            ) as mock_collect,
+        ):
             collector = _make_minimal_collector()
             collector._enrich_news_contexts(contexts)
 
@@ -434,11 +433,12 @@ class TestEnrichNewsContexts:
     def test_skips_already_populated(self, sample_context: MatchContext):
         sample_context.news_context = "Já populado."
         contexts = [sample_context]
-        with patch(
-            "japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", True
-        ), patch(
-            "japredictbet.data.context_collector.ContextCollector._collect_news_context",
-        ) as mock_collect:
+        with (
+            patch("japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", True),
+            patch(
+                "japredictbet.data.context_collector.ContextCollector._collect_news_context",
+            ) as mock_collect,
+        ):
             collector = _make_minimal_collector()
             collector._enrich_news_contexts(contexts)
 
@@ -446,11 +446,12 @@ class TestEnrichNewsContexts:
 
     def test_handles_search_failure_gracefully(self, sample_context: MatchContext):
         contexts = [sample_context]
-        with patch(
-            "japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", True
-        ), patch(
-            "japredictbet.data.context_collector.ContextCollector._collect_news_context",
-            return_value=None,
+        with (
+            patch("japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", True),
+            patch(
+                "japredictbet.data.context_collector.ContextCollector._collect_news_context",
+                return_value=None,
+            ),
         ):
             collector = _make_minimal_collector()
             collector._enrich_news_contexts(contexts)
@@ -460,9 +461,7 @@ class TestEnrichNewsContexts:
 
     def test_duckduckgo_unavailable_noop(self, sample_context: MatchContext):
         contexts = [sample_context]
-        with patch(
-            "japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", False
-        ):
+        with patch("japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", False):
             collector = _make_minimal_collector()
             collector._enrich_news_contexts(contexts)
 
@@ -478,9 +477,7 @@ class TestCollectUpcomingSuperbetOnly:
     def test_superbet_only_with_news_enrichment(self):
         snapshot = _make_snapshot("evt1", "Flamengo", "Palmeiras")
         mock_superbet = _make_mock_superbet(fetch_return={"evt1": snapshot})
-        with patch(
-            "japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", False
-        ):
+        with patch("japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", False):
             collector = ContextCollector(
                 superbet=mock_superbet,
                 api_football=None,
@@ -521,9 +518,7 @@ class TestCollectUpcomingFullMode:
             standings=_STANDINGS_ROWS,
         )
 
-        with patch(
-            "japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", False
-        ):
+        with patch("japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", False):
             collector = ContextCollector(
                 superbet=mock_superbet,
                 api_football=api_client,
@@ -552,9 +547,7 @@ class TestCollectUpcomingFullMode:
             lineups_side_effect=RuntimeError("Timeout"),
         )
 
-        with patch(
-            "japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", False
-        ):
+        with patch("japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", False):
             collector = ContextCollector(
                 superbet=mock_superbet,
                 api_football=api_client,
@@ -571,7 +564,9 @@ class TestCollectUpcomingFullMode:
         """Standings > 2024 are None — free-tier API cap."""
         kickoff_future = (datetime.now(UTC) + timedelta(minutes=30)).isoformat()
         fixture = _make_api_football_fixture(
-            100, "Flamengo", "Palmeiras",
+            100,
+            "Flamengo",
+            "Palmeiras",
             league_id=71,
             kickoff=kickoff_future,
         )
@@ -586,9 +581,7 @@ class TestCollectUpcomingFullMode:
             standings=[],  # empty standings
         )
 
-        with patch(
-            "japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", False
-        ):
+        with patch("japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", False):
             collector = ContextCollector(
                 superbet=mock_superbet,
                 api_football=api_client,
@@ -625,9 +618,7 @@ class TestCollectUpcomingFullMode:
             standings=_STANDINGS_ROWS,
         )
 
-        with patch(
-            "japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", False
-        ):
+        with patch("japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", False):
             collector = ContextCollector(
                 superbet=mock_superbet,
                 api_football=api_client,
@@ -650,16 +641,16 @@ class TestEnrichPreMatchContexts:
 
     def test_no_api_client_returns_unchanged(self, sample_context: MatchContext):
         collector = _make_minimal_collector(api_football_client=None)
-        result = collector.enrich_pre_match_contexts(
-            [sample_context], "2026-05-08"
-        )
+        result = collector.enrich_pre_match_contexts([sample_context], "2026-05-08")
         assert result is not None
         assert len(result) == 1
         assert result[0] is sample_context
 
     def test_enriches_with_lineups_and_standings(self, sample_context: MatchContext):
         fixture = _make_api_football_fixture(
-            100, "Flamengo", "Palmeiras",
+            100,
+            "Flamengo",
+            "Palmeiras",
             kickoff="2026-05-08T20:00:00+00:00",
         )
         api_client = _make_mock_api_client(
@@ -669,13 +660,9 @@ class TestEnrichPreMatchContexts:
             standings=_STANDINGS_ROWS,
         )
 
-        with patch(
-            "japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", False
-        ):
+        with patch("japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", False):
             collector = _make_minimal_collector(api_football_client=api_client)
-            result = collector.enrich_pre_match_contexts(
-                [sample_context], "2026-05-08"
-            )
+            result = collector.enrich_pre_match_contexts([sample_context], "2026-05-08")
 
         assert len(result) == 1
         ctx = result[0]
@@ -688,13 +675,9 @@ class TestEnrichPreMatchContexts:
         fixture = _make_api_football_fixture(100, "Santos", "Corinthians")
         api_client = _make_mock_api_client(fixtures=[fixture])
 
-        with patch(
-            "japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", False
-        ):
+        with patch("japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", False):
             collector = _make_minimal_collector(api_football_client=api_client)
-            result = collector.enrich_pre_match_contexts(
-                [sample_context], "2026-05-08"
-            )
+            result = collector.enrich_pre_match_contexts([sample_context], "2026-05-08")
 
         assert result[0].home_lineup is None
 
@@ -708,16 +691,15 @@ class TestEnrichPreMatchContexts:
             standings=_STANDINGS_ROWS,
         )
 
-        with patch(
-            "japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", True
-        ), patch(
-            "japredictbet.data.context_collector.ContextCollector._collect_news_context",
-            return_value="Notícia de derby.",
+        with (
+            patch("japredictbet.data.context_collector._DUCKDUCKGO_AVAILABLE", True),
+            patch(
+                "japredictbet.data.context_collector.ContextCollector._collect_news_context",
+                return_value="Notícia de derby.",
+            ),
         ):
             collector = _make_minimal_collector(api_football_client=api_client)
-            result = collector.enrich_pre_match_contexts(
-                [sample_context], "2026-05-08"
-            )
+            result = collector.enrich_pre_match_contexts([sample_context], "2026-05-08")
 
         ctx = result[0]
         assert ctx.news_context == "Notícia de derby."
@@ -731,19 +713,17 @@ class TestApiFootballClientEdgeCases:
 
     def test_http_500_raises(self):
         client = _make_api_client_with_response(status_code=500, text="Server Error")
-        with pytest.raises(Exception):
+        with pytest.raises(httpx.HTTPStatusError):
             client.get_fixtures_today()
 
     def test_http_429_raises(self):
         client = _make_api_client_with_response(status_code=429, text="Rate Limited")
-        with pytest.raises(Exception):
+        with pytest.raises(httpx.HTTPStatusError):
             client.get_fixtures_today()
 
     def test_invalid_json_raises(self):
-        client = _make_api_client_with_response(
-            status_code=200, text="Not JSON at all"
-        )
-        with pytest.raises(Exception):
+        client = _make_api_client_with_response(status_code=200, text="Not JSON at all")
+        with pytest.raises(json.JSONDecodeError):
             client.get_fixtures_today()
 
     def test_api_errors_in_response(self):
@@ -792,6 +772,7 @@ class TestModuleHelpers:
 
     def test_merge_injuries_matching_team(self):
         from japredictbet.data.context_collector import TeamLineup
+
         lineup = TeamLineup()
         injuries = [
             {"player": "P1", "team": "Flamengo", "type": "Injury", "reason": "Knee"},
@@ -802,6 +783,7 @@ class TestModuleHelpers:
 
     def test_merge_injuries_non_matching_team(self):
         from japredictbet.data.context_collector import TeamLineup
+
         lineup = TeamLineup()
         injuries = [
             {"player": "P1", "team": "Palmeiras", "type": "Injury", "reason": "Knee"},
@@ -815,6 +797,7 @@ class TestModuleHelpers:
 
     def test_find_standing_match(self):
         from japredictbet.data.context_collector import StandingsEntry
+
         standings = [
             StandingsEntry(rank=1, team="Flamengo", points=30, played=10, goal_diff=15),
         ]
@@ -834,9 +817,7 @@ class TestContextCollectorFromConfigs:
     """Verify factory method behavior."""
 
     def test_superbet_only_when_no_api_key(self):
-        with patch.object(
-            SuperbetCollector, "fetch_today_odds", return_value={}
-        ):
+        with patch.object(SuperbetCollector, "fetch_today_odds", return_value={}):
             collector = ContextCollector.from_configs(
                 superbet_cfg=SuperbetShadowConfig(),
                 api_football_cfg=ApiFootballConfig(),
@@ -847,9 +828,7 @@ class TestContextCollectorFromConfigs:
             assert collector._api is None  # type: ignore[union-attr]
 
     def test_with_api_key_creates_client(self):
-        with patch.object(
-            SuperbetCollector, "fetch_today_odds", return_value={}
-        ):
+        with patch.object(SuperbetCollector, "fetch_today_odds", return_value={}):
             collector = ContextCollector.from_configs(
                 superbet_cfg=SuperbetShadowConfig(),
                 api_football_cfg=ApiFootballConfig(),
@@ -913,11 +892,7 @@ def _make_mock_api_client(
             return injuries or {"response": []}
         if "standings" in endpoint:
             resp = standings or []
-            return (
-                {"response": [{"league": {"standings": [resp]}}]}
-                if resp
-                else {"response": []}
-            )
+            return {"response": [{"league": {"standings": [resp]}}]} if resp else {"response": []}
         if "fixtures" in endpoint:
             return {"response": fixtures or []}
         return {"response": []}
@@ -941,7 +916,11 @@ def _make_api_client_with_response(
         mock_response.json.return_value = json_body
         mock_response.raise_for_status.return_value = None
     elif status_code >= 400:
-        mock_response.raise_for_status.side_effect = Exception(f"HTTP {status_code}")
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            f"HTTP {status_code}",
+            request=MagicMock(),
+            response=mock_response,
+        )
         mock_response.text = text
     else:
         mock_response.json.side_effect = json.JSONDecodeError("bad json", text, 0)

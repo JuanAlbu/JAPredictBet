@@ -48,9 +48,10 @@ from japredictbet.odds.superbet_client import SuperbetCollector, SuperbetSnapsho
 
 try:
     from duckduckgo_search import DDGS
+
     _DUCKDUCKGO_AVAILABLE = True
 except ImportError:  # pragma: no cover — optional dependency
-    DDGS = None  # type: ignore[assignment]
+    DDGS = None  # type: ignore[assignment,misc]
     _DUCKDUCKGO_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
@@ -788,9 +789,7 @@ class ContextCollector:
         block the pipeline.  Modified in-place.
         """
         if not _DUCKDUCKGO_AVAILABLE:
-            logger.debug(
-                "duckduckgo-search not installed — skipping news context enrichment."
-            )
+            logger.debug("duckduckgo-search not installed — skipping news context enrichment.")
             return
 
         enriched = 0
@@ -832,8 +831,8 @@ class ContextCollector:
         Only matches with at least one market in the Target Zone justify
         the cost of a DuckDuckGo search for external news context.
         """
-        _TARGET_MIN = 1.60
-        _TARGET_MAX = 2.20
+        target_min = 1.60
+        target_max = 2.20
 
         candidates = [
             odds.corner_over_odds,
@@ -848,10 +847,7 @@ class ContextCollector:
             odds.goals_over_2_5,
             odds.goals_under_2_5,
         ]
-        return any(
-            o is not None and _TARGET_MIN <= o <= _TARGET_MAX
-            for o in candidates
-        )
+        return any(o is not None and target_min <= o <= target_max for o in candidates)
 
     @staticmethod
     def _collect_news_context(
@@ -870,9 +866,7 @@ class ContextCollector:
         never block the pipeline.
         """
         if not _DUCKDUCKGO_AVAILABLE:
-            logger.debug(
-                "duckduckgo-search not installed — skipping news context."
-            )
+            logger.debug("duckduckgo-search not installed — skipping news context.")
             return None
 
         query = f"{home_team} {away_team}"
@@ -897,7 +891,7 @@ class ContextCollector:
         # Build a compact summary (token-economy aware)
         snippets: list[str] = []
         total_chars = 0
-        _MAX_CHARS = 500
+        max_chars = 500
 
         for r in results:
             body = r.get("body", "").strip()
@@ -905,10 +899,10 @@ class ContextCollector:
             if not body:
                 continue
             line = f"- {title}: {body}" if title else f"- {body}"
-            if total_chars + len(line) > _MAX_CHARS:
-                remaining = _MAX_CHARS - total_chars
+            if total_chars + len(line) > max_chars:
+                remaining = max_chars - total_chars
                 if remaining > 60:
-                    line = line[:remaining - 3] + "..."
+                    line = line[: remaining - 3] + "..."
                 else:
                     break
             snippets.append(line)
