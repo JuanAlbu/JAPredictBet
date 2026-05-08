@@ -13,3 +13,6 @@ shap==0.51.0
 # Gatekeeper Live Pipeline Dependencies
 openai>=1.14.0
 python-dotenv>=1.0.1
+
+# News Context — DuckDuckGo optional search (AUDIT.1)
+duckduckgo-search>=7.5.0
