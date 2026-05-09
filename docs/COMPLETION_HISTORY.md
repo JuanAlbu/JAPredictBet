@@ -1,7 +1,7 @@
 # JA PREDICT BET — HISTÓRICO DE ITENS CONCLUÍDOS
 
 **Criado:** 03 de Abril, 2026
-**Última atualização:** 07-MAI-2026
+**Última atualização:** 09-MAI-2026
 **Propósito:** Registro permanente de todos os itens de roadmap concluídos, com datas, evidências e detalhes de implementação. Itens são movidos do roadmap ativo (`next_pass.md`) para cá ao serem fechados.
 
 ---
@@ -594,3 +594,4 @@ Isso exigiu mudança de tipo no `league_tournament_ids.json`: de `dict[str, int]
 | 09-MAI-2026 | **Hardening da matriz de precificação do Gatekeeper.** [`gatekeeper.py`](src/japredictbet/agents/gatekeeper.py) agora reclassifica odds no pós-LLM: `<1.25` vira `NO BET`, `1.25-1.59` fica sem stake e não pode virar entrada simples, `>2.20` limita stake a `0.5u`. Testes adicionados em [`test_gatekeeper.py`](tests/agents/test_gatekeeper.py). 29/29 testes do Gatekeeper validados. |
 | 09-MAI-2026 | **Backlog revisado pós-auditoria de odds.** `ODDS.1` priorizado em [`next_pass.md`](docs/next_pass.md) como pré-filtro determinístico pré-LLM. Item duplicado `CKPT.1` removido da FASE 6. Docstring obsoleta sobre `AnalystAgent` removida de [`test_shadow_integration.py`](tests/pipeline/test_shadow_integration.py). |
 | 09-MAI-2026 | **ODDS.1 detalhado em 3 camadas.** Backlog agora explicita `scraper_filter`, `llm_candidate_builder` e `gatekeeper_post_guard`, incluindo obrigação de manter regressão para a trava pós-LLM já implementada. |
+| 09-MAI-2026 | **FASE 2 — Planejamento e Revisão.** Auditoria completa de código para validar premissas dos 4 itens: (1) Confirmado 0 ocorrências de `concurrent.futures` em `src/` — P3.ENG é válido. (2) Confirmado `RefereeInfo` existe mas `referee` NUNCA é extraído — ENR.3 é válido e custo $0. (3) Confirmado `ApiFootballClient` não tem `get_h2h()`, `MatchContext` não tem campo `h2h` — ENR.4 é válido mas depende de `team.id` de ENR.3. (4) Confirmados 3 locais com substring matching frágil — AUDIT.3 é válido. **Reordenamento:** AUDIT.3 elevado a ⚠️ PRIORIDADE ELEVADA (Bouncer V2 estreita funil, cada mismatch custa mais). P3.ENG movido para último (paralelismo com dados ruins é perigoso). Ordem final: AUDIT.3 → ENR.3 → ENR.4 → P3.ENG. Adicionadas notas de segurança: `threading.Lock` no `approved_count`, rate limit (100 req/dia) com Bouncer V2 gating no ENR.4, `rapidfuzz.token_sort_ratio()` preferido sobre `partial_ratio()`. [`docs/next_pass.md`](docs/next_pass.md) atualizado com revisão completa. |
