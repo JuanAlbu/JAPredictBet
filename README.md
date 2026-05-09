@@ -118,7 +118,7 @@ Requires `OPENAI_API_KEY` in `.env` (see `.env.example`). Shadow log saved to `l
   - `data/`: Ingestion, Feature Store, Context Collector.
   - `probability/`: Calibration metrics (Brier Score, ECE).
 - `data/`: Datasets, mappings, and odds snapshots.
-- `scripts/`: CLI tools (shadow observe, scraper, hyperopt, consensus report).
+- `scripts/`: CLI tools (menu cockpit, shadow observe, scraper, hyperopt, consensus report).
 - `tests/`: Test suite (218 tests, 21 files).
 - `docs/`: Project documentation.
 

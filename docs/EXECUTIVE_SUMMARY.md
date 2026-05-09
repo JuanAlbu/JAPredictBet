@@ -75,7 +75,7 @@
 - **Mantido:** Ensemble output NUNCA é injetado no prompt do LLM
 - **Mantido:** Handicap excluído de todos os motores
 - **Mantido:** Matriz de Zonas de Odd: 4 faixas (Morta < 1.25, Builder 1.25–1.59, Alvo 1.60–2.20, Variância > 2.20)
-- **Mantido:** `min_odd` = 1.25 para permitir pernas de composição (Builder zone)
+- **Atualizado 09-MAI-2026:** pré-filtro por seleção antes da LLM. Odds `<1.25` não devem entrar no payload; `1.25-1.59` só entram como pernas de composição sem stake/best_pick; o pós-LLM mantém guarda determinístico.
 
 ---
 

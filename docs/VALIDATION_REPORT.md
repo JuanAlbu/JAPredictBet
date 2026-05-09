@@ -145,7 +145,7 @@
 | `models/` | `test_train.py`, `test_missing_feature_imputation.py` | 15+ | ✅ |
 | `features/` | `test_rolling_p1b2.py`, `test_drop_redundant.py`, `test_h2h.py`, `test_rolling_cross_group.py` | 25+ | ✅ |
 | `probability/` | `test_calibration.py` | 16 | ✅ |
-| `agents/` | `test_gatekeeper.py` | 27 | ✅ |
+| `agents/` | `test_gatekeeper.py` | 29 | ✅ |
 | `config` | `test_config_defaults.py` | 5+ | ✅ |
 | integration | `integration_p1a2.py`, `integration_p1a3.py` | ~10+ | ✅ |
 

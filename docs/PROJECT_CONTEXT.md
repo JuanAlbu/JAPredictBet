@@ -215,7 +215,7 @@ Testing & Validation (11-APR-2026):
 - 254 unit/integration tests passing across 21 test files
 - Consensus script synchronized with pipeline (106 features, STD+EMA+drop_redundant+H2H)
 - All tests runnable and producing valid reports in log-test/
-- Gatekeeper agent (all markets, Prompt Mestre V26) with 27 tests
+- Gatekeeper agent (all markets, Prompt Mestre V26) with 29 tests, including deterministic post-LLM pricing guard
 - Feature Store with daily pre-computation (Parquet)
 - Pre-match pipeline with scraper JSON loader
 

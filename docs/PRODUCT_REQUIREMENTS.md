@@ -299,7 +299,8 @@ The system must:
 The system must:
 
 - evaluate ALL markets (corners, 1x2, BTTS, Over/Under Gols, 1º Tempo) via a single Gatekeeper Agent (LLM-only, context-driven)
-- apply hard Python pre-filters before LLM calls (min_odd + market whitelist via scraper)
+- apply hard Python pre-filters before LLM calls (market whitelist + per-selection pricing zones)
+- remove `odd < 1.25` from the LLM payload; allow `1.25-1.59` only as composition metadata with `stake=null` and no `best_pick` eligibility
 - produce structured JSON output with markets array, best_pick, status, stake, edge, classification, and red flags
 - cap daily entries at a configurable maximum
 - log all evaluations to shadow log (JSONL format, observational only)

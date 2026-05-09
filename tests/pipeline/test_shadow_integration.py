@@ -9,8 +9,8 @@ Covers:
 - ApiFootballClient: fixture queries by date
 
 Post-refactoring (May-2026): The Shadow pipeline uses a SINGLE LLM motor
-(GatekeeperAgent evaluating ALL markets). The 30-model ensemble and
-AnalystAgent are exclusive to Mode 1 (Backtest).
+(GatekeeperAgent evaluating ALL markets). The 30-model ensemble is
+exclusive to Mode 1 (Backtest).
 """
 
 from __future__ import annotations

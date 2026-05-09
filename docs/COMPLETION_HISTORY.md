@@ -584,3 +584,13 @@ Isso exigiu mudança de tipo no `league_tournament_ids.json`: de `dict[str, int]
 | 05-MAI-2026 | **Revisão profunda do backlog.** Descobertas: (a) `artifacts/models/` já tem 30 modelos treinados (desmentindo prioridade #1 do roadmap anterior), (b) CI pipeline já implementado (P2.B1 concluído), (c) imports padronizados (P2.C4 concluído), (d) `pyproject.toml` já blindado contra falsa coleta (P2.B5/B9 concluído), (e) ENR.1 (context study) já concluído (commit 39da387). Total de 5 itens removidos do backlog ativo. `next_pass.md` reescrito: 46→41 itens pendentes, data atualizada para 05-MAI-2026. |
 | 07-MAI-2026 | **Auditoria de arquitetura — 5 blocos analisados.** Roadmap atualizado: 48→54 itens. Novos itens: AUDIT.1 (News Context — 6º pilar no Prompt Mestre), AUDIT.2 (Test Mocks para DuckDuckGo/API-Football), AUDIT.3 (Fuzzy Matching com rapidfuzz), AUDIT.4 (Telegram Notifier), AUDIT.5 (RAG Lite / Memory). |
 | 07-MAI-2026 | **Menu refatorado para v2.0.** [`scripts/menu.py`](scripts/menu.py): 296→355 linhas, 5→6 opções. Correções: descrição "ML+LLM" → "Gatekeeper LLM", Analisar agora reutiliza JSON do scraper sem re-scraping, manutenção semanal remove `run.py` (retreino agora sob demanda). Fluxo encadeado com `_executar_encadeado()`. Toggle `[V]` verbose. Ruff/MyPy/pytest (254/254) validados. Commit `8a7d121`. |
+
+---
+
+## Changelog (09-MAI-2026)
+
+| Data | Ação |
+|------|------|
+| 09-MAI-2026 | **Hardening da matriz de precificação do Gatekeeper.** [`gatekeeper.py`](src/japredictbet/agents/gatekeeper.py) agora reclassifica odds no pós-LLM: `<1.25` vira `NO BET`, `1.25-1.59` fica sem stake e não pode virar entrada simples, `>2.20` limita stake a `0.5u`. Testes adicionados em [`test_gatekeeper.py`](tests/agents/test_gatekeeper.py). 29/29 testes do Gatekeeper validados. |
+| 09-MAI-2026 | **Backlog revisado pós-auditoria de odds.** `ODDS.1` priorizado em [`next_pass.md`](docs/next_pass.md) como pré-filtro determinístico pré-LLM. Item duplicado `CKPT.1` removido da FASE 6. Docstring obsoleta sobre `AnalystAgent` removida de [`test_shadow_integration.py`](tests/pipeline/test_shadow_integration.py). |
+| 09-MAI-2026 | **ODDS.1 detalhado em 3 camadas.** Backlog agora explicita `scraper_filter`, `llm_candidate_builder` e `gatekeeper_post_guard`, incluindo obrigação de manter regressão para a trava pós-LLM já implementada. |

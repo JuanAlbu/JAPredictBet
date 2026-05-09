@@ -1,6 +1,6 @@
 # JA PREDICT BET - Fluxo de Execucao Diaria
 
-Atualizado: 03-MAY-2026
+Atualizado: 09-MAY-2026
 
 ## Rotina Diaria (2 comandos)
 
@@ -47,8 +47,12 @@ Observacoes:
 
 ### Step 3 - Gatekeeper Agent (LLM unificado, TODOS os mercados)
 
-- Pre-filtro Python (scraper): `min_odd >= 1.25` + market whitelist (corners, 1x2, BTTS, O/U Gols)
-- Pre-filtro Python (pipeline): odds abaixo de `min_odd` -> `FILTERED` (sem chamada LLM)
+- Pre-filtro Python (scraper/pipeline): market whitelist (corners, 1x2, BTTS, O/U Gols) + filtro por seleção antes da LLM
+- `odd < 1.25`: removida do payload LLM (ZONA MORTA)
+- `1.25 <= odd < 1.60`: só entra como `PERNA DE COMPOSIÇÃO`, sem stake e sem elegibilidade para `best_pick`
+- `1.60 <= odd <= 2.20`: candidata a aposta simples
+- `odd > 2.20`: candidata de variância com stake máxima `0.5u`
+- Pós-LLM: guarda determinístico reclassifica qualquer violação restante da matriz de odds
 - LLM: Prompt Mestre V26, `temp=0.3`
 
 Entrada do LLM:
@@ -114,7 +118,7 @@ SHADOW OBSERVATION SUMMARY
 ------------------------------------------------------------
   [OK] Arsenal vs Chelsea     | APPROVED | 2/5 mercados
        -> Best: Escanteios Over 9.5 | APOSTA SIMPLES | stake=1.0
-       -> Tambem: BTTS SIM | PERNA DE COMPOSIÇÃO | stake=0.5
+       -> Tambem: BTTS SIM | PERNA DE COMPOSIÇÃO | stake=None
 
   [OK] Man City vs Fulham     | APPROVED | 1/5 mercados
        -> Best: 1x2 HOME | APOSTA SIMPLES | stake=0.5
@@ -123,7 +127,7 @@ SHADOW OBSERVATION SUMMARY
       -> Gatekeeper rejeitou: escalação incerta, odds baixas
 
   [!] Brentford vs Newcastle  | FILTERED | stake=None
-      -> Nenhuma odd acima do minimo (min_odd=1.25)
+      -> Nenhuma seleção elegível após filtro pré-LLM
 ------------------------------------------------------------
   Shadow log: logs/shadow_bets.log
 ```

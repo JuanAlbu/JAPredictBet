@@ -60,6 +60,95 @@ def classify_odd(odd: float | None) -> str | None:
     return _ZONE_VARIANCE
 
 
+def _coerce_float(value: Any) -> float | None:
+    """Return *value* as float, or None when it is not numeric."""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _coerce_stake(value: object) -> float | None:
+    """Normalize a stake value to the supported unit ladder."""
+    stake = _coerce_float(value)
+    if stake is None:
+        return None
+    if stake not in (0.5, 1.0, 2.0):
+        return min(max(stake, 0.5), 2.0)
+    return stake
+
+
+def _with_red_flag(red_flags: list[str], flag: str) -> list[str]:
+    """Return red flags with *flag* added once."""
+    if flag not in red_flags:
+        red_flags.append(flag)
+    return red_flags
+
+
+def _normalize_pricing_rules(market: MarketEvaluation) -> MarketEvaluation:
+    """Enforce the hard pricing matrix after the LLM response is parsed."""
+    odd = _coerce_float(market.odd)
+    classification = classify_odd(odd) if odd is not None else market.classification
+    status = market.status
+    stake = market.stake
+    edge = market.edge
+    red_flags = list(market.red_flags)
+    justification = market.justification
+
+    if odd is None:
+        if status == _STATUS_NO_BET:
+            stake = None
+            edge = None
+        return MarketEvaluation(
+            market=market.market,
+            status=status,
+            stake=stake,
+            odd=None,
+            edge=edge,
+            classification=classification,
+            justification=justification,
+            red_flags=red_flags,
+        )
+
+    if classification == _ZONE_DEAD:
+        status = _STATUS_NO_BET
+        stake = None
+        edge = None
+        red_flags = _with_red_flag(red_flags, "zona morta")
+        if not justification:
+            justification = "Odd abaixo de 1.25: rejeicao obrigatoria pela matriz de precificacao."
+    elif classification == _ZONE_BUILDER:
+        stake = None
+    elif classification == _ZONE_VARIANCE and stake is not None:
+        stake = min(stake, 0.5)
+
+    if status == _STATUS_NO_BET:
+        stake = None
+        edge = None
+
+    return MarketEvaluation(
+        market=market.market,
+        status=status,
+        stake=stake,
+        odd=odd,
+        edge=edge,
+        classification=classification,
+        justification=justification,
+        red_flags=red_flags,
+    )
+
+
+def _is_actionable_single(market: MarketEvaluation | None) -> bool:
+    """Return True when a market can become the day's single bet entry."""
+    return (
+        market is not None
+        and market.status == _STATUS_APPROVED
+        and market.classification in (_ZONE_SINGLE, _ZONE_VARIANCE)
+    )
+
+
 # ── Data classes ─────────────────────────────────────────────────────
 
 
@@ -506,66 +595,49 @@ class GatekeeperAgent(BaseAgent):
         for m in markets_data:
             if not isinstance(m, dict):
                 continue
-            stake_raw = m.get("stake")
-            stake: float | None = None
-            if stake_raw is not None:
-                try:
-                    stake = float(stake_raw)
-                    if stake not in (0.5, 1.0, 2.0):
-                        stake = min(max(stake, 0.5), 2.0)
-                except (ValueError, TypeError):
-                    stake = None
-
-            odd_val = m.get("odd")
-            classification = m.get("classification") or classify_odd(float(odd_val) if odd_val is not None else None)
+            stake = _coerce_stake(m.get("stake"))
+            odd_val = _coerce_float(m.get("odd"))
+            classification = classify_odd(odd_val) or m.get("classification")
 
             status = m.get("status", _STATUS_NO_BET).upper().strip()
             if status not in (_STATUS_APPROVED, _STATUS_NO_BET):
                 status = _STATUS_NO_BET
 
-            markets.append(
-                MarketEvaluation(
-                    market=str(m.get("market", "")),
-                    status=status,
-                    stake=stake,
-                    odd=odd_val,
-                    edge=m.get("edge"),
-                    classification=classification,
-                    justification=m.get("justification"),
-                    red_flags=list(m.get("red_flags", [])),
-                )
+            market = MarketEvaluation(
+                market=str(m.get("market", "")),
+                status=status,
+                stake=stake,
+                odd=odd_val,
+                edge=m.get("edge"),
+                classification=classification,
+                justification=m.get("justification"),
+                red_flags=list(m.get("red_flags", [])),
             )
+            markets.append(_normalize_pricing_rules(market))
 
         # ── Parse best_pick ────────────────────────────────────────
         best_data = data.get("best_pick")
         best_pick: MarketEvaluation | None = None
         if isinstance(best_data, dict):
             bp = best_data
-            bp_stake_raw = bp.get("stake")
-            bp_stake: float | None = None
-            if bp_stake_raw is not None:
-                try:
-                    bp_stake = float(bp_stake_raw)
-                    if bp_stake not in (0.5, 1.0, 2.0):
-                        bp_stake = min(max(bp_stake, 0.5), 2.0)
-                except (ValueError, TypeError):
-                    bp_stake = None
-
-            bp_odd = bp.get("odd")
-            bp_classification = bp.get("classification") or classify_odd(float(bp_odd) if bp_odd is not None else None)
+            bp_stake = _coerce_stake(bp.get("stake"))
+            bp_odd = _coerce_float(bp.get("odd"))
+            bp_classification = classify_odd(bp_odd) or bp.get("classification")
             bp_status = bp.get("status", _STATUS_NO_BET).upper().strip()
             if bp_status not in (_STATUS_APPROVED, _STATUS_NO_BET):
                 bp_status = _STATUS_NO_BET
 
-            best_pick = MarketEvaluation(
-                market=str(bp.get("market", "")),
-                status=bp_status,
-                stake=bp_stake,
-                odd=bp_odd,
-                edge=bp.get("edge"),
-                classification=bp_classification,
-                justification=bp.get("justification"),
-                red_flags=list(bp.get("red_flags", [])),
+            best_pick = _normalize_pricing_rules(
+                MarketEvaluation(
+                    market=str(bp.get("market", "")),
+                    status=bp_status,
+                    stake=bp_stake,
+                    odd=bp_odd,
+                    edge=bp.get("edge"),
+                    classification=bp_classification,
+                    justification=bp.get("justification"),
+                    red_flags=list(bp.get("red_flags", [])),
+                )
             )
 
         # ── Legacy fallback: single-market format (no markets array) ─
@@ -573,25 +645,32 @@ class GatekeeperAgent(BaseAgent):
             legacy_status = str(data.get("status", _STATUS_NO_BET)).upper().strip()
             if legacy_status not in (_STATUS_APPROVED, _STATUS_NO_BET):
                 legacy_status = _STATUS_NO_BET
-            legacy_stake_raw = data.get("stake")
-            legacy_stake: float | None = None
-            if legacy_stake_raw is not None:
-                try:
-                    legacy_stake = float(legacy_stake_raw)
-                    if legacy_stake not in (0.5, 1.0, 2.0):
-                        legacy_stake = min(max(legacy_stake, 0.5), 2.0)
-                except (ValueError, TypeError):
-                    legacy_stake = None
-            overall_status = legacy_status
-            overall_stake = legacy_stake
-            overall_market = data.get("market")
-            overall_odd = data.get("odd")
-            overall_edge = data.get("edge")
-            overall_classification = data.get("classification")
-            overall_justification = data.get("justification")
-            overall_red_flags = list(data.get("red_flags", []))
+            legacy_pick = _normalize_pricing_rules(
+                MarketEvaluation(
+                    market=str(data.get("market", "")),
+                    status=legacy_status,
+                    stake=_coerce_stake(data.get("stake")),
+                    odd=_coerce_float(data.get("odd")),
+                    edge=data.get("edge"),
+                    classification=data.get("classification"),
+                    justification=data.get("justification"),
+                    red_flags=list(data.get("red_flags", [])),
+                )
+            )
+            is_actionable = legacy_pick.status == _STATUS_APPROVED and (
+                legacy_pick.odd is None or _is_actionable_single(legacy_pick)
+            )
+            overall_status = legacy_pick.status if is_actionable else _STATUS_NO_BET
+            overall_stake = legacy_pick.stake if is_actionable else None
+            overall_market = legacy_pick.market if is_actionable else None
+            overall_odd = legacy_pick.odd if is_actionable else None
+            overall_edge = legacy_pick.edge if is_actionable else None
+            overall_classification = legacy_pick.classification if is_actionable else None
+            overall_justification = legacy_pick.justification
+            overall_red_flags = legacy_pick.red_flags
         # ── Derive overall status from best_pick or markets ────────
-        elif best_pick is not None and best_pick.status == _STATUS_APPROVED:
+        elif _is_actionable_single(best_pick):
+            assert best_pick is not None  # type guard — _is_actionable_single garante
             overall_status = _STATUS_APPROVED
             overall_stake = best_pick.stake
             overall_market = best_pick.market
@@ -600,9 +679,9 @@ class GatekeeperAgent(BaseAgent):
             overall_classification = best_pick.classification
             overall_justification = best_pick.justification
             overall_red_flags = best_pick.red_flags
-        elif any(m.status == _STATUS_APPROVED for m in markets):
+        elif any(_is_actionable_single(m) for m in markets):
             # BEST_PICK ausente mas há mercados aprovados — usa o primeiro
-            first_approved = next(m for m in markets if m.status == _STATUS_APPROVED)
+            first_approved = next(m for m in markets if _is_actionable_single(m))
             overall_status = _STATUS_APPROVED
             overall_stake = first_approved.stake
             overall_market = first_approved.market
@@ -621,6 +700,7 @@ class GatekeeperAgent(BaseAgent):
             overall_classification = None
             overall_justification = None
             overall_red_flags = []
+            best_pick = None
 
         return GatekeeperResult(
             status=overall_status,

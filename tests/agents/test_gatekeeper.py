@@ -420,6 +420,94 @@ class TestMultiMarketParsing:
         result = agent.evaluate_match(_make_match_context())
         assert result.markets[0].status == "NO BET"
 
+    def test_pricing_matrix_overrides_llm_zone_errors(self, agent, mock_openai):
+        """Hard pricing rules override unsafe LLM approvals."""
+        response = json.dumps(
+            {
+                "markets": [
+                    {
+                        "market": "BTTS SIM",
+                        "status": "APPROVED",
+                        "stake": 1.0,
+                        "odd": 1.09,
+                        "edge": "Alto",
+                        "classification": "PERNA DE COMPOSIÇÃO",
+                    },
+                    {
+                        "market": "Over 2.5 Gols",
+                        "status": "APPROVED",
+                        "stake": 1.0,
+                        "odd": 1.43,
+                        "edge": "Médio",
+                        "classification": "APOSTA SIMPLES",
+                    },
+                    {
+                        "market": "1x2 AWAY",
+                        "status": "APPROVED",
+                        "stake": 1.0,
+                        "odd": 2.42,
+                        "edge": "Baixo",
+                        "classification": "APOSTA SIMPLES",
+                    },
+                ],
+                "best_pick": {
+                    "market": "Over 2.5 Gols",
+                    "status": "APPROVED",
+                    "stake": 1.0,
+                    "odd": 1.43,
+                    "edge": "Médio",
+                    "classification": "APOSTA SIMPLES",
+                },
+            }
+        )
+        _mock_llm_response(mock_openai, response)
+        result = agent.evaluate_match(_make_match_context(away_odds=2.42))
+
+        assert result.markets[0].status == "NO BET"
+        assert result.markets[0].stake is None
+        assert result.markets[0].classification == "ZONA MORTA"
+        assert result.markets[1].status == "APPROVED"
+        assert result.markets[1].stake is None
+        assert result.markets[1].classification == "PERNA DE COMPOSIÇÃO"
+        assert result.markets[2].stake == 0.5
+        assert result.markets[2].classification == "APOSTA SIMPLES — VARIÂNCIA"
+        assert result.status == "APPROVED"
+        assert result.market == "1x2 AWAY"
+        assert result.stake == 0.5
+
+    def test_builder_only_approval_does_not_create_single_entry(self, agent, mock_openai):
+        """Composition legs are valid notes, not standalone shadow entries."""
+        response = json.dumps(
+            {
+                "markets": [
+                    {
+                        "market": "Over 1.5 Gols",
+                        "status": "APPROVED",
+                        "stake": 1.0,
+                        "odd": 1.37,
+                        "edge": "Alto",
+                        "classification": "APOSTA SIMPLES",
+                    }
+                ],
+                "best_pick": {
+                    "market": "Over 1.5 Gols",
+                    "status": "APPROVED",
+                    "stake": 1.0,
+                    "odd": 1.37,
+                    "edge": "Alto",
+                    "classification": "APOSTA SIMPLES",
+                },
+            }
+        )
+        _mock_llm_response(mock_openai, response)
+        result = agent.evaluate_match(_make_match_context())
+
+        assert result.status == "NO BET"
+        assert result.stake is None
+        assert result.best_pick is None
+        assert result.markets[0].classification == "PERNA DE COMPOSIÇÃO"
+        assert result.markets[0].stake is None
+
 
 # ── Markdown-fence stripping ─────────────────────────────────────────
 
