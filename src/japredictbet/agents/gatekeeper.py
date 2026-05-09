@@ -27,7 +27,8 @@ from japredictbet.agents.base import AgentContext, BaseAgent
 from japredictbet.config import GatekeeperConfig
 from japredictbet.odds.pre_llm_filter import (
     build_llm_candidates,
-    PreLlmFilterResult,
+)
+from japredictbet.odds.pre_llm_filter import (
     classify_odd as _classify_odd_core,
 )
 

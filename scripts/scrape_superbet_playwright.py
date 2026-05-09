@@ -3,10 +3,10 @@
 Usage:
     python scripts/scrape_superbet_playwright.py [--day quinta-feira] [--headless]
 """
+
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -20,7 +20,7 @@ if len(sys.argv) > 1 and sys.argv[1].startswith("--day="):
 HEADLESS = "--no-headless" not in sys.argv
 
 OUTPUT_DIR = ROOT / "data"
-OUTPUT_FILE = OUTPUT_DIR / f"_playwright_{DAY.replace('-','_')}.json"
+OUTPUT_FILE = OUTPUT_DIR / f"_playwright_{DAY.replace('-', '_')}.json"
 
 URL = f"https://superbet.bet.br/apostas/futebol?day={DAY}"
 
@@ -74,11 +74,13 @@ def main() -> None:
             method = request.method
             # Only capture relevant URLs
             if any(p in url for p in INTERCEPT_PATTERNS) or "api" in url.lower():
-                results["captured_requests"].append({
-                    "url": url,
-                    "method": method,
-                    "resource_type": request.resource_type,
-                })
+                results["captured_requests"].append(
+                    {
+                        "url": url,
+                        "method": method,
+                        "resource_type": request.resource_type,
+                    }
+                )
                 print(f"  [REQUEST] {method} {url[:120]}")
 
         def handle_response(response):
@@ -91,7 +93,7 @@ def main() -> None:
                     content_preview = body[:500] if body else ""
                 except Exception:
                     content_preview = ""
-                
+
                 result_item = {
                     "url": url,
                     "status": status,
@@ -110,21 +112,25 @@ def main() -> None:
                         if isinstance(data, dict):
                             for key in ["id", "eventId", "event_id", "matchId"]:
                                 if key in data:
-                                    captured_events.append({
-                                        "source": url,
-                                        "event_id": data[key],
-                                        "data": str(data)[:300],
-                                    })
+                                    captured_events.append(
+                                        {
+                                            "source": url,
+                                            "event_id": data[key],
+                                            "data": str(data)[:300],
+                                        }
+                                    )
                         elif isinstance(data, list):
                             for item in data:
                                 if isinstance(item, dict):
                                     for key in ["id", "eventId", "event_id", "matchId"]:
                                         if key in item:
-                                            captured_events.append({
-                                                "source": url,
-                                                "event_id": item[key],
-                                                "data": str(item)[:300],
-                                            })
+                                            captured_events.append(
+                                                {
+                                                    "source": url,
+                                                    "event_id": item[key],
+                                                    "data": str(item)[:300],
+                                                }
+                                            )
                     except Exception:
                         pass
 
@@ -151,7 +157,7 @@ def main() -> None:
             # Get all visible text
             body_text = page.inner_text("body")
             # Save snippets of the body text
-            lines = [l.strip() for l in body_text.split("\n") if l.strip()]
+            lines = [line.strip() for line in body_text.split("\n") if line.strip()]
             results["page_content_snippets"] = lines[:200]
 
             # Try to find elements with event/match data
@@ -174,7 +180,12 @@ def main() -> None:
                         print(f"\n  Found {len(elements)} elements matching '{selector}'")
                         for el in elements[:10]:
                             html = el.inner_html()[:200]
-                            attrs = el.evaluate("el => { const attrs = {}; for (const attr of el.attributes) { attrs[attr.name] = attr.value; } return attrs; }")
+                            attrs = el.evaluate(
+                                "el => { const attrs = {}; "
+                                "for (const attr of el.attributes) "
+                                "{ attrs[attr.name] = attr.value; } "
+                                "return attrs; }"
+                            )
                             print(f"    Attributes: {attrs}")
                             print(f"    HTML: {html[:100]}")
                 except Exception as e:
@@ -194,7 +205,7 @@ def main() -> None:
         # Try to get the full HTML after JS execution
         html_after_js = page.content()
         results["html_after_js_length"] = len(html_after_js)
-        
+
         # Save full HTML for analysis
         html_path = OUTPUT_DIR / f"_page_html_{DAY}.html"
         with open(html_path, "w", encoding="utf-8") as f:

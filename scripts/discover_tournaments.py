@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import json
 import logging
-import sys
 import time
 from collections import defaultdict
 from datetime import datetime
@@ -28,21 +27,11 @@ MAPPING_DIR = ROOT / "data" / "mapping"
 LEAGUE_IDS_PATH = MAPPING_DIR / "league_tournament_ids.json"
 OUTPUT_PATH = ROOT / "data" / "_discovered_tournaments.json"
 
-SSE_ENDPOINT_PREMATCH = (
-    "https://production-superbet-offer-br.freetls.fastly.net"
-    "/subscription/v2/pt-BR/events/prematch"
-)
-SSE_ENDPOINT_ALL = (
-    "https://production-superbet-offer-br.freetls.fastly.net"
-    "/subscription/v2/pt-BR/events/all"
-)
-REST_EVENT_URL = (
-    "https://production-superbet-offer-br.freetls.fastly.net"
-    "/v2/pt-BR/events/{event_id}"
-)
+SSE_ENDPOINT_PREMATCH = "https://production-superbet-offer-br.freetls.fastly.net/subscription/v2/pt-BR/events/prematch"
+SSE_ENDPOINT_ALL = "https://production-superbet-offer-br.freetls.fastly.net/subscription/v2/pt-BR/events/all"
+REST_EVENT_URL = "https://production-superbet-offer-br.freetls.fastly.net/v2/pt-BR/events/{event_id}"
 USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 )
 MIDDLE_DOT = "\u00b7"
 SPORT_ID_FOOTBALL = 5
@@ -75,7 +64,7 @@ def stream_sse(
     deadline = time.monotonic() + duration_s
     lines_read = 0
 
-    print(f"  Conectando ao SSE {endpoint.split('/')[-1]} por {duration_s:.0f}s...")
+    print(f"  Conectando ao SSE {endpoint.rsplit('/', maxsplit=1)[-1]} por {duration_s:.0f}s...")
 
     try:
         with httpx.Client(timeout=timeout) as client:
@@ -168,7 +157,7 @@ def fetch_rest_event(event_id: str) -> dict[str, Any] | None:
 
 def get_category_name(category_id: int) -> str:
     """Map category IDs to known competition names based on observed data."""
-    CATEGORY_NAMES = {
+    category_names = {
         45: "England (Premier League)",
         31: "South America (Libertadores?)",
         194: "Norway",
@@ -190,15 +179,13 @@ def get_category_name(category_id: int) -> str:
         23: "ITF Tennis",
         37: "ITF Doubles",
     }
-    return CATEGORY_NAMES.get(category_id, f"Unknown(cat={category_id})")
+    return category_names.get(category_id, f"Unknown(cat={category_id})")
 
 
 def main() -> None:
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Discover new tournament IDs from Superbet SSE feed"
-    )
+    parser = argparse.ArgumentParser(description="Discover new tournament IDs from Superbet SSE feed")
     parser.add_argument(
         "--target-date",
         type=str,
@@ -216,9 +203,7 @@ def main() -> None:
         action="store_true",
         help="Fetch REST details for unknown TIDs (slower)",
     )
-    parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Show all events, not just summary"
-    )
+    parser.add_argument("--verbose", "-v", action="store_true", help="Show all events, not just summary")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -271,13 +256,21 @@ def main() -> None:
         if sid:
             by_sport[sid].append(ev)
 
-    print(f"\n  Esportes encontrados:")
+    print("\n  Esportes encontrados:")
     for sid in sorted(by_sport.keys()):
         sid_events = by_sport[sid]
-        sport_label = {5: "Futebol", 11: "Tenis", 75: "E-Football",
-                       24: "Ten. Mesa", 3: "Hoquei", 4: "Basquete",
-                       70: "E-Basquete", 20: "Basebol", 190: "Fut. Virtual",
-                       2: "Tenis 2"}.get(sid, f"SportId={sid}")
+        sport_label = {
+            5: "Futebol",
+            11: "Tenis",
+            75: "E-Football",
+            24: "Ten. Mesa",
+            3: "Hoquei",
+            4: "Basquete",
+            70: "E-Basquete",
+            20: "Basebol",
+            190: "Fut. Virtual",
+            2: "Tenis 2",
+        }.get(sid, f"SportId={sid}")
         # Count distinct tournaments
         tids = set()
         for ev in sid_events:
@@ -319,10 +312,7 @@ def main() -> None:
 
     # --- Filter by date if requested ---
     if args.target_date:
-        filtered_football = [
-            ev for ev in football_events
-            if extract_event_date(ev) == args.target_date
-        ]
+        filtered_football = [ev for ev in football_events if extract_event_date(ev) == args.target_date]
         print(f"\n  Eventos de futebol para {args.target_date}: {len(filtered_football)}")
         football_events = filtered_football
         # Re-group by TID
@@ -333,9 +323,9 @@ def main() -> None:
                 by_tid[tid].append(ev)
 
     # --- Show tournament summary ---
-    print(f"\n  --- Torneios de Futebol Encontrados ---")
+    print("\n  --- Torneios de Futebol Encontrados ---")
     print(f"  {'TID':<8} {'CatID':<6} {'Eventos':<8} {'Conhecido?':<12} {'Exemplos'}")
-    print(f"  {'-'*60}")
+    print(f"  {'-' * 60}")
 
     unknown_tids: list[int] = []
 
@@ -393,9 +383,9 @@ def main() -> None:
             time.sleep(0.3)  # Rate limiting
 
         # Show REST details
-        print(f"\n  --- Detalhes REST para TIDs desconhecidos ---")
+        print("\n  --- Detalhes REST para TIDs desconhecidos ---")
         print(f"  {'TID':<8} {'CatID':<6} {'Match'}")
-        print(f"  {'-'*60}")
+        print(f"  {'-' * 60}")
         for tid in sorted(rest_details.keys()):
             rd = rest_details[tid]
             mn = rd.get("matchName", "?")
@@ -405,7 +395,7 @@ def main() -> None:
 
     # --- Also show ALL events (non-football) summary for context ---
     if args.verbose:
-        print(f"\n  --- Todos os Esportes - Resumo de Torneios ---")
+        print("\n  --- Todos os Esportes - Resumo de Torneios ---")
         for sid in sorted(by_sport.keys()):
             if sid == SPORT_ID_FOOTBALL:
                 continue
@@ -415,9 +405,17 @@ def main() -> None:
                 t = ev.get("tournamentId")
                 if t:
                     tids_sport.add(t)
-            sport_name = {11: "Tenis", 75: "E-Football", 24: "Ten.Mesa",
-                          3: "Hoquei", 4: "Basquete", 70: "E-Basquete",
-                          20: "Basebol", 190: "Fut.Virtual", 2: "Tenis2"}.get(sid, f"Sport{sid}")
+            sport_name = {
+                11: "Tenis",
+                75: "E-Football",
+                24: "Ten.Mesa",
+                3: "Hoquei",
+                4: "Basquete",
+                70: "E-Basquete",
+                20: "Basebol",
+                190: "Fut.Virtual",
+                2: "Tenis2",
+            }.get(sid, f"Sport{sid}")
             print(f"\n  SportId={sid} ({sport_name}): {len(events)} eventos, {len(tids_sport)} torneios")
             for tid in sorted(tids_sport):
                 tid_events = [ev for ev in events if ev.get("tournamentId") == tid]
@@ -448,12 +446,15 @@ def main() -> None:
         "known_leagues": {k: v for k, v in sorted(known.items(), key=lambda x: x[1])},
         "tournament_summary": tournament_summary,
         "unknown_tids": unknown_tids,
-        "category_guesses": {str(cid): name for cid, name in {
-            45: "England (Premier League)",
-            31: "South America - likely Copa Libertadores",
-            194: "Norway Eliteserien",
-            248: "Morocco Botola",
-        }.items()},
+        "category_guesses": {
+            str(cid): name
+            for cid, name in {
+                45: "England (Premier League)",
+                31: "South America - likely Copa Libertadores",
+                194: "Norway Eliteserien",
+                248: "Morocco Botola",
+            }.items()
+        },
     }
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -465,11 +466,11 @@ def main() -> None:
     # --- Summary ---
     if unknown_tids:
         print(f"\n  [!] {len(unknown_tids)} TIDs desconhecidos encontrados!")
-        print(f"  Execute com --rest para buscar detalhes via REST API.")
+        print("  Execute com --rest para buscar detalhes via REST API.")
     else:
-        print(f"\n  Todos os TIDs encontrados ja sao conhecidos.")
+        print("\n  Todos os TIDs encontrados ja sao conhecidos.")
 
-    print(f"\n  Concluido!")
+    print("\n  Concluido!")
 
 
 if __name__ == "__main__":

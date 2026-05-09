@@ -12,8 +12,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from japredictbet.odds.pre_llm_filter import (
     WHITELIST_MARKETS,
     PreLlmCandidate,
@@ -359,15 +357,17 @@ class TestBuildLlmCandidates:
 
     def test_market_not_in_whitelist_removed(self) -> None:
         """Simulate a JSON with a non-whitelisted market field."""
-        ctx = json.dumps({
-            "event_id": "evt_001",
-            "home_team": "A",
-            "away_team": "B",
-            "odds": {
-                "home_odds": 1.80,
-                "some_exotic_market": 5.00,
-            },
-        })
+        ctx = json.dumps(
+            {
+                "event_id": "evt_001",
+                "home_team": "A",
+                "away_team": "B",
+                "odds": {
+                    "home_odds": 1.80,
+                    "some_exotic_market": 5.00,
+                },
+            }
+        )
         result = build_llm_candidates(ctx)
         # home_odds (1.80) should be a valid candidate
         # some_exotic_market won't be extracted by _extract_selections

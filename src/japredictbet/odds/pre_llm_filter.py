@@ -123,17 +123,17 @@ def _is_market_whitelisted(market_name: str) -> bool:
     variações como "Total de Escanteios Over/Under" etc.
     """
     lower = market_name.lower()
-    for allowed in WHITELIST_MARKETS:
-        if allowed in lower:
-            return True
-    return False
+    return any(allowed in lower for allowed in WHITELIST_MARKETS)
 
 
 def _is_player_market(market_name: str) -> bool:
     """Detecta mercados de jogador (props) que devem ser excluídos."""
     player_kw = (
-        "jogador", "player", "chutes no gol",
-        "finalizações", "faltas cometidas",
+        "jogador",
+        "player",
+        "chutes no gol",
+        "finalizações",
+        "faltas cometidas",
     )
     lower = market_name.lower()
     return any(kw in lower for kw in player_kw)
@@ -235,15 +235,17 @@ def build_llm_candidates(
             # (sem stake, sem best_pick) independente de composition_enabled.
             # composition_enabled só afeta a decisão de chamar LLM.
             if zone == _ZONE_BUILDER:
-                candidates.append(PreLlmCandidate(
-                    market_name=market_name,
-                    selection_label=label,
-                    odd=odd,
-                    line=line,
-                    zone=zone,
-                    stake_allowed=False,
-                    best_pick_allowed=False,
-                ))
+                candidates.append(
+                    PreLlmCandidate(
+                        market_name=market_name,
+                        selection_label=label,
+                        odd=odd,
+                        line=line,
+                        zone=zone,
+                        stake_allowed=False,
+                        best_pick_allowed=False,
+                    )
+                )
                 continue
 
             # SINGLE ou VARIANCE — candidato válido
@@ -254,16 +256,18 @@ def build_llm_candidates(
             if zone == _ZONE_VARIANCE:
                 max_stake = 0.5
 
-            candidates.append(PreLlmCandidate(
-                market_name=market_name,
-                selection_label=label,
-                odd=odd,
-                line=line,
-                zone=zone,
-                stake_allowed=stake_allowed,
-                best_pick_allowed=best_pick_allowed,
-                max_stake=max_stake,
-            ))
+            candidates.append(
+                PreLlmCandidate(
+                    market_name=market_name,
+                    selection_label=label,
+                    odd=odd,
+                    line=line,
+                    zone=zone,
+                    stake_allowed=stake_allowed,
+                    best_pick_allowed=best_pick_allowed,
+                    max_stake=max_stake,
+                )
+            )
 
     # ── Filtro 4: reduzir linhas redundantes por direção ─────────────
     candidates = _deduplicate_lines(candidates, max_lines_per_direction)
@@ -285,29 +289,29 @@ def build_llm_candidates(
         result.reasons = reasons + ["Nenhum candidato restante após filtragem"]
         logger.info(
             "Pre-LLM: %s vs %s — 0 candidatos, LLM não chamada (%d removidos).",
-            home_team, away_team, removed,
+            home_team,
+            away_team,
+            removed,
         )
         return result
 
     # Chama LLM quando:
     # a) Pelo menos 1 SINGLE/VARIANCE_SINGLE, OU
     # b) Pelo menos 2 COMPOSITION_ONLY com composition_enabled
-    if result.has_single_or_variance:
-        result.should_call_llm = True
-    elif composition_enabled and result.composition_count >= 2:
+    if result.has_single_or_variance or composition_enabled and result.composition_count >= 2:
         result.should_call_llm = True
 
     if not result.should_call_llm:
         result.reasons = reasons + [
             f"Apenas {len(compositions)} composition(s), mínimo 2 exigido"
-            if composition_enabled else
-            "Nenhum candidato SINGLE/VARIANCE — composition desabilitado"
+            if composition_enabled
+            else "Nenhum candidato SINGLE/VARIANCE — composition desabilitado"
         ]
 
     logger.info(
-        "Pre-LLM: %s vs %s — %d candidatos (%d singles, %d comp), "
-        "call_llm=%s, %d removidos.",
-        home_team, away_team,
+        "Pre-LLM: %s vs %s — %d candidatos (%d singles, %d comp), call_llm=%s, %d removidos.",
+        home_team,
+        away_team,
         len(candidates),
         len(singles_or_variances),
         len(compositions),
@@ -334,52 +338,66 @@ def _extract_selections(
     # Escanteios
     if odds.get("corner_over_odds") is not None:
         line = odds.get("corner_line")
-        selections.setdefault("Total de Escanteios", []).append((
-            f"Escanteios Over {line}" if line else "Escanteios Over",
-            float(odds["corner_over_odds"]),
-            line,
-        ))
+        selections.setdefault("Total de Escanteios", []).append(
+            (
+                f"Escanteios Over {line}" if line else "Escanteios Over",
+                float(odds["corner_over_odds"]),
+                line,
+            )
+        )
     if odds.get("corner_under_odds") is not None:
         line = odds.get("corner_line")
-        selections.setdefault("Total de Escanteios", []).append((
-            f"Escanteios Under {line}" if line else "Escanteios Under",
-            float(odds["corner_under_odds"]),
-            line,
-        ))
+        selections.setdefault("Total de Escanteios", []).append(
+            (
+                f"Escanteios Under {line}" if line else "Escanteios Under",
+                float(odds["corner_under_odds"]),
+                line,
+            )
+        )
 
     # 1x2
     if odds.get("home_odds") is not None:
-        selections.setdefault("Resultado Final", []).append((
-            "1x2 HOME",
-            float(odds["home_odds"]),
-            None,
-        ))
+        selections.setdefault("Resultado Final", []).append(
+            (
+                "1x2 HOME",
+                float(odds["home_odds"]),
+                None,
+            )
+        )
     if odds.get("draw_odds") is not None:
-        selections.setdefault("Resultado Final", []).append((
-            "1x2 DRAW",
-            float(odds["draw_odds"]),
-            None,
-        ))
+        selections.setdefault("Resultado Final", []).append(
+            (
+                "1x2 DRAW",
+                float(odds["draw_odds"]),
+                None,
+            )
+        )
     if odds.get("away_odds") is not None:
-        selections.setdefault("Resultado Final", []).append((
-            "1x2 AWAY",
-            float(odds["away_odds"]),
-            None,
-        ))
+        selections.setdefault("Resultado Final", []).append(
+            (
+                "1x2 AWAY",
+                float(odds["away_odds"]),
+                None,
+            )
+        )
 
     # BTTS
     if odds.get("btts_yes") is not None:
-        selections.setdefault("Ambas as Equipes Marcam", []).append((
-            "BTTS SIM",
-            float(odds["btts_yes"]),
-            None,
-        ))
+        selections.setdefault("Ambas as Equipes Marcam", []).append(
+            (
+                "BTTS SIM",
+                float(odds["btts_yes"]),
+                None,
+            )
+        )
     if odds.get("btts_no") is not None:
-        selections.setdefault("Ambas as Equipes Marcam", []).append((
-            "BTTS NAO",
-            float(odds["btts_no"]),
-            None,
-        ))
+        selections.setdefault("Ambas as Equipes Marcam", []).append(
+            (
+                "BTTS NAO",
+                float(odds["btts_no"]),
+                None,
+            )
+        )
 
     # Over/Under Gols (1.5, 2.5, 3.5)
     goal_lines = [
@@ -388,17 +406,21 @@ def _extract_selections(
     ]
     for goal_line, over_key, under_key in goal_lines:
         if odds.get(over_key) is not None:
-            selections.setdefault("Total de Gols", []).append((
-                f"Gols Over {goal_line}",
-                float(odds[over_key]),
-                goal_line,
-            ))
+            selections.setdefault("Total de Gols", []).append(
+                (
+                    f"Gols Over {goal_line}",
+                    float(odds[over_key]),
+                    goal_line,
+                )
+            )
         if odds.get(under_key) is not None:
-            selections.setdefault("Total de Gols", []).append((
-                f"Gols Under {goal_line}",
-                float(odds[under_key]),
-                goal_line,
-            ))
+            selections.setdefault("Total de Gols", []).append(
+                (
+                    f"Gols Under {goal_line}",
+                    float(odds[under_key]),
+                    goal_line,
+                )
+            )
 
     return selections
 
@@ -431,7 +453,7 @@ def _deduplicate_lines(
                 _ZONE_VARIANCE: 1,
                 _ZONE_BUILDER: 2,
             }
-            return (zone_priority.get(c.zone, 99), abs(c.odd - 1.9))
+            return (zone_priority.get(c.zone or "", 99), abs(c.odd - 1.9))
 
         cands_sorted = sorted(cands, key=_sort_key)
         result.extend(cands_sorted[:max_per_direction])
@@ -440,7 +462,9 @@ def _deduplicate_lines(
         if removed_count > 0:
             logger.debug(
                 "Dedup: %s — %d linhas redundantes removidas (max=%d)",
-                market_name, removed_count, max_per_direction,
+                market_name,
+                removed_count,
+                max_per_direction,
             )
 
     return result
@@ -481,10 +505,7 @@ def apply_scraper_market_filter(
 
         # Filtra seleções individuais por odd mínima
         selections = mdata.get("selections", [])
-        kept_selections = [
-            s for s in selections
-            if s.get("price") is None or float(s["price"]) >= min_odd
-        ]
+        kept_selections = [s for s in selections if s.get("price") is None or float(s["price"]) >= min_odd]
 
         if not kept_selections:
             continue
@@ -497,9 +518,7 @@ def apply_scraper_market_filter(
         for key in ("home", "draw", "away", "yes", "no"):
             if key in filtered_market:
                 matching = [
-                    s for s in kept_selections
-                    if s.get("code", "").lower() == key
-                    or s.get("name", "").lower() == key
+                    s for s in kept_selections if s.get("code", "").lower() == key or s.get("name", "").lower() == key
                 ]
                 if matching:
                     filtered_market[key] = matching[0]["price"]

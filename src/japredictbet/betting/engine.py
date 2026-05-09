@@ -1,7 +1,6 @@
 # src/japredictbet/betting/engine.py
 
 import logging
-import math
 from collections.abc import Iterable, Sequence
 
 import numpy as np
