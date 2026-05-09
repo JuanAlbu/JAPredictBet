@@ -7,30 +7,14 @@ from collections.abc import Iterable, Sequence
 import numpy as np
 from scipy.stats import poisson
 
+# Backward-compatible re-exports — canonical location is
+# ``japredictbet.probability.poisson``.
+from japredictbet.probability.poisson import (  # noqa: F401  # re-export
+    poisson_over_prob,
+    poisson_under_prob,
+)
+
 logger = logging.getLogger(__name__)
-
-
-# =========================
-# PROBABILITY FUNCTIONS
-# =========================
-
-
-def poisson_over_prob(lambda_: float, line: float) -> float:
-    """
-    Calcula P(X > line) usando distribuição de Poisson.
-    Ex: line = 5.5 → P(X >= 6)
-    """
-    k = math.floor(line)
-    return 1 - poisson.cdf(k, lambda_)
-
-
-def poisson_under_prob(lambda_: float, line: float) -> float:
-    """
-    Calcula P(X < line) usando Poisson.
-    Ex: line = 5.5 → P(X <= 5)
-    """
-    k = math.floor(line)
-    return poisson.cdf(k, lambda_)
 
 
 # =========================

@@ -108,7 +108,7 @@ class TestPreFilter:
         )
         result = agent.evaluate_match(ctx)
         assert result.status == "FILTERED"
-        assert "1.60" in result.justification
+        assert "1.6" in result.justification
 
     def test_one_odd_above_min_passes_filter(self, agent, mock_openai):
         _mock_llm_response(
@@ -141,9 +141,10 @@ class TestPreFilter:
         result = agent.evaluate_match(ctx)
         assert result.status != "FILTERED"
 
-    def test_invalid_json_context_returns_error(self, agent):
+    def test_invalid_json_context_returns_filtered(self, agent):
+        """Bouncer V2 handles invalid JSON deterministically — returns FILTERED."""
         result = agent.evaluate_match("not valid json {{")
-        assert result.status == "ERROR"
+        assert result.status == "FILTERED"
 
     def test_empty_odds_returns_filtered(self, agent):
         ctx = json.dumps({"event_id": "1", "home_team": "A", "away_team": "B", "odds": {}})

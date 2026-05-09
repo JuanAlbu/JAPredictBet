@@ -1,5 +1,8 @@
 """Superbet odds scraper — fetch pre-match odds by day.
 
+Uses The Bouncer V2 (``pre_llm_filter.apply_scraper_market_filter``) to
+remove non-whitelisted markets and ineligible odds before saving.
+
 **Primary source:** Playwright headless browser — opens the Superbet website
 (``https://superbet.bet.br/apostas/futebol?day=sexta-feira``) and extracts
 event IDs, tournament IDs, and match names directly from the rendered HTML.
@@ -65,6 +68,17 @@ try:
     _PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     _PLAYWRIGHT_AVAILABLE = False
+
+try:
+    from japredictbet.odds.pre_llm_filter import apply_scraper_market_filter
+except ImportError:
+    # Fallback: no-op filter when module is not in sys.path (e.g. early dev)
+    def apply_scraper_market_filter(  # type: ignore[misc]
+        markets: dict,
+        *,
+        min_odd: float = 1.25,
+    ) -> dict:
+        return markets
 
 # ── Paths ────────────────────────────────────────────────────────────
 
@@ -1279,6 +1293,9 @@ def _apply_snapshot_filter(
 ) -> tuple[list[dict], int, int]:
     """Filter events before saving to JSON/snapshot.
 
+    Uses **The Bouncer V2** (``apply_scraper_market_filter``) for market-level
+    filtering: whitelist, handicap/prop removal, and per-selection min_odd.
+
     Parameters
     ----------
     events:
@@ -1287,13 +1304,12 @@ def _apply_snapshot_filter(
     tid_to_league:
         Tournament ID → league name mapping.
     min_odd:
-        Minimum odd threshold.  Events where the best available odd
-        across ALL markets is below this value are discarded entirely.
+        Minimum odd threshold (ZONA MORTA).  Events where the best
+        available odd is below this value are discarded entirely.
     market_filter:
-        Optional list of market name substrings to KEEP.  Markets whose
-        ``name`` does not contain ANY of these substrings (case-
-        insensitive) are removed from the event's ``markets`` dict.
-        If ``None``, all markets are kept.
+        If provided, only markets whose name contains any of these
+        substrings (case-insensitive) are kept — uses the Bouncer's
+        whitelist logic.  If ``None``, all markets are kept (``--all-markets``).
 
     Returns
     -------
@@ -1310,18 +1326,18 @@ def _apply_snapshot_filter(
         if not markets:
             continue
 
-        # ── Market name filtering (optional) ─────────────────────────
-        if market_filter:
-            filtered_markets = {}
-            for mname, mdata in markets.items():
-                mname_lower = mname.lower()
-                if any(kw in mname_lower for kw in market_filter):
-                    filtered_markets[mname] = mdata
-            markets = filtered_markets
-            if not markets:
-                continue
+        # ── Bouncer V2: market-level filtering ───────────────────────
+        if market_filter is not None:
+            # Use the whitelist-based filter from pre_llm_filter
+            markets = apply_scraper_market_filter(markets, min_odd=min_odd)
+        else:
+            # No filter — keep everything (--markets all)
+            pass
 
-        # ── min_odd check ────────────────────────────────────────────
+        if not markets:
+            continue
+
+        # ── Event-level min_odd check ────────────────────────────────
         best_odd = 0.0
         for mdata in markets.values():
             for sel in mdata.get("selections", []):
@@ -1344,17 +1360,16 @@ def _apply_snapshot_filter(
         filtered.append(filtered_ev)
 
     total_after = len(filtered)
-    if market_filter:
+    if market_filter is not None:
         logger.info(
-            "Snapshot filter: %d → %d eventos (filtro mercados=%s, min_odd=%.2f)",
+            "Snapshot filter (Bouncer V2): %d → %d eventos (min_odd=%.2f)",
             total_before,
             total_after,
-            ", ".join(market_filter),
             min_odd,
         )
     else:
         logger.info(
-            "Snapshot filter: %d → %d eventos (min_odd=%.2f)",
+            "Snapshot filter (all markets): %d → %d eventos (min_odd=%.2f)",
             total_before,
             total_after,
             min_odd,

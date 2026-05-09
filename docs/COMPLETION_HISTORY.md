@@ -36,7 +36,7 @@ Este endpoint funciona diretamente via HTTPX (sem Playwright) e retorna **todos 
 - `docs/ARCHITECTURE.md` — Seção do scraper atualizada com nova arquitetura
 
 ### Arquivos Criados (durante desenvolvimento)
-- `scripts/_scrape_superbet_playwright.py` — Playwright scraper (interceptação de rede que levou à descoberta)
+- `scripts/scrape_superbet_playwright.py` — Playwright scraper (interceptação de rede que levou à descoberta)
 - `data/_playwright_sexta_feira.json` / `data/_playwright_quinta_feira.json` — Capturas de tráfego (removidos após consolidação)
 
 ### Arquivos Removidos (limpeza)
@@ -119,7 +119,7 @@ Isso exigiu mudança de tipo no `league_tournament_ids.json`: de `dict[str, int]
 | [`data/mapping/league_tournament_ids.json`](data/mapping/league_tournament_ids.json) | `sul_americana` mudou de `51372` (int) para `[51372, 51375]` (list) |
 | [`scripts/superbet_scraper.py`](scripts/superbet_scraper.py) | Multi-scroll Playwright (linhas 464-476); `_load_league_ids()` retorna `dict[str, int \| list[int]]`; `_build_tid_to_league()` achata listas em flat dict; `main()` usa `_flatten_tids()` para construir `tournament_filter` |
 | [`src/japredictbet/data/feature_store.py`](src/japredictbet/data/feature_store.py) | `get_active_tournament_ids()` trata valores `list[int]` com `isinstance(v, list)` |
-| [`scripts/_discover_tournaments.py`](scripts/_discover_tournaments.py) | `load_known_ids()` retorna `dict[str, int \| list[int]]`; `known_tids` itera com `isinstance()` |
+| [`scripts/discover_tournaments.py`](scripts/discover_tournaments.py) | `load_known_ids()` retorna `dict[str, int \| list[int]]`; `known_tids` itera com `isinstance()` |
 
 ### Testes Realizados
 

@@ -2,9 +2,10 @@
 
 Uses the Prompt Mestre V26 system prompt to evaluate whether a match
 context warrants a bet entry across **all available markets** (corners,
-1x2, BTTS, Over/Under Gols, 1º Tempo).  The agent applies a **hard Python
-pre-filter** (min_odd) before calling the LLM, and parses the
-structured JSON response (markets array + best_pick) into typed results.
+1x2, BTTS, Over/Under Gols, 1º Tempo).  The agent applies **The Bouncer
+V2** (deterministic pre-filter) before calling the LLM, removing
+ineligible odds, and parses the structured JSON response (markets array +
+best_pick) into typed results.
 
 Safety: this module is strictly observational.  It never places real
 bets — output is written to a shadow log only.
@@ -24,6 +25,11 @@ from openai import OpenAI, RateLimitError
 
 from japredictbet.agents.base import AgentContext, BaseAgent
 from japredictbet.config import GatekeeperConfig
+from japredictbet.odds.pre_llm_filter import (
+    build_llm_candidates,
+    PreLlmFilterResult,
+    classify_odd as _classify_odd_core,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +45,11 @@ _STATUS_FILTERED = "FILTERED"
 _DEFAULT_MODEL = "gpt-4o-mini"
 
 
-# ── Pricing Zones ────────────────────────────────────────────────────
+# ── Pricing Zones (re-exported from pre_llm_filter SSOT) ────────────
 
+# SSOT: src/japredictbet/odds/pre_llm_filter.py
+# These are re-exported for backward compatibility — _normalize_pricing_rules
+# and _is_actionable_single still reference them directly.
 _ZONE_DEAD = "ZONA MORTA"  # < 1.25
 _ZONE_BUILDER = "PERNA DE COMPOSIÇÃO"  # 1.25–1.59
 _ZONE_SINGLE = "APOSTA SIMPLES"  # 1.60–2.20
@@ -48,16 +57,13 @@ _ZONE_VARIANCE = "APOSTA SIMPLES — VARIÂNCIA"  # > 2.20
 
 
 def classify_odd(odd: float | None) -> str | None:
-    """Return the pricing-zone tag for a given odd value."""
+    """Return the pricing-zone tag for a given odd value.
+
+    Wraps ``pre_llm_filter.classify_odd`` (SSOT) to accept ``None``.
+    """
     if odd is None:
         return None
-    if odd < 1.25:
-        return _ZONE_DEAD
-    if odd < 1.60:
-        return _ZONE_BUILDER
-    if odd <= 2.20:
-        return _ZONE_SINGLE
-    return _ZONE_VARIANCE
+    return _classify_odd_core(odd)
 
 
 def _coerce_float(value: Any) -> float | None:
@@ -336,18 +342,33 @@ class GatekeeperAgent(BaseAgent):
         Parameters
         ----------
         match_context_json:
-            JSON string produced by ``MatchContext.to_json()``.
+            JSON string produced by ``MatchContext.to_llm_context()``.
         """
 
-        # ── Step 1: hard pre-filter (min_odd) ────────────────────────
-        filtered = self._apply_pre_filter(match_context_json)
-        if filtered is not None:
-            return filtered
+        # ── Step 1: Bouncer V2 — pre-filter determinístico ───────────
+        filter_result = build_llm_candidates(
+            match_context_json,
+            min_odd=self._cfg.min_odd,
+        )
 
-        # ── Step 2: build user prompt ────────────────────────────────
-        user_prompt = self._build_user_prompt(match_context_json)
+        if not filter_result.should_call_llm:
+            return GatekeeperResult(
+                status=_STATUS_FILTERED,
+                justification=(
+                    f"The Bouncer: {filter_result.total_removed} odds "
+                    f"removed, {filter_result.candidate_count} candidatos "
+                    f"restantes — nenhum SINGLE/VARIANCE. "
+                    f"{'; '.join(filter_result.reasons[-3:])}"
+                ),
+            )
 
-        # ── Step 3: call LLM ─────────────────────────────────────────
+        # ── Step 2: build filtered context (token economy) ──────────
+        filtered_json = self._build_filtered_context_json(match_context_json)
+
+        # ── Step 3: build user prompt ────────────────────────────────
+        user_prompt = self._build_user_prompt(filtered_json)
+
+        # ── Step 4: call LLM ─────────────────────────────────────────
         raw_response = self._call_llm(user_prompt)
         if raw_response is None:
             return GatekeeperResult(
@@ -355,7 +376,7 @@ class GatekeeperAgent(BaseAgent):
                 justification="LLM call failed — see logs.",
             )
 
-        # ── Step 4: parse response ───────────────────────────────────
+        # ── Step 5: parse response ───────────────────────────────────
         return self._parse_response(raw_response)
 
     # ── Private helpers ──────────────────────────────────────────────
@@ -373,56 +394,47 @@ class GatekeeperAgent(BaseAgent):
             "justification, red_flags."
         )
 
-    def _apply_pre_filter(self, match_context_json: str) -> GatekeeperResult | None:
-        """Return a FILTERED result if no odds meet min_odd, else None."""
+    @staticmethod
+    def _build_filtered_context_json(match_context_json: str) -> str:
+        """Remove odds não-rastreadas do JSON de contexto (token economy).
+
+        Preserva apenas os campos de odds que correspondem a mercados
+        na whitelist, eliminando handicaps, props, e mercados exóticos
+        antes de enviar à LLM.
+        """
         try:
             ctx = json.loads(match_context_json)
         except (json.JSONDecodeError, TypeError):
-            return GatekeeperResult(
-                status=_STATUS_ERROR,
-                justification="Invalid match context JSON.",
-            )
+            return match_context_json
 
         odds = ctx.get("odds", {})
-        best_odd = max(
-            filter(
-                lambda v: v is not None,
-                [
-                    odds.get("corner_over_odds"),
-                    odds.get("corner_under_odds"),
-                    odds.get("home_odds"),
-                    odds.get("draw_odds"),
-                    odds.get("away_odds"),
-                    odds.get("btts_yes"),
-                    odds.get("btts_no"),
-                    odds.get("over_15_goals"),
-                    odds.get("over_25_goals"),
-                    odds.get("over_35_goals"),
-                    odds.get("under_15_goals"),
-                    odds.get("under_25_goals"),
-                    odds.get("under_35_goals"),
-                ],
-            ),
-            default=0.0,
-        )
+        if not isinstance(odds, dict):
+            return match_context_json
 
-        if best_odd < self._cfg.min_odd:
-            home = ctx.get("home_team", "?")
-            away = ctx.get("away_team", "?")
-            logger.info(
-                "Pre-filter: %s vs %s — best odd %.2f < min %.2f → FILTERED",
-                home,
-                away,
-                best_odd,
-                self._cfg.min_odd,
-            )
-            return GatekeeperResult(
-                status=_STATUS_FILTERED,
-                justification=(
-                    f"Melhor odd disponível ({best_odd:.2f}) abaixo do mínimo operacional ({self._cfg.min_odd:.2f})."
-                ),
-            )
-        return None
+        # Campos de odds correspondentes aos mercados na whitelist
+        whitelisted_odds_keys = {
+            # Escanteios
+            "corner_line",
+            "corner_over_odds",
+            "corner_under_odds",
+            # 1x2
+            "home_odds",
+            "draw_odds",
+            "away_odds",
+            # BTTS
+            "btts_yes",
+            "btts_no",
+            # Over/Under Gols
+            "goals_over_1_5",
+            "goals_under_1_5",
+            "goals_over_2_5",
+            "goals_under_2_5",
+        }
+
+        filtered_odds = {k: v for k, v in odds.items() if k in whitelisted_odds_keys}
+        ctx["odds"] = filtered_odds
+
+        return json.dumps(ctx, ensure_ascii=False)
 
     @staticmethod
     def _build_user_prompt(

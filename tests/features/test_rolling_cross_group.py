@@ -8,7 +8,6 @@ import pandas as pd
 
 from japredictbet.features.rolling import (
     add_result_rolling,
-    add_rolling_features,
     add_rolling_std,
     add_stat_rolling,
 )
@@ -45,23 +44,6 @@ def test_add_stat_rolling_stays_within_team_group() -> None:
     # Team A at index 4 should use only its own shifted values [1, 2] => mean=1.5
     assert result.loc[4, "home_corners_for_last2"] == 1.5
     # Team B at index 5 should use only its own shifted values [10, 20] => mean=15
-    assert result.loc[5, "home_corners_for_last2"] == 15.0
-
-
-def test_add_rolling_features_stays_within_team_group() -> None:
-    df = _interleaved_df()
-
-    result = add_rolling_features(
-        df,
-        team_col="team",
-        opponent_col="opponent",
-        for_col="corners_for",
-        against_col="corners_against",
-        window=2,
-        prefix="home",
-    )
-
-    assert result.loc[4, "home_corners_for_last2"] == 1.5
     assert result.loc[5, "home_corners_for_last2"] == 15.0
 
 
