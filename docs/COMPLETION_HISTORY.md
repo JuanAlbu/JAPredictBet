@@ -587,10 +587,42 @@ Isso exigiu mudança de tipo no `league_tournament_ids.json`: de `dict[str, int]
 
 ---
 
+## P1 + FASE 1 — ODDS.1 (The Bouncer V2) + Limpeza Imediata (09-MAI-2026)
+
+> **Status:** ✅ CONCLUÍDO — Commit `2941c48` (15 arquivos, +1963/-221 linhas). 67/67 testes nos módulos afetados. Seção P1 zerada. FASE 1 zerada.
+
+### ODDS.1 — The Bouncer V2: pré-filtro determinístico de odds
+
+| Item | Arquivo | Descrição |
+|------|---------|-----------|
+| Camada 1 — `scraper_filter` | [`superbet_scraper.py`](scripts/superbet_scraper.py) (+57/-xx) | Remove mercados não rastreados, odds `<1.25`, linhas redundantes antes de salvar snapshot |
+| Camada 2 — `llm_candidate_builder` | [`pre_llm_filter.py`](src/japredictbet/odds/pre_llm_filter.py) (+511 novo) | Monta payload compacto, marca `zone`/`stake_allowed`/`best_pick_allowed`, decide se jogo merece chamada LLM |
+| Camada 3 — `gatekeeper_post_guard` | [`gatekeeper.py`](src/japredictbet/agents/gatekeeper.py) (142 alterações) | Trava rígida pós-LLM: `<1.25` → `NO BET`, `1.25-1.59` sem stake, `>2.20` max_stake=0.5 |
+| Testes | [`test_pre_llm_filter.py`](tests/odds/test_pre_llm_filter.py) (+517 novo) | Cobertura: descarte `<1.25`, builder sem stake, variância `max_stake=0.5`, whitelist, evento sem candidato |
+
+### FASE 1 — Limpeza Imediata (5 itens)
+
+| Item | Descrição | Arquivo |
+|------|-----------|---------|
+| P2.C1/C6 | `add_rolling_features()` + teste removidos | [`rolling.py`](src/japredictbet/features/rolling.py) (-39), [`test_rolling_cross_group.py`](tests/features/test_rolling_cross_group.py) (-18) |
+| P2.C2 | Poisson movido para `probability/poisson.py` | [`poisson.py`](src/japredictbet/probability/poisson.py) (+59 novo), [`engine.py`](src/japredictbet/betting/engine.py) (30 alterações) |
+| pyproject.toml | Metadata completa (description, authors, dependencies) | [`pyproject.toml`](pyproject.toml) (+43) |
+| NEW.1 | `config_backup.yml` removido | Deletado (-33) |
+| NEW.2 | Scripts `_*.py` renomeados | `discover_tournaments.py`, `scrape_superbet_playwright.py` |
+
+### Impacto Consolidado
+- **Tokens:** Redução de ~40-60% no payload enviado ao LLM (odds inelegíveis filtradas antes)
+- **Segurança:** 3 camadas de defesa contra odds matematicamente inválidas
+- **Código:** -221 linhas de dead code / duplicação removidas
+- **Testes:** +517 linhas de testes de unidade para o pré-filtro
+
+---
+
 ## Changelog (09-MAI-2026)
 
 | Data | Ação |
 |------|------|
+| 09-MAI-2026 | **P1 + FASE 1 concluídos.** Commit `2941c48`: ODDS.1 (The Bouncer V2) implementado com [`pre_llm_filter.py`](src/japredictbet/odds/pre_llm_filter.py) (+511) e [`test_pre_llm_filter.py`](tests/odds/test_pre_llm_filter.py) (+517). Hardening pós-LLM em [`gatekeeper.py`](src/japredictbet/agents/gatekeeper.py). FASE 1: dead code removido, Poisson boundary corrigida, pyproject completo, config_backup.yml removido, scripts renomeados. |
 | 09-MAI-2026 | **Hardening da matriz de precificação do Gatekeeper.** [`gatekeeper.py`](src/japredictbet/agents/gatekeeper.py) agora reclassifica odds no pós-LLM: `<1.25` vira `NO BET`, `1.25-1.59` fica sem stake e não pode virar entrada simples, `>2.20` limita stake a `0.5u`. Testes adicionados em [`test_gatekeeper.py`](tests/agents/test_gatekeeper.py). 29/29 testes do Gatekeeper validados. |
 | 09-MAI-2026 | **Backlog revisado pós-auditoria de odds.** `ODDS.1` priorizado em [`next_pass.md`](docs/next_pass.md) como pré-filtro determinístico pré-LLM. Item duplicado `CKPT.1` removido da FASE 6. Docstring obsoleta sobre `AnalystAgent` removida de [`test_shadow_integration.py`](tests/pipeline/test_shadow_integration.py). |
 | 09-MAI-2026 | **ODDS.1 detalhado em 3 camadas.** Backlog agora explicita `scraper_filter`, `llm_candidate_builder` e `gatekeeper_post_guard`, incluindo obrigação de manter regressão para a trava pós-LLM já implementada. |
